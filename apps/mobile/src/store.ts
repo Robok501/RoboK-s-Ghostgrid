@@ -21,8 +21,12 @@ export interface ClickSettings {
   presets: Preset[];
 }
 
+/** Tempo trainer progress: highest unlocked rung, best score per rung (out of ROUND). */
+export interface EarSettings { unlocked: number; best: Record<string, number>; openAll: boolean; rung: number }
+
 export interface AppSettings {
   click: ClickSettings;
+  ear: EarSettings;
   keepBt: boolean;
   pads: PadSettings;
 }
@@ -36,6 +40,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     program: DEFAULT_CONFIG.program, loop: true,
     tol: 15, grade: 'beat', input: 'tap', calib: { tap: 0, mic: 0, pads: 0 }, presets: [],
   },
+  ear: { unlocked: 0, best: {}, openAll: false, rung: 0 },
   keepBt: true,
   pads: { ...DEFAULT_PAD_SETTINGS, preset: 'roland' },
 };
@@ -49,6 +54,7 @@ export function loadSettings(): AppSettings {
     const saved = JSON.parse(f.textSync()) as Partial<AppSettings>;
     return {
       click: { ...DEFAULT_SETTINGS.click, ...(saved.click || {}), calib: { ...DEFAULT_SETTINGS.click.calib, ...(saved.click?.calib || {}) } },
+      ear: { ...DEFAULT_SETTINGS.ear, ...(saved.ear || {}) },
       keepBt: saved.keepBt ?? DEFAULT_SETTINGS.keepBt,
       pads: { ...DEFAULT_SETTINGS.pads, ...(saved.pads || {}) },
     };

@@ -64,16 +64,16 @@ export function Stepper({ value, onChange, min, max, step = 1, format }: {
   );
 }
 
-export function Seg<T extends string | number>({ options, value, onChange, small }: {
-  options: { value: T; label: string; disabled?: boolean }[]; value: T; onChange: (v: T) => void; small?: boolean;
+export function Seg<T extends string | number>({ options, value, onChange, small, wide }: {
+  options: { value: T; label: string; disabled?: boolean }[]; value: T; onChange: (v: T) => void; small?: boolean; wide?: boolean;
 }) {
   return (
-    <View style={u.seg}>
+    <View style={[u.seg, wide && { flexShrink: 0 }]}>
       {options.map((o) => {
         const on = o.value === value;
         return (
           <Pressable key={String(o.value)} disabled={o.disabled} onPress={() => onChange(o.value)} accessibilityRole="button"
-            accessibilityState={{ selected: on, disabled: o.disabled }} style={[u.segBtn, small && u.segSmall, on && u.segOn, o.disabled && { opacity: 0.35 }]}>
+            accessibilityState={{ selected: on, disabled: o.disabled }} style={[u.segBtn, small && u.segSmall, wide && { flex: 1 }, on && u.segOn, o.disabled && { opacity: 0.35 }]}>
             <Text style={[u.segTxt, on && u.segTxtOn]}>{o.label}</Text>
           </Pressable>
         );

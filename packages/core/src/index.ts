@@ -10,3 +10,4 @@ export * from './engine';
 export * from './export/midi';
 export * from './export/zip';
 export * from './export/texttab';
+export * from './tempoear';

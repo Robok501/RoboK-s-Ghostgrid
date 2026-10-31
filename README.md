@@ -16,6 +16,7 @@ Ghostgrid is the drummer's companion: a programmable metronome with training mod
 | --- | --- |
 | `meter` | Beat groupings (auto and chosen), accent levels, tempo markings, tap tempo |
 | `training` | `ClickPlan`: basic, gap, drop, ramp, coach and program modes as a stream of click steps; player levels |
+| `tempoear` | Tempo trainer: groove clips with drift and live wander, a 14-step ladder of listening and playing exercises, grading |
 | `timing` | Hit offsets against the click, statistics, calibration, per-pad hit log |
 | `groove` | Instruments, ideas and bars on a step grid, edits (beats, grid, bars), counting, swing timing, undo |
 | `engrave` | Drum notation engraver to SVG (two voices, beams, rests, tuplets, accents, ghosts, open hi-hat) and an export document |

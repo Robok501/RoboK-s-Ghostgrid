@@ -28,6 +28,7 @@ final class GGEngine {
   private var mapHost: UInt64 = 0
   private var pending: [(frame: Int64, buf: Int)] = []
   private var voices: [(buf: Int, pos: Int)] = []
+  /// All playable buffers: 0–2 = click (soft, normal, accent), then the drum voices for the tempo trainer.
   private var clicks: [[Float]] = []
   private let hostToSeconds: Double = {
     var tb = mach_timebase_info_data_t()
@@ -151,6 +152,15 @@ final class GGEngine {
     os_unfair_lock_unlock(lock)
   }
 
+  /// Drum voice for tempo-trainer clips: 0 kick, 1 snare, 2 ghost snare, 3 hat, 4 accented hat, 5 open hat, 6 click, 7 accented click.
+  func scheduleDrum(time: Double, sound: Int) {
+    let frame = Int64((time * sampleRate).rounded())
+    os_unfair_lock_lock(lock)
+    let buf = 3 + sound
+    if sound >= 0 && buf < clicks.count && frame >= rendered { pending.append((frame, buf)) }
+    os_unfair_lock_unlock(lock)
+  }
+
   func cancelAfter(time: Double) {
     let frame = Int64(time * sampleRate)
     os_unfair_lock_lock(lock)
@@ -201,7 +211,7 @@ final class GGEngine {
   /// Choose the click sound: "click", "wood", "cowbell" or "hat". Takes effect on the next click.
   func setClickSound(_ name: String) {
     clickSound = name
-    let made = makeSounds(name)
+    let made = makeSounds(name) + makeDrums()
     os_unfair_lock_lock(lock)
     clicks = made
     voices.removeAll(keepingCapacity: true)
@@ -209,7 +219,7 @@ final class GGEngine {
   }
 
   private func makeClicks() {
-    let made = makeSounds(clickSound)
+    let made = makeSounds(clickSound) + makeDrums()
     os_unfair_lock_lock(lock)
     clicks = made
     os_unfair_lock_unlock(lock)
@@ -258,6 +268,40 @@ final class GGEngine {
     return [one(0), one(1), one(2)]
   }
 
+  /// Synthesised drum voices (no samples, so nothing to license). Order matches DRUM_SOUNDS in @ghostgrid/core.
+  private func makeDrums() -> [[Float]] {
+    let sr = sampleRate
+    var seed: UInt32 = 987
+    func noise() -> Double { seed = seed &* 1664525 &+ 1013904223; return Double(seed) / Double(UInt32.max) * 2 - 1 }
+    func render(_ dur: Double, _ f: (Double) -> Double) -> [Float] {
+      let n = Int(sr * dur)
+      return (0..<n).map { i in Float(f(Double(i) / sr)) }
+    }
+    let attack = { (t: Double) in min(1, t / 0.001) }
+    let kick = render(0.4) { t in
+      let phase = 2 * .pi * (48 * t + 90 * 0.035 * (1 - exp(-t / 0.035)))
+      return sin(phase) * exp(-t / 0.13) * attack(t) * 0.85
+    }
+    func snare(_ gain: Double) -> [Float] {
+      var prev = 0.0
+      return render(0.25) { t in
+        let n = noise(); let hp = n - prev * 0.6; prev = n
+        return (hp * 0.5 * exp(-t / 0.055) + sin(2 * .pi * 185 * t) * 0.45 * exp(-t / 0.035)) * attack(t) * gain
+      }
+    }
+    func hat(_ dur: Double, _ gain: Double) -> [Float] {
+      var p1 = 0.0, p2 = 0.0
+      return render(dur) { t in
+        let n = noise(); let h1 = n - p1; p1 = n; let h2 = h1 - p2; p2 = h1
+        return h2 * exp(-t / (dur / 5)) * attack(t) * gain
+      }
+    }
+    func click(_ f: Double, _ gain: Double) -> [Float] {
+      render(0.045) { t in sin(2 * .pi * f * t) * min(1, t / 0.0015) * exp(-t / 0.009) * gain }
+    }
+    return [kick, snare(0.8), snare(0.18), hat(0.05, 0.16), hat(0.06, 0.3), hat(0.35, 0.22), click(1320, 0.6), click(1760, 0.95)]
+  }
+
   /// Convert a time in seconds since boot (UITouch / React Native touch timestamps) to engine seconds.
   func uptimeToEngine(_ uptime: Double) -> Double {
     return hostToEngine(UInt64(max(0, uptime) / hostToSeconds))
@@ -301,6 +345,7 @@ final class GGEngine {
         voices[v].pos = pos + n
       }
       voices.removeAll { $0.pos >= clicks[$0.buf].count }
+      for f in 0..<n { first[f] = max(-1, min(1, first[f])) }
       for b in buffers.dropFirst() {
         guard let data = b.mData?.assumingMemoryBound(to: Float.self) else { continue }
         for f in 0..<n { data[f] = first[f] }

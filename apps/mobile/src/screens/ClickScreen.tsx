@@ -12,6 +12,7 @@ import { CoachPanel } from '../click/CoachPanel';
 import { BUILTIN_PRESETS, SUB_NAMES } from '../click/presets';
 import { SongMap } from '../click/SongMap';
 import { TempoBlock } from '../click/TempoBlock';
+import { TempoTrainer } from '../click/TempoTrainer';
 import { useClick } from '../click/useClick';
 import { C } from '../theme';
 import { Btn, Card, Chip, Note, Pill, Row, Seg, Stepper, Toggle } from '../ui';
@@ -30,7 +31,7 @@ const MODE_DESC: Record<Mode, string> = {
   coach: 'Timing coach: hit on the click and see how early or late every hit is, by tap, mic or your e-drum pads.',
   gap: 'Gap click: the click plays for a few bars, then drops out. Keep playing and land on the one when it returns.',
   drop: 'Random drop-outs: single beats or whole bars go silent without warning, so you stop leaning on the click.',
-  ramp: 'Tempo trainer: the tempo climbs (or falls) by a set step every few bars until it reaches the target.',
+  ramp: 'Speed builder: the tempo climbs (or falls) by a set step every few bars until it reaches the target.',
   program: 'A song or exercise as sections, each with its own bars, tempo and meter. Plays through or loops.',
 };
 
@@ -38,6 +39,7 @@ export function ClickScreen() {
   const { settings, setClick, setMic, mic, micLevel } = useApp();
   const c = settings.click;
   const k = useClick();
+  const [view, setView] = React.useState<'metronome' | 'ear'>('metronome');
   const program = c.mode === 'program';
   const showPad = c.mode === 'coach' || c.mode === 'gap' || c.mode === 'drop';
   const modes = MODE_ORDER.filter((m) => modesForLevel(c.level).includes(m));
@@ -62,8 +64,20 @@ export function ClickScreen() {
     mode: c.mode === 'program' ? 'basic' : c.mode,
   });
 
+  const switcher = (
+    <View style={s.switchWrap}>
+      <Seg options={[{ value: 'metronome', label: 'Metronome' }, { value: 'ear', label: 'Tempo trainer' }]} value={view} wide
+        onChange={(v) => { if (v === 'ear') k.stop(); setView(v as 'metronome' | 'ear'); }} />
+    </View>
+  );
+
+  if (view === 'ear') {
+    return <View style={s.root}>{switcher}<TempoTrainer /></View>;
+  }
+
   return (
     <View style={s.root}>
+      {switcher}
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <View style={s.levels} accessibilityRole="tablist">
           {LEVELS.map((l) => {
@@ -265,6 +279,7 @@ function ModeSettings({ c, setClick, setInput, k }: {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  switchWrap: { paddingHorizontal: 16, paddingTop: 8, alignItems: 'stretch' },
   scroll: { padding: 16, gap: 14, paddingBottom: 24 },
   levels: { flexDirection: 'row', backgroundColor: C.raised, borderRadius: 14, padding: 4, gap: 4 },
   levelBtn: { flex: 1, minHeight: 52, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
