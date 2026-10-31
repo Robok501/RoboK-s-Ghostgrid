@@ -73,6 +73,14 @@ jobs:
           fi
           exit $STATUS
 
+      - name: Check the native engine is inside the app
+        working-directory: apps/mobile/ios
+        run: |
+          grep -q "GhostgridEngine" Podfile.lock
+          grep -rq "GhostgridEngineModule" Pods/Target\ Support\ Files/Pods-Ghostgrid/ExpoModulesProvider.swift || grep -rq "GhostgridEngineModule" Ghostgrid/ build/Build/Intermediates.noindex 2>/dev/null
+          strings build/Build/Products/Release-iphoneos/Ghostgrid.app/Ghostgrid | grep -q "GhostgridEngine"
+          echo "GhostgridEngine is linked into Ghostgrid.app"
+
       - name: Package Ghostgrid.ipa
         working-directory: apps/mobile/ios
         run: |
