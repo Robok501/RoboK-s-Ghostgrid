@@ -15,10 +15,16 @@
           "audio"
         ],
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "icon": "./assets/icon.png"
     },
     "android": {
-      "package": "com.robok.ghostgrid"
-    }
+      "package": "com.robok.ghostgrid",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0f1214"
+      }
+    },
+    "icon": "./assets/icon.png"
   }
 }

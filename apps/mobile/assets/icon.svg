@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#262d32"/><stop offset="1" stop-color="#0b0e10"/>
+    </radialGradient>
+    <linearGradient id="amb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6c76a"/><stop offset="1" stop-color="#d9962f"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="22"/></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- step grid -->
+  <g fill="#ebe8e1" opacity="0.085">
+    <rect x="72.0" y="72.0" width="130.0" height="130.0" rx="22"/>
+<rect x="222.0" y="72.0" width="130.0" height="130.0" rx="22"/>
+<rect x="372.0" y="72.0" width="130.0" height="130.0" rx="22"/>
+<rect x="522.0" y="72.0" width="130.0" height="130.0" rx="22"/>
+<rect x="672.0" y="72.0" width="130.0" height="130.0" rx="22"/>
+<rect x="822.0" y="72.0" width="130.0" height="130.0" rx="22"/>
+<rect x="72.0" y="222.0" width="130.0" height="130.0" rx="22"/>
+<rect x="222.0" y="222.0" width="130.0" height="130.0" rx="22"/>
+<rect x="372.0" y="222.0" width="130.0" height="130.0" rx="22"/>
+<rect x="522.0" y="222.0" width="130.0" height="130.0" rx="22"/>
+<rect x="672.0" y="222.0" width="130.0" height="130.0" rx="22"/>
+<rect x="822.0" y="222.0" width="130.0" height="130.0" rx="22"/>
+<rect x="72.0" y="372.0" width="130.0" height="130.0" rx="22"/>
+<rect x="222.0" y="372.0" width="130.0" height="130.0" rx="22"/>
+<rect x="372.0" y="372.0" width="130.0" height="130.0" rx="22"/>
+<rect x="522.0" y="372.0" width="130.0" height="130.0" rx="22"/>
+<rect x="672.0" y="372.0" width="130.0" height="130.0" rx="22"/>
+<rect x="822.0" y="372.0" width="130.0" height="130.0" rx="22"/>
+<rect x="72.0" y="522.0" width="130.0" height="130.0" rx="22"/>
+<rect x="222.0" y="522.0" width="130.0" height="130.0" rx="22"/>
+<rect x="372.0" y="522.0" width="130.0" height="130.0" rx="22"/>
+<rect x="522.0" y="522.0" width="130.0" height="130.0" rx="22"/>
+<rect x="672.0" y="522.0" width="130.0" height="130.0" rx="22"/>
+<rect x="822.0" y="522.0" width="130.0" height="130.0" rx="22"/>
+<rect x="72.0" y="672.0" width="130.0" height="130.0" rx="22"/>
+<rect x="222.0" y="672.0" width="130.0" height="130.0" rx="22"/>
+<rect x="372.0" y="672.0" width="130.0" height="130.0" rx="22"/>
+<rect x="522.0" y="672.0" width="130.0" height="130.0" rx="22"/>
+<rect x="672.0" y="672.0" width="130.0" height="130.0" rx="22"/>
+<rect x="822.0" y="672.0" width="130.0" height="130.0" rx="22"/>
+<rect x="72.0" y="822.0" width="130.0" height="130.0" rx="22"/>
+<rect x="222.0" y="822.0" width="130.0" height="130.0" rx="22"/>
+<rect x="372.0" y="822.0" width="130.0" height="130.0" rx="22"/>
+<rect x="522.0" y="822.0" width="130.0" height="130.0" rx="22"/>
+<rect x="672.0" y="822.0" width="130.0" height="130.0" rx="22"/>
+<rect x="822.0" y="822.0" width="130.0" height="130.0" rx="22"/>
+  </g>
+  <!-- ghost note: parentheses around a note head -->
+  <g filter="url(#glow)" opacity="0.55" fill="none" stroke="#e2ab4b" stroke-width="60" stroke-linecap="round">
+    <path d="M330 270 Q200 512 330 754"/><path d="M694 270 Q824 512 694 754"/>
+  </g>
+  <g fill="none" stroke="url(#amb)" stroke-width="58" stroke-linecap="round">
+    <path d="M330 270 Q200 512 330 754"/><path d="M694 270 Q824 512 694 754"/>
+  </g>
+  <ellipse cx="512" cy="512" rx="128" ry="96" transform="rotate(-22 512 512)" fill="#e2ab4b" filter="url(#glow)" opacity="0.6"/>
+  <ellipse cx="512" cy="512" rx="128" ry="96" transform="rotate(-22 512 512)" fill="url(#amb)"/>
+</svg>
