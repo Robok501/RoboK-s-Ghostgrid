@@ -8,7 +8,7 @@ Ghostgrid is the drummer's companion: a programmable metronome with training mod
 | --- | --- |
 | `packages/core` | Platform-independent logic in TypeScript, with tests. Used by the web prototypes now and by the React Native app next. |
 | `prototypes/` | The working web prototypes (Click Coach, Groove Sketch). Self-contained HTML; open in a browser or host on any HTTPS site. |
-| `apps/mobile` | *Coming in step 2:* the Expo / React Native app with a native audio engine. |
+| `apps/mobile` | Expo / React Native app with the native iOS engine (`modules/ghostgrid-engine`): the step-2 proof of concept. |
 
 ## Core modules (`@ghostgrid/core`)
 
@@ -49,4 +49,4 @@ From the architecture memo in the project:
 6. Small DAW with latency compensation
 7. On-device stem splitting
 
-Building the iOS app without a Mac goes through Expo EAS cloud builds and needs an Apple Developer Program membership.
+Installing on an iPhone without a Mac: see [docs/install-iphone.md](docs/install-iphone.md) (free Apple ID + unsigned build from GitHub Actions + iloader).
