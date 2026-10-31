@@ -1,0 +1,23 @@
+{
+  "name": "@ghostgrid/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "ios": "expo run:ios",
+    "prebuild:ios": "expo prebuild --platform ios --no-install --clean",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ghostgrid/core": "*",
+    "expo": "58.0.14",
+    "expo-status-bar": "58.0.3",
+    "react": "19.3.0",
+    "react-native": "0.88.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "5.6.3"
+  }
+}

@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "The drummer's companion: metronome with training modes, drum notation, kits, DAW and stem splitting.",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "test": "npm test --workspaces --if-present",

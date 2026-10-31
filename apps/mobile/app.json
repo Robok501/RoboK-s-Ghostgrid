@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Ghostgrid",
+    "slug": "ghostgrid",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "com.robok.ghostgrid",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Ghostgrid listens for your hits to score your timing against the click.",
+        "NSBluetoothAlwaysUsageDescription": "Ghostgrid connects to Bluetooth MIDI drum modules, such as your e-drum.",
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.robok.ghostgrid"
+    }
+  }
+}

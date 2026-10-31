@@ -1,0 +1,95 @@
+# Builds an unsigned iPhone app (.ipa) on GitHub's Macs.
+# Sign and install it on your own iPhone with a sideload tool (e.g. iloader) and your free Apple ID.
+name: iOS build (unsigned .ipa)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/core/**'
+      - 'package-lock.json'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Use the newest Xcode on the runner
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -v beta | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Core tests
+        run: npm test --workspace @ghostgrid/core
+
+      - name: Generate the iOS project (expo prebuild)
+        working-directory: apps/mobile
+        env:
+          CI: 1
+        run: npx expo prebuild --platform ios --no-install --clean
+
+      - name: Install CocoaPods
+        working-directory: apps/mobile/ios
+        run: pod install
+
+      - name: Build (Release, no code signing)
+        working-directory: apps/mobile/ios
+        run: |
+          set +e
+          xcodebuild \
+            -workspace Ghostgrid.xcworkspace \
+            -scheme Ghostgrid \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > xcodebuild.log 2>&1
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::group::Build errors"
+            grep -E "error:|\*\* BUILD FAILED" xcodebuild.log | head -100
+            echo "::endgroup::"
+            tail -60 xcodebuild.log
+          fi
+          exit $STATUS
+
+      - name: Package Ghostgrid.ipa
+        working-directory: apps/mobile/ios
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Ghostgrid.app Payload/
+          zip -qry ../../../Ghostgrid.ipa Payload
+          ls -la ../../../Ghostgrid.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ghostgrid-ipa
+          path: Ghostgrid.ipa
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: xcodebuild-log
+          path: apps/mobile/ios/xcodebuild.log
+          retention-days: 7
