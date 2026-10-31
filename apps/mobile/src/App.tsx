@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import {
-  ClickPlan, DEFAULT_CONFIG, DEFAULT_PAD_SETTINGS, HitLog, PAD_NAMES, Scheduler, calibrationFromHits, defaultLevels,
+  ClickPlan, DEFAULT_CONFIG, DEFAULT_PAD_SETTINGS, HH_PEDAL_CC, HitLog, PAD_NAMES, Scheduler, calibrationFromHits, defaultLevels,
   gridOffset, resolveNote, tempoMarking, timingStats, type ClickStep, type PadKey, type Preset,
 } from '@ghostgrid/core';
 import Engine, { type EngineInfo, type PadHitEvent, type CaptureHitEvent } from '../modules/ghostgrid-engine';
@@ -39,12 +39,14 @@ export default function App() {
   const [calibCount, setCalibCount] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
   const [lastMic, setLastMic] = useState('');
+  const [pedal, setPedal] = useState<number | null>(null);
 
   // live values for native event handlers
   const R = useRef({
     info: null as EngineInfo | null, running: false, bpm: 100, preset: 'roland' as Preset,
     calib: { pads: 0, mic: 0 } as Record<Source, number>, calibrating: null as Source | null, calibRaw: [] as number[],
     grid: [] as number[], visual: [] as { t: number; beat: number }[],
+    hhPedal: null as number | null,
     scheduler: null as Scheduler<ClickStep> | null, timer: null as ReturnType<typeof setInterval> | null,
     log: new HitLog(32),
   });
@@ -119,8 +121,13 @@ export default function App() {
       Engine.addListener('onRouteChange', (i) => { R.current.info = i; setInfo(i); }),
       Engine.addListener('onMidiSources', (e) => setSources(e.sources)),
       Engine.addListener('onMicLevel', (e) => setMicLevel(e.level)),
+      Engine.addListener('onControl', (e) => {
+        if (e.cc !== HH_PEDAL_CC) return;
+        R.current.hhPedal = e.value;
+        setPedal(e.value);
+      }),
       Engine.addListener('onPadHit', (e: PadHitEvent) => {
-        const h = resolveNote({ ...DEFAULT_PAD_SETTINGS, preset: R.current.preset }, e.note, e.velocity);
+        const h = resolveNote({ ...DEFAULT_PAD_SETTINGS, preset: R.current.preset }, e.note, e.velocity, R.current.hhPedal);
         const key: string = h.id ? (h.open ? 'hh+o' : h.id) : `n${e.note}`;
         const name = h.id ? PAD_NAMES[key as PadKey] : 'not mapped';
         const off = score(e.time, 'pads', key);
@@ -235,6 +242,7 @@ export default function App() {
             ))}
           </View>
           <Text style={s.lastHit}>{lastHit}</Text>
+          <Row label="Hi-hat pedal" value={pedal === null ? 'not received yet' : `${pedal} · ${pedal >= DEFAULT_PAD_SETTINGS.hhClosedAt ? 'closed' : 'open'}`} />
         </Card>
 
         {/* 4. Timing */}

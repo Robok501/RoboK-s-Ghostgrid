@@ -16,9 +16,11 @@ export interface EngineInfo {
 
 export interface PadHitEvent { time: number; note: number; velocity: number; channel: number; source: string }
 export interface CaptureHitEvent { time: number; peak: number }
+export interface ControlEvent { time: number; cc: number; value: number; channel: number; source: string }
 
 type Events = {
   onPadHit: (e: PadHitEvent) => void;
+  onControl: (e: ControlEvent) => void;
   onMidiSources: (e: { sources: string[] }) => void;
   onCaptureHit: (e: CaptureHitEvent) => void;
   onMicLevel: (e: { level: number }) => void;

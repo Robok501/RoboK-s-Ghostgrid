@@ -27,8 +27,13 @@ export interface PadSettings {
   acc: number;
   /** snare velocity below which a hit is a ghost note */
   ghost: number;
+  /** hi-hat pedal position (MIDI CC 4, 0 = open … 127 = closed) at or above which the hi-hat counts as closed */
+  hhClosedAt: number;
 }
-export const DEFAULT_PAD_SETTINGS: PadSettings = { preset: 'gm', custom: {}, acc: 110, ghost: 40 };
+export const DEFAULT_PAD_SETTINGS: PadSettings = { preset: 'gm', custom: {}, acc: 110, ghost: 40, hhClosedAt: 90 };
+
+/** MIDI controller that carries the hi-hat pedal position on most e-drum modules. */
+export const HH_PEDAL_CC = 4;
 
 export function noteTable(s: PadSettings): Record<number, PadKey> {
   return { ...(s.preset === 'roland' ? ROLAND_MAP : GM_MAP), ...s.custom };
@@ -36,10 +41,23 @@ export function noteTable(s: PadSettings): Record<number, PadKey> {
 
 export interface PadHit { note: number; vel: number; id: InstrumentId | null; open: boolean }
 
-/** Resolve a note-on to an instrument (or null when the note isn't mapped). */
-export function resolveNote(s: PadSettings, note: number, vel: number): PadHit {
+/**
+ * Resolve a note-on to an instrument (or null when the note isn't mapped).
+ * Many modules (e.g. the Roland TD-27 on the hi-hat edge) send the same note open or closed and report the
+ * pedal position separately as CC 4. When that position is known, it decides open versus closed for hi-hat hits.
+ */
+export function resolveNote(s: PadSettings, note: number, vel: number, hhPedal?: number | null): PadHit {
   const m = noteTable(s)[note];
-  return { note, vel, id: m ? (m.split('+')[0] as InstrumentId) : null, open: !!m && m.endsWith('+o') };
+  const id = m ? (m.split('+')[0] as InstrumentId) : null;
+  let open = !!m && m.endsWith('+o');
+  if (id === 'hh' && hhPedal !== undefined && hhPedal !== null) open = hhPedal < (s.hhClosedAt ?? 90);
+  return { note, vel, id, open };
+}
+
+/** Parse a control change; returns controller, value and channel, or null. */
+export function parseControl(data: ArrayLike<number>): { cc: number; value: number; channel: number } | null {
+  if (!data || data.length < 3 || (data[0] & 0xf0) !== 0xb0) return null;
+  return { cc: data[1], value: data[2], channel: data[0] & 0x0f };
 }
 
 /** Parse a raw MIDI message; returns a note-on (velocity > 0) or null. */

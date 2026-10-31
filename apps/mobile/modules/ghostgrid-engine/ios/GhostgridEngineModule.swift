@@ -9,7 +9,7 @@ public class GhostgridEngineModule: Module {
   public func definition() -> ModuleDefinition {
     Name("GhostgridEngine")
 
-    Events("onPadHit", "onMidiSources", "onCaptureHit", "onMicLevel", "onRouteChange")
+    Events("onPadHit", "onControl", "onMidiSources", "onCaptureHit", "onMicLevel", "onRouteChange")
 
     OnCreate {
       self.engine.emit = { [weak self] name, body in

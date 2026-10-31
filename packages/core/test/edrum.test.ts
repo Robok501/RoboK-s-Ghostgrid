@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PAD_SETTINGS, learnPad, notesFor, parseNoteOn, resolveNote, stateFor, type PadSettings } from '../src/edrum';
+import { DEFAULT_PAD_SETTINGS, learnPad, notesFor, parseControl, parseNoteOn, resolveNote, stateFor, type PadSettings } from '../src/edrum';
 
 const gm = DEFAULT_PAD_SETTINGS, roland: PadSettings = { ...gm, preset: 'roland' };
 
@@ -24,6 +24,27 @@ describe('note mapping', () => {
   it('hi-hat may learn several notes', () => {
     const s = learnPad(learnPad(gm, 100, 'hh'), 101, 'hh');
     expect(notesFor(s, 'hh')).toEqual([42, 100, 101]);
+  });
+});
+
+describe('hi-hat pedal position (CC 4)', () => {
+  it('decides open or closed when the module sends one note for both (TD-27 edge = 26)', () => {
+    expect(resolveNote(roland, 26, 90, 0)).toMatchObject({ id: 'hh', open: true });
+    expect(resolveNote(roland, 26, 90, 127)).toMatchObject({ id: 'hh', open: false });
+    expect(resolveNote(roland, 46, 90, 127).open).toBe(false); // bow note says open, pedal says closed
+    expect(resolveNote(roland, 42, 90, 10).open).toBe(true);
+  });
+  it('keeps the note map when the pedal position is unknown, and ignores it for other pads', () => {
+    expect(resolveNote(roland, 26, 90).open).toBe(true);
+    expect(resolveNote(roland, 22, 90, null).open).toBe(false);
+    expect(resolveNote(roland, 38, 90, 0).open).toBe(false);
+  });
+  it('uses the configurable closed threshold', () => {
+    expect(resolveNote({ ...roland, hhClosedAt: 120 }, 26, 90, 100).open).toBe(true);
+  });
+  it('parses control changes', () => {
+    expect(parseControl([0xb9, 4, 127])).toEqual({ cc: 4, value: 127, channel: 9 });
+    expect(parseControl([0x99, 38, 100])).toBeNull();
   });
 });
 

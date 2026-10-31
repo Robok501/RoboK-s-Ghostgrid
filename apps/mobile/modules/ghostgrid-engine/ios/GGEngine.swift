@@ -366,6 +366,17 @@ final class GGEngine {
             "source": source,
           ])
         }
+      } else if kind == 0xB0 {
+        guard i + 1 < len else { break }
+        let cc = Int(raw[i]), value = Int(raw[i + 1])
+        i += 2
+        emit?("onControl", [
+          "time": hostToEngine(host),
+          "cc": cc,
+          "value": value,
+          "channel": Int(status & 0x0F),
+          "source": source,
+        ])
       } else if kind == 0xC0 || kind == 0xD0 {
         i += 1
       } else if status != 0 {
