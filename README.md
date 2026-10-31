@@ -1,6 +1,6 @@
-# Drum app
+# Ghostgrid
 
-The drummer's companion: a programmable metronome with training modes, drum notation with voice and e-drum input, realistic kits, a small DAW and stem splitting. iPhone and iPad first, Android second.
+Ghostgrid is the drummer's companion: a programmable metronome with training modes, drum notation with voice and e-drum input, realistic kits, a small DAW and stem splitting. iPhone and iPad first, Android second.
 
 ## Repository layout
 
@@ -10,7 +10,7 @@ The drummer's companion: a programmable metronome with training modes, drum nota
 | `prototypes/` | The working web prototypes (Click Coach, Groove Sketch). Self-contained HTML; open in a browser or host on any HTTPS site. |
 | `apps/mobile` | *Coming in step 2:* the Expo / React Native app with a native audio engine. |
 
-## Core modules (`@drum-app/core`)
+## Core modules (`@ghostgrid/core`)
 
 | Module | Contents |
 | --- | --- |

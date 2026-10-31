@@ -1,5 +1,5 @@
 {
-  "name": "@drum-app/core",
+  "name": "@ghostgrid/core",
   "version": "0.1.0",
   "description": "Platform-independent drum app logic: meter, training modes, timing, grooves, notation engraving, quantizing, voice recognition, e-drum mapping, export.",
   "type": "module",
