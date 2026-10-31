@@ -34,6 +34,8 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   now(): number;
   scheduleClick(time: number, level: number): void;
   cancelAfter(time: number): void;
+  setClickSound(name: 'click' | 'wood' | 'cowbell' | 'hat'): void;
+  uptimeToEngine(uptime: number): number;
   info(): EngineInfo;
   midiSources(): string[];
   showBluetoothMidi(): Promise<void>;

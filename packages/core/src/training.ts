@@ -94,6 +94,14 @@ export class ClickPlan {
     this.barSilent = silent;
   }
 
+  /** Change the tempo while running (not in program mode, where sections set it). Takes effect on the next step. */
+  setBpm(bpm: number) {
+    if (this.cfg.mode !== 'program') { this.bpm = bpm; this.cfg.bpm = bpm; }
+  }
+
+  /** Current tempo (follows ramps and program sections). */
+  get tempo() { return this.bpm; }
+
   /** Next click step, or null when a non-looping program has finished. */
   next(): ClickStep | null {
     if (this.done) return null;

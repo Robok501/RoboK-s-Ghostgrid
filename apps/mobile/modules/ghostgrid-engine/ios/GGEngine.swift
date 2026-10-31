@@ -196,17 +196,71 @@ final class GGEngine {
 
   // MARK: - Click sounds
 
+  private var clickSound = "click"
+
+  /// Choose the click sound: "click", "wood", "cowbell" or "hat". Takes effect on the next click.
+  func setClickSound(_ name: String) {
+    clickSound = name
+    let made = makeSounds(name)
+    os_unfair_lock_lock(lock)
+    clicks = made
+    voices.removeAll(keepingCapacity: true)
+    os_unfair_lock_unlock(lock)
+  }
+
   private func makeClicks() {
-    func burst(_ freq: Double, _ gain: Float, _ dur: Double) -> [Float] {
-      let n = Int(sampleRate * dur)
-      return (0..<n).map { i in
-        let t = Double(i) / sampleRate
-        let env = Float(min(1, t / 0.0015) * exp(-t / (dur / 5)))
-        return Float(sin(2 * Double.pi * freq * t)) * env * gain
+    let made = makeSounds(clickSound)
+    os_unfair_lock_lock(lock)
+    clicks = made
+    os_unfair_lock_unlock(lock)
+  }
+
+  /// Three buffers per sound: index 0 = soft (subdivision), 1 = normal, 2 = accent. Same recipes as the web prototype.
+  private func makeSounds(_ name: String) -> [[Float]] {
+    let sr = sampleRate
+    var seed: UInt32 = 12345
+    func noise() -> Double { seed = seed &* 1664525 &+ 1013904223; return Double(seed) / Double(UInt32.max) * 2 - 1 }
+    func env(_ t: Double, _ dur: Double) -> Double { min(1, t / 0.0015) * exp(-t / (dur / 5)) }
+    func render(_ dur: Double, _ f: (Double) -> Double) -> [Float] {
+      let n = Int(sr * dur)
+      return (0..<n).map { i in Float(f(Double(i) / sr)) }
+    }
+    func tri(_ freq: Double, _ t: Double) -> Double { let x = (freq * t).truncatingRemainder(dividingBy: 1); return 4 * abs(x - 0.5) - 1 }
+    func sq(_ freq: Double, _ t: Double) -> Double { sin(2 * .pi * freq * t) >= 0 ? 1 : -1 }
+
+    func one(_ level: Int) -> [Float] {
+      let gain = [0.28, 0.6, 0.95][level]
+      let acc = level == 2, sub = level == 0
+      switch name {
+      case "wood":
+        let f = acc ? 1180.0 : sub ? 640.0 : 860.0
+        var prev = 0.0
+        return render(0.06) { t in
+          let n = noise(); let hp = n - prev; prev = n
+          return (tri(f, t) * 0.9 + hp * 0.25 * exp(-t / 0.004)) * env(t, 0.06) * gain
+        }
+      case "cowbell":
+        let m = acc ? 1.25 : sub ? 0.85 : 1.0
+        return render(0.16) { t in (sq(540 * m, t) + sq(800 * m, t)) * 0.18 * env(t, 0.16) * gain }
+      case "hat":
+        let dur = acc ? 0.14 : 0.05
+        var p1 = 0.0, p2 = 0.0
+        return render(dur) { t in
+          let n = noise(); let h1 = n - p1; p1 = n; let h2 = h1 - p2; p2 = h1
+          return h2 * 0.35 * env(t, dur) * gain
+        }
+      default:
+        let f = acc ? 1760.0 : sub ? 990.0 : 1320.0
+        let dur = acc ? 0.045 : sub ? 0.035 : 0.04
+        return render(dur) { t in sin(2 * .pi * f * t) * env(t, dur) * gain }
       }
     }
-    // index 0 = soft (subdivision), 1 = normal, 2 = accent
-    clicks = [burst(990, 0.28, 0.035), burst(1320, 0.6, 0.04), burst(1760, 0.95, 0.045)]
+    return [one(0), one(1), one(2)]
+  }
+
+  /// Convert a time in seconds since boot (UITouch / React Native touch timestamps) to engine seconds.
+  func uptimeToEngine(_ uptime: Double) -> Double {
+    return hostToEngine(UInt64(max(0, uptime) / hostToSeconds))
   }
 
   // MARK: - Render (audio thread)

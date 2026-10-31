@@ -48,6 +48,15 @@ public class GhostgridEngineModule: Module {
       self.engine.cancelAfter(time: time)
     }
 
+    Function("setClickSound") { (name: String) in
+      self.engine.setClickSound(name)
+    }
+
+    /// Convert a touch timestamp (seconds since boot) to engine time, for the on-screen tap pad.
+    Function("uptimeToEngine") { (uptime: Double) -> Double in
+      return self.engine.uptimeToEngine(uptime)
+    }
+
     Function("info") { () -> [String: Any] in
       return self.engine.info()
     }

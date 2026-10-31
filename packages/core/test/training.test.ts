@@ -15,6 +15,21 @@ describe('basic', () => {
   });
 });
 
+describe('live tempo change', () => {
+  it('applies a new tempo from the next step', () => {
+    const p = new ClickPlan(cfg({ bpm: 120 }));
+    expect(p.next()!.duration).toBeCloseTo(0.5);
+    p.setBpm(60);
+    expect(p.next()!.duration).toBeCloseTo(1);
+    expect(p.tempo).toBe(60);
+  });
+  it('is ignored in program mode', () => {
+    const p = new ClickPlan(cfg({ mode: 'program', program: [{ bars: 1, bpm: 90, beats: 4 }] }));
+    p.setBpm(200);
+    expect(p.next()!.bpm).toBe(90);
+  });
+});
+
 describe('gap', () => {
   it('alternates bars with click and silent bars', () => {
     const s = take(new ClickPlan(cfg({ mode: 'gap', beats: 4, gapOn: 2, gapOff: 1 })), 4 * 6);
