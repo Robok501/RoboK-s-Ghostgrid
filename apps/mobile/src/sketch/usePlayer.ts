@@ -1,11 +1,13 @@
 /**
  * Sketch playback and recording on the native engine. Bars are scheduled a little ahead, one at a time, from the
- * latest idea, so edits are heard from the next bar. Recording counts in one bar, then captures e-drum hits.
+ * latest idea, so edits are heard from the next bar. Recording counts in one bar, then captures e-drum hits,
+ * or your voice (beatbox) through the mic, which is recognised after you stop.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { File } from 'expo-file-system';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
-  DRUM_SOUNDS, INSTRUMENTS, barGrid, barSteps, ideaToRaw, soundFor, stepTime, withRaw, type Idea, type InstrumentId, type RawNote,
+  DRUM_SOUNDS, INSTRUMENTS, analyze, barGrid, barSteps, ideaToRaw, soundFor, stepTime, withRaw, type Idea, type InstrumentId, type RawNote,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
@@ -14,9 +16,16 @@ const AHEAD = 0.5;
 const sound = (name: string) => DRUM_SOUNDS.indexOf(name as (typeof DRUM_SOUNDS)[number]);
 
 export interface PlayPos { bar: number; step: number }
-type RecState = null | { phase: 'count' | 'rec'; start: number; bars: number; beat: number; hits: RawNote[] };
+export type RecSource = 'pads' | 'voice';
+type RecState = null | { phase: 'count' | 'rec'; start: number; bars: number; beat: number; hits: RawNote[]; source: RecSource; clickOk: boolean };
 
-export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: number) => void) {
+/** Read the raw float file written by the native recorder. */
+export function readVoiceFile(path: string): Float32Array {
+  const bytes = new File(path).bytesSync();
+  return new Float32Array(bytes.slice().buffer, 0, Math.floor(bytes.length / 4));
+}
+
+export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: number, source: RecSource) => void) {
   const { info, on, settings } = useApp();
   const ideaRef = useRef(idea);
   ideaRef.current = idea;
@@ -26,6 +35,10 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
   sk.current = settings.sketch;
   const calibPads = useRef(settings.click.calib.pads);
   calibPads.current = settings.click.calib.pads;
+  const calibMic = useRef(settings.click.calib.mic);
+  calibMic.current = settings.click.calib.mic;
+  const route = useRef(info?.route);
+  route.current = info?.route;
   const outLat = useRef(0);
   outLat.current = info?.outputLatency ?? 0;
 
@@ -52,7 +65,8 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
         Engine.scheduleDrum(t + stepTime(I, b, s) - stepTime(I, b, 0), sound(sd.sound), sd.gain);
       }
     }
-    if (sk.current.click || R.current.rec) {
+    const rc = R.current.rec;
+    if (sk.current.click || (rc && (rc.source === 'pads' || rc.clickOk))) {
       const beat = 60 / I.bpm;
       for (let k = 0; k < I.beats; k++) Engine.scheduleDrum(t + k * beat, sound(k === 0 ? 'clickAcc' : 'click'), 0.7);
     }
@@ -69,18 +83,30 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     setPlaying(false); setPos(null); setRec(null);
     deactivateKeepAwake('sketch');
     if (wasRec && wasRec.phase === 'rec') finishRecording(wasRec);
+    else if (wasRec?.source === 'voice') { try { Engine.stopRecording(); } catch { /* not recording */ } onRec.current(ideaRef.current, -1, 'voice'); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const finishRecording = (r: NonNullable<RecState>) => {
     const I = ideaRef.current;
+    if (r.source === 'voice') {
+      try {
+        const f = Engine.stopRecording();
+        const data = readVoiceFile(f.path);
+        const a = analyze(data, f.sampleRate, sk.current.voice, sk.current.ghostPct);
+        r.hits = a.hits.map((h) => ({
+          beat: (f.startTime + h.t - outLat.current + calibMic.current / 1000 - r.start) / r.beat,
+          id: h.cls, v: (h.acc ? 2 : h.v || 1) as RawNote['v'],
+        }));
+      } catch { r.hits = []; }
+    }
     const start = 0, end = r.bars * I.beats;
     let base = ideaToRaw(I);
     if (sk.current.recMode === 'replace') base = base.filter((n) => n.beat < start - 1e-6 || n.beat >= end - 1e-6);
     const hits = r.hits.filter((h) => h.beat > -0.5 && h.beat < end - 0.1).map((h) => ({ ...h, beat: Math.max(0, h.beat) }));
-    if (!hits.length) { onRec.current(I, 0); return; }
+    if (!hits.length) { onRec.current(I, 0, r.source); return; }
     const used = new Set<InstrumentId>([...(I.rows ?? []), ...hits.map((h) => h.id)]);
     const next = withRaw({ ...I, rows: I.rows ? [...used] : undefined }, [...base, ...hits], I.bars.length);
-    onRec.current(next, hits.length);
+    onRec.current(next, hits.length, r.source);
   };
 
   const pump = useCallback(() => {
@@ -112,14 +138,17 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     }
   }, [stop]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const begin = useCallback((recording: boolean) => {
+  const begin = useCallback((recording: boolean, source: RecSource = 'pads') => {
     stop();
     const r = R.current, I = ideaRef.current;
+    // with the phone speaker the mic would hear the click, so voice takes get the count-in only
+    const clickOk = source === 'pads' || route.current !== 'speaker';
     r.nextT = Engine.now() + 0.15;
     r.nextBar = 0;
     r.starts = [];
-    r.withGroove = !recording || sk.current.recMode === 'layer';
-    r.rec = recording ? { phase: 'count', start: 0, bars: Math.max(1, I.bars.length), beat: 60 / I.bpm, hits: [] } : null;
+    r.withGroove = !recording || (sk.current.recMode === 'layer' && clickOk);
+    r.rec = recording ? { phase: 'count', start: 0, bars: Math.max(1, I.bars.length), beat: 60 / I.bpm, hits: [], source, clickOk } : null;
+    if (recording && source === 'voice' && !Engine.startRecording()) { r.rec = null; onRec.current(I, -2, 'voice'); return; }
     pump();
     r.timer = setInterval(pump, 50);
     setPlaying(true);
@@ -153,7 +182,7 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
   // e-drum hits while recording
   useEffect(() => on('pad', (e) => {
     const r = R.current.rec;
-    if (!r || !e.mapped) return;
+    if (!r || r.source !== 'pads' || !e.mapped) return;
     const id = (e.key === 'hh+o' ? 'hh' : e.key) as InstrumentId;
     if (!INSTRUMENTS.some((i) => i.id === id)) return;
     const t = e.time - outLat.current + calibPads.current / 1000;
@@ -163,5 +192,5 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
   useEffect(() => on('restart', () => stop()), [on, stop]);
   useEffect(() => () => stop(), [stop]);
 
-  return { playing, pos, rec, countBeat, play: () => begin(false), record: () => begin(true), stop };
+  return { playing, pos, rec, countBeat, recSource: R.current.rec?.source ?? null, play: () => begin(false), record: (src: RecSource = 'pads') => begin(true, src), stop };
 }

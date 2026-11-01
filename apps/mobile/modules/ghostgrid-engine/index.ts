@@ -39,6 +39,10 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   setClickSound(name: 'click' | 'wood' | 'cowbell' | 'hat'): void;
   uptimeToEngine(uptime: number): number;
   info(): EngineInfo;
+  /** Keep the raw mic signal (voice to notes). Returns false when the mic is off. */
+  startRecording(): boolean;
+  /** Stop; the samples are in a file of 32-bit floats (little-endian, mono). */
+  stopRecording(): { path: string; sampleRate: number; startTime: number; frames: number };
   midiSources(): string[];
   showBluetoothMidi(): Promise<void>;
 }

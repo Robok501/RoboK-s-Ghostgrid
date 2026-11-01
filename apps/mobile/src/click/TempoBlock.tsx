@@ -29,7 +29,7 @@ export function TempoBlock({ bpm, shown, meter, disabled, onChange, onTap }: {
         <View {...pan.panHandlers} style={s.numberBox} accessible accessibilityRole="adjustable" accessibilityLabel={`Tempo ${shown} BPM, drag up or down`}
           accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
           onAccessibilityAction={(e) => set.current(live.current + (e.nativeEvent.actionName === 'increment' ? 1 : -1))}>
-          <Text style={s.number} numberOfLines={1} adjustsFontSizeToFit>{shown}</Text>
+          <Text style={s.number} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{shown}</Text>
         </View>
         <Pressable {...up} style={s.round} accessibilityRole="button" accessibilityLabel="Faster"><Text style={s.roundTxt}>+</Text></Pressable>
       </View>
@@ -51,8 +51,9 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', justifyContent: 'space-between' },
   round: { width: 56, height: 56, borderRadius: 28, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center' },
   roundTxt: { color: C.fg, fontSize: 30, lineHeight: 34 },
-  numberBox: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 120 },
-  number: { color: C.fg, fontSize: 112, lineHeight: 118, fontWeight: '800', fontVariant: ['tabular-nums'], fontFamily: F.display },
+  // the condensed display face has tall digits: give the line extra room so iOS doesn't clip their tops
+  numberBox: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 140, paddingTop: 8, overflow: 'visible' },
+  number: { color: C.fg, fontSize: 108, lineHeight: 136, paddingTop: 6, fontWeight: '800', fontVariant: ['tabular-nums'], fontFamily: F.display, includeFontPadding: false, textAlignVertical: 'center' },
   label: { color: C.muted, fontSize: 12, letterSpacing: 1.4 },
   quick: { flexDirection: 'row', gap: 8, marginTop: 8 },
   tap: { minHeight: 44, paddingHorizontal: 18, borderRadius: 12, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center' },

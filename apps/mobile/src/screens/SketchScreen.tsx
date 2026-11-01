@@ -1,6 +1,7 @@
 /**
  * Groove Sketch: tap grooves into a step grid, see them as a drum score, play them, record them from the e-drum,
- * import MIDI and export PDF, MIDI, text tab or a Ghostgrid file.
+ * record them by voice (beatbox), import MIDI and export PDF, MIDI, text tab or a Ghostgrid file.
+ * A ribbon under the title (Ideas · Import · Export · Voice · Settings) opens everything that belongs to the sketch.
  * Layout: iPad shows score and full grid together; iPhone upright shows the score above a half-bar grid you swipe;
  * iPhone sideways shows a full bar of grid and only shows the score while playing.
  */
@@ -13,19 +14,20 @@ import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import {
   GRID_NAMES, INSTRUMENTS, MAX_BARS, UndoStack, addBar, addRow, barGrid, buildMidi, clearBar, cycleState, deleteBar, duplicateBar,
-  importMidi, newId, nextGrid, notationStyle, scoreDocument, setBarGrid, setBeats, setGrid, setNote, textTab, tidyRows, visibleRows,
-  INSTRUMENT, type Idea, type InstrumentId,
+  SOUNDS, addSamples, analyze, importMidi, newId, nextGrid, taughtSounds, usesOwnSounds, notationStyle, scoreDocument, setBarGrid, setBeats, setGrid, setNote, textTab, tidyRows, visibleRows,
+  INSTRUMENT, type Idea, type InstrumentId, type SoundKey,
 } from '@ghostgrid/core';
+import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 import { GridPager } from '../sketch/GridPager';
 import { Score } from '../sketch/Score';
 import { freshIdea, loadIdeas, saveIdeas, type IdeaStore } from '../sketch/ideas';
-import { useSketchPlayer } from '../sketch/usePlayer';
+import { readVoiceFile, useSketchPlayer } from '../sketch/usePlayer';
 import { C, F } from '../theme';
 import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle } from '../ui';
 
 export function SketchScreen() {
-  const { settings, setSketch } = useApp();
+  const { settings, setSketch, mic, setMic } = useApp();
   const sk = settings.sketch;
   const style = useMemo(() => notationStyle(sk.style, sk.custom), [sk.style, sk.custom]);
   const win = useWindowDimensions();
@@ -38,7 +40,9 @@ export function SketchScreen() {
   const idea = store.ideas.find((i) => i.id === store.current) ?? store.ideas[0];
   const [bar, setBar] = useState(0);
   const [scope, setScope] = useState<'all' | 'bar'>('all');
-  const [menu, setMenu] = useState(false);
+  const [sheet, setSheet] = useState<null | 'ideas' | 'export' | 'voice' | 'settings' | 'all'>(null);
+  const [teaching, setTeaching] = useState<SoundKey | null>(null);
+  const micWasOff = useRef(false);
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState('');
   const [sideView, setSideView] = useState<'auto' | 'grid' | 'score'>('auto');
@@ -58,11 +62,55 @@ export function SketchScreen() {
   }, []);
   const say = (t: string) => { setNotice(t); setTimeout(() => setNotice((n) => (n === t ? '' : n)), 4500); };
 
-  const player = useSketchPlayer(idea, (next, count) => {
-    if (!count) { say('No hits recorded. Is your e-drum connected? See Kit & settings.'); return; }
+  const releaseMic = () => { if (micWasOff.current) { micWasOff.current = false; setMic(false); } };
+  const player = useSketchPlayer(idea, (next, count, source) => {
+    if (source === 'voice') setTimeout(releaseMic, 50);
+    if (count === -2) { say('The microphone is off. Allow it in Settings → Ghostgrid.'); return; }
+    if (count < 0) return;
+    if (!count) {
+      say(source === 'voice' ? 'No sounds found. Beatbox a bit louder, close to the phone.' : 'No hits recorded. Is your e-drum connected? See Kit & settings.');
+      return;
+    }
     commit(next);
-    say(`Recorded ${count} hits. Change the grid if the timing needs a different grid.`);
+    say(`${source === 'voice' ? 'Heard' : 'Recorded'} ${count} hits. Change the grid if the timing needs a different grid.`);
   });
+
+  /** Mic on for voice work (remember to turn it off again afterwards). */
+  const ensureMic = async () => {
+    if (mic) return true;
+    micWasOff.current = true;
+    const ok = await setMic(true);
+    if (!ok) { micWasOff.current = false; say('The microphone is off. Allow it in Settings → Ghostgrid.'); }
+    return ok;
+  };
+  const recordVoice = async () => {
+    if (player.rec) { player.stop(); return; }
+    if (await ensureMic()) player.record('voice');
+  };
+
+  // ---- teaching your own beatbox sounds
+  const startTeach = async (k: SoundKey) => {
+    player.stop();
+    if (!(await ensureMic())) return;
+    if (!Engine.startRecording()) { say('The microphone is off.'); return; }
+    setTeaching(k);
+  };
+  const finishTeach = (keep: boolean) => {
+    const k = teaching;
+    setTeaching(null);
+    try {
+      const f = Engine.stopRecording();
+      if (keep && k) {
+        const a = analyze(readVoiceFile(f.path), f.sampleRate, {});
+        const vecs = a.hits.slice().sort((x, y) => y.peak - x.peak).slice(0, 8).map((h) => h.f.v);
+        if (vecs.length >= 2) {
+          setSketch({ voice: addSamples(sk.voice, k, vecs) });
+          say(`${SOUNDS.find((x) => x.k === k)!.name}: learned ${vecs.length} examples.`);
+        } else say('Heard too few sounds. Try again, 4 to 6 times, with a short pause between them.');
+      }
+    } catch { say('Recording failed.'); }
+    setTimeout(releaseMic, 50);
+  };
 
   const switchTo = (id: string) => {
     player.stop();
@@ -105,7 +153,7 @@ export function SketchScreen() {
 
   // ---- import / export
   const importFile = async () => {
-    setMenu(false);
+    setSheet(null);
     const res = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
     if (res.canceled || !res.assets?.[0]) return;
     const a = res.assets[0], name = a.name.replace(/\.(mid|midi|ghostgrid|json)$/i, '');
@@ -133,7 +181,7 @@ export function SketchScreen() {
     await Sharing.shareAsync(f.uri, { mimeType, UTI, dialogTitle: idea.name });
   };
   const exportAs = async (kind: 'pdf' | 'midi' | 'txt' | 'gg') => {
-    setMenu(false);
+    setSheet(null);
     try {
       if (kind === 'pdf') {
         const svg = scoreDocument(idea, 720, sk.count, style);
@@ -149,26 +197,57 @@ export function SketchScreen() {
   };
 
   const playBtn = <Btn label={player.playing && !player.rec ? 'Stop' : 'Play'} primary active={player.playing && !player.rec} onPress={() => { setSideView('auto'); if (player.playing) player.stop(); else player.play(); }} style={s.play} />;
+  const recOn = (src: 'pads' | 'voice') => !!player.rec && player.recSource === src;
+  const recLabel = (src: 'pads' | 'voice', idle: string) => (recOn(src) ? (player.rec === 'count' ? `${player.countBeat || '…'}` : 'Stop') : idle);
   const recBtn = (
-    <Pressable onPress={() => (player.rec ? player.stop() : player.record())} style={[s.rec, player.rec && s.recOn]} accessibilityRole="button" accessibilityLabel={player.rec ? 'Stop recording' : 'Record from e-drum'}>
-      <View style={[s.recDot, player.rec && { backgroundColor: C.fg }]} />
-      <Text style={s.recTxt}>{player.rec === 'count' ? `${player.countBeat || '…'}` : player.rec ? 'Stop' : 'Rec'}</Text>
+    <Pressable onPress={() => (player.rec ? player.stop() : player.record('pads'))} style={[s.rec, recOn('pads') && s.recOn]} accessibilityRole="button" accessibilityLabel={player.rec ? 'Stop recording' : 'Record from e-drum'}>
+      <View style={[s.recDot, recOn('pads') && { backgroundColor: C.fg }]} />
+      <Text style={s.recTxt}>{recLabel('pads', 'E-drum')}</Text>
     </Pressable>
   );
+  const voiceBtn = (
+    <Pressable onPress={recordVoice} style={[s.rec, recOn('voice') && s.recOn]} accessibilityRole="button" accessibilityLabel={player.rec ? 'Stop recording' : 'Record beatbox'}>
+      <Text style={[s.recTxt, { fontSize: 16 }]}>{recOn('voice') ? '' : '◉'}</Text>
+      <Text style={s.recTxt}>{recLabel('voice', 'Voice')}</Text>
+    </Pressable>
+  );
+  const RIBBON: { id: 'ideas' | 'import' | 'export' | 'voice' | 'settings'; glyph: string; label: string }[] = [
+    { id: 'ideas', glyph: '▤', label: 'Ideas' },
+    { id: 'import', glyph: '⤓', label: 'Import' },
+    { id: 'export', glyph: '⤴', label: 'Export' },
+    { id: 'voice', glyph: '◉', label: 'Voice' },
+    { id: 'settings', glyph: '⚙︎', label: 'Settings' },
+  ];
+  const ribbon = (
+    <View style={s.ribbon} accessibilityRole="toolbar">
+      {RIBBON.map((r) => (
+        <Pressable key={r.id} onPress={() => (r.id === 'import' ? importFile() : setSheet(r.id))} style={({ pressed }) => [s.ribBtn, pressed && { backgroundColor: C.raised2 }]}
+          accessibilityRole="button" accessibilityLabel={r.label}>
+          <Text style={s.ribGlyph}>{r.glyph}</Text>
+          <Text style={s.ribTxt}>{r.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+  const show = (k: 'ideas' | 'export' | 'voice' | 'settings') => sheet === k || sheet === 'all';
+  const own = usesOwnSounds(sk.voice), taught = taughtSounds(sk.voice);
 
   return (
     <View style={s.root}>
       {/* top bar */}
       <View style={s.top}>
-        <Pressable onPress={() => setMenu(true)} style={s.ideaBtn} accessibilityRole="button" accessibilityLabel="Ideas and options">
+        <Pressable onPress={() => setSheet('ideas')} style={s.ideaBtn} accessibilityRole="button" accessibilityLabel="Ideas">
           <Text style={s.ideaName} numberOfLines={1}>{idea.name}</Text>
           <Text style={s.ideaSub}>{idea.bpm} BPM · {idea.beats}/4 ▾</Text>
         </Pressable>
+        {phoneSideways && <Btn label="☰ Menu" onPress={() => setSheet('all')} />}
         <Btn label="Undo" disabled={!undo.current.size} onPress={() => { const p = undo.current.pop(); if (p) commit(p, false); }} />
         {phoneSideways && <Btn label={sideScore ? 'Grid' : 'Score'} onPress={() => setSideView(sideScore ? 'grid' : 'score')} />}
         {phoneSideways && recBtn}
+        {phoneSideways && voiceBtn}
         {phoneSideways && playBtn}
       </View>
+      {!phoneSideways && ribbon}
 
       {!!notice && <Text style={s.notice}>{notice}</Text>}
 
@@ -213,18 +292,19 @@ export function SketchScreen() {
         <View style={s.bottom}>
           <Stepper value={idea.bpm} min={30} max={260} onChange={(bpm) => commit({ ...idea, bpm }, false)} format={(v) => `${v}`} />
           {recBtn}
+          {voiceBtn}
           {playBtn}
         </View>
       )}
 
-      <Modal visible={menu} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setMenu(false)}>
+      <Modal visible={!!sheet} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSheet(null)}>
         <View style={s.sheet}>
           <View style={s.sheetHead}>
-            <Text style={s.sheetTitle}>Sketch</Text>
-            <Btn label="Done" onPress={() => setMenu(false)} />
+            <Text style={s.sheetTitle}>{{ ideas: 'Ideas', export: 'Export', voice: 'Voice to notes', settings: 'Sketch settings', all: 'Sketch' }[sheet ?? 'all']}</Text>
+            <Btn label="Done" onPress={() => setSheet(null)} />
           </View>
           <ScrollView contentContainerStyle={s.sheetScroll} keyboardShouldPersistTaps="handled">
-            <Card title="Ideas">
+            {show('ideas') && <Card title="Ideas">
               <View style={s.chips}>
                 {store.ideas.map((i) => <Chip key={i.id} label={i.name} on={i.id === idea.id} onPress={() => switchTo(i.id)} />)}
               </View>
@@ -232,53 +312,82 @@ export function SketchScreen() {
                 <TextInput value={idea.name} onChangeText={(name) => commit({ ...idea, name }, false)} style={s.input} placeholder="Name" placeholderTextColor={C.muted} />
               </Row>
               <View style={s.btnRow}>
-                <Btn label="+ New idea" onPress={() => { addIdea(freshIdea(store.ideas.length + 1)); setMenu(false); }} />
+                <Btn label="+ New idea" onPress={() => { addIdea(freshIdea(store.ideas.length + 1)); setSheet(null); }} />
                 <Btn label="Duplicate" onPress={() => addIdea({ ...JSON.parse(JSON.stringify(idea)), id: newId(), name: `${idea.name} copy` })} />
                 <Btn label="Delete" disabled={store.ideas.length < 2} onPress={() => {
                   const rest = store.ideas.filter((i) => i.id !== idea.id);
                   persist({ ideas: rest, current: rest[0].id }); setBar(0);
                 }} />
               </View>
-            </Card>
+            </Card>}
 
-            <Card title="Groove">
+            {show('settings') && <Card title="Groove">
               <Row label="Tempo" first><Stepper value={idea.bpm} min={30} max={260} onChange={(bpm) => commit({ ...idea, bpm }, false)} /></Row>
               <Row label="Beats per bar"><Stepper value={idea.beats} min={1} max={12} onChange={(b) => commit(setBeats(idea, b))} /></Row>
               <Row label="Swing" hint="not with triplets"><Stepper value={idea.swing} min={0} max={50} step={5} format={(v) => `${v}%`} onChange={(swing) => commit({ ...idea, swing }, false)} /></Row>
               <Toggle label="Click while playing" value={sk.click} onChange={(click) => setSketch({ click })} />
               <Toggle label="Count under the score" hint="1 e & a" value={sk.count} onChange={(count) => setSketch({ count })} />
-            </Card>
+            </Card>}
 
-            <Card title={`Bar ${selBar + 1}`}>
+            {show('settings') && <Card title={`Bar ${selBar + 1}`}>
               <View style={s.btnRow}>
                 <Btn label="Duplicate" disabled={idea.bars.length >= MAX_BARS} onPress={() => commit(duplicateBar(idea, selBar))} />
                 <Btn label="Clear" onPress={() => commit(clearBar(idea, selBar))} />
                 <Btn label="Delete" disabled={idea.bars.length < 2} onPress={() => { commit(deleteBar(idea, selBar)); setBar(Math.max(0, selBar - 1)); }} />
               </View>
               <View style={s.btnRow}><Btn label="Clean up empty rows" onPress={() => commit(tidyRows(idea), false)} /></View>
-            </Card>
+            </Card>}
 
-            <Card title="Record from e-drum">
-              <Note>One bar count-in, then it records over the bars of this idea. Replace writes over them; Layer adds to what's there (kick first, then hats…).</Note>
+            {show('settings') && <Card title="Recording">
+              <Note>E-drum and Voice both count in one bar, then record over the bars of this idea. Replace writes over them; Layer adds to what's there (kick first, then hats…).</Note>
               <Row label="Mode"><Seg options={[{ value: 'replace', label: 'Replace' }, { value: 'layer', label: 'Layer' }]} value={sk.recMode} onChange={(recMode) => setSketch({ recMode: recMode as 'replace' | 'layer' })} /></Row>
-            </Card>
+            </Card>}
 
-            <Card title="Import">
+            {sheet === 'all' && <Card title="Import">
               <Note>A MIDI file (from your module, a DAW or a groove library) becomes a score. Then cycle the grid until it reads right; tap a bar first to change only that bar.</Note>
               <View style={s.btnRow}><Btn label="Import MIDI or Ghostgrid file" onPress={importFile} /></View>
-            </Card>
+            </Card>}
 
-            <Card title="Export">
+            {show('voice') && <Card title="Voice to notes">
+              <Note>Press Voice, wait for the count-in, and beatbox the groove: “boom” for kick, “ka” or “psh” for snare, “ts” for hi-hat. When you stop, the hits are recognised and written into the bars. Use headphones or Bluetooth so the mic doesn't hear the click; on the phone speaker you only get the count-in.</Note>
+              <Row label="Recognition"><Text style={[s.status, own && { color: C.good }]}>{own ? 'Your own sounds' : 'Built-in rules'}</Text></Row>
+              {!own && <Note>Teach at least Kick, Snare and Hi-hat closed with your own voice: recognition gets much better.</Note>}
+            </Card>}
+            {show('voice') && <Card title="Teach your sounds">
+              {SOUNDS.map((snd, i) => {
+                const n = sk.voice[snd.k]?.length ?? 0;
+                return (
+                  <Row key={snd.k} label={`${snd.name}${['bd', 'sn', 'hh'].includes(snd.k) ? ' ·' : ''}`} hint={`say “${snd.say}” · ${n ? `${n} examples` : 'not taught'}`} first={i === 0}>
+                    <Btn label={taught.includes(snd.k) ? 'Again' : 'Teach'} onPress={() => startTeach(snd.k)} />
+                  </Row>
+                );
+              })}
+              <Row label="Ghost notes" hint="snares softer than this share of a normal snare"><Stepper value={sk.ghostPct} min={20} max={70} step={5} format={(v) => `${v}%`} onChange={(ghostPct) => setSketch({ ghostPct })} /></Row>
+              <View style={s.btnRow}><Btn label="Forget taught sounds" onPress={() => setSketch({ voice: {} })} /></View>
+            </Card>}
+
+            {show('export') && <Card title="Export">
               <View style={s.btnRow}>
                 <Btn label="PDF score" onPress={() => exportAs('pdf')} />
                 <Btn label="MIDI" onPress={() => exportAs('midi')} />
                 <Btn label="Text tab" onPress={() => exportAs('txt')} />
                 <Btn label="Ghostgrid file" onPress={() => exportAs('gg')} />
               </View>
-            </Card>
+              <Note>PDF and text tab for reading and printing, MIDI for your DAW or module, a Ghostgrid file to open again in the app (Import).</Note>
+            </Card>}
             <Text style={s.footer}>Notation style: {style.name} · change it under Kit & settings</Text>
           </ScrollView>
         </View>
+        {teaching && (
+          <View style={s.teach}>
+            <Text style={s.teachTitle}>{SOUNDS.find((x) => x.k === teaching)!.name}</Text>
+            <Text style={s.teachSay}>Say “{SOUNDS.find((x) => x.k === teaching)!.say}” 4 to 6 times, with a short pause in between.</Text>
+            <View style={s.btnRow}>
+              <Btn label="Cancel" onPress={() => finishTeach(false)} />
+              <Btn label="Done" primary onPress={() => finishTeach(true)} style={{ minWidth: 140 }} />
+            </View>
+          </View>
+        )}
       </Modal>
     </View>
   );
@@ -300,10 +409,10 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 6 },
   bottom: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
   play: { flex: 1, minHeight: 52 },
-  rec: { minHeight: 52, minWidth: 72, borderRadius: 16, backgroundColor: C.raised, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12 },
+  rec: { minHeight: 52, minWidth: 60, borderRadius: 16, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 8 },
   recOn: { backgroundColor: C.late },
   recDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.late },
-  recTxt: { color: C.fg, fontSize: 15, fontWeight: '700' },
+  recTxt: { color: C.fg, fontSize: 12, fontWeight: '700' },
   sheet: { flex: 1, backgroundColor: C.bg },
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   sheetTitle: { color: C.fg, fontSize: 22, fontWeight: '800' },
@@ -311,4 +420,12 @@ const s = StyleSheet.create({
   btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 6 },
   input: { flex: 1, minHeight: 44, color: C.fg, fontSize: 16, textAlign: 'right' },
   footer: { color: C.muted, fontSize: 12, textAlign: 'center' },
+  ribbon: { flexDirection: 'row', gap: 4, paddingHorizontal: 12, paddingBottom: 6 },
+  ribBtn: { flex: 1, minHeight: 48, borderRadius: 12, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center', paddingVertical: 4 },
+  ribGlyph: { color: C.accent, fontSize: 17, lineHeight: 20 },
+  ribTxt: { color: C.fg, fontSize: 11, fontWeight: '600', marginTop: 1 },
+  status: { color: C.fg, fontSize: 15, fontWeight: '600' },
+  teach: { position: 'absolute', left: 0, right: 0, bottom: 0, top: 0, backgroundColor: 'rgba(15,18,20,0.96)', alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
+  teachTitle: { color: C.accent, fontSize: 30, fontWeight: '800', fontFamily: F.display },
+  teachSay: { color: C.fg, fontSize: 18, textAlign: 'center', lineHeight: 26 },
 });

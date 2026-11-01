@@ -279,7 +279,7 @@ function ModeSettings({ c, setClick, setInput, k }: {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  switchWrap: { paddingHorizontal: 16, paddingTop: 8, alignItems: 'stretch' },
+  switchWrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, alignItems: 'stretch', zIndex: 2, backgroundColor: C.bg },
   scroll: { padding: 16, gap: 14, paddingBottom: 24 },
   levels: { flexDirection: 'row', backgroundColor: C.raised, borderRadius: 14, padding: 4, gap: 4 },
   levelBtn: { flex: 1, minHeight: 52, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },

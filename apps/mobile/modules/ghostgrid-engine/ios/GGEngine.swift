@@ -36,6 +36,18 @@ final class GGEngine {
     return Double(tb.numer) / Double(tb.denom) / 1e9
   }()
 
+  // MARK: voice recording (tap thread appends, JS thread starts and stops, guarded by recLock)
+  private let recLock: UnsafeMutablePointer<os_unfair_lock> = {
+    let p = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
+    p.initialize(to: os_unfair_lock())
+    return p
+  }()
+  private var recording = false
+  private var recBuf: [Float] = []
+  private var recStart: Double = 0
+  private var recRate: Double = 48_000
+  private let recMaxSeconds: Double = 120
+
   // MARK: mic state (tap thread only)
   private var micThreshold: Float = 0.07
   private var micFloor: Float = 0.003
@@ -64,6 +76,8 @@ final class GGEngine {
   deinit {
     lock.deinitialize(count: 1)
     lock.deallocate()
+    recLock.deinitialize(count: 1)
+    recLock.deallocate()
   }
 
   // MARK: - Engine
@@ -382,6 +396,17 @@ final class GGEngine {
     let sr = buffer.format.sampleRate
     let host = when.isHostTimeValid ? when.hostTime : mach_absolute_time()
     let inputLatency = AVAudioSession.sharedInstance().inputLatency
+    os_unfair_lock_lock(recLock)
+    if recording {
+      if recBuf.isEmpty {
+        recStart = hostToEngine(host) - inputLatency
+        recRate = sr
+      }
+      if Double(recBuf.count) < recMaxSeconds * sr {
+        recBuf.append(contentsOf: UnsafeBufferPointer(start: ch, count: n))
+      }
+    }
+    os_unfair_lock_unlock(recLock)
     for i in 0..<n {
       let a = abs(ch[i])
       if a > micPeak { micPeak = a }
@@ -400,6 +425,32 @@ final class GGEngine {
       micPeak = 0
       micLevelCounter = 0
     }
+  }
+
+  /// Start keeping the raw microphone signal (for voice-to-notes). The mic must be on (start with mic: true).
+  func startRecording() -> Bool {
+    os_unfair_lock_lock(recLock)
+    recBuf.removeAll(keepingCapacity: true)
+    recBuf.reserveCapacity(Int(sampleRate * 30))
+    recording = micOn
+    os_unfair_lock_unlock(recLock)
+    return micOn
+  }
+
+  /// Stop and write the recording as raw 32-bit float mono samples to a temporary file.
+  /// Returns the file path, sample rate, engine time of the first sample and the number of samples.
+  func stopRecording() -> [String: Any] {
+    os_unfair_lock_lock(recLock)
+    recording = false
+    let buf = recBuf
+    let start = recStart
+    let rate = recRate
+    recBuf.removeAll()
+    os_unfair_lock_unlock(recLock)
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("ghostgrid-voice.f32")
+    let data = buf.withUnsafeBufferPointer { Data(buffer: $0) }
+    try? data.write(to: url)
+    return ["path": url.absoluteString, "sampleRate": rate, "startTime": start, "frames": buf.count]
   }
 
   static func requestMicPermission(_ done: @escaping (Bool) -> Void) {

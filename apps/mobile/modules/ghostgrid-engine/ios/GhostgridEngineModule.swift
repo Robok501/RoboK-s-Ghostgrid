@@ -61,6 +61,14 @@ public class GhostgridEngineModule: Module {
       return self.engine.uptimeToEngine(uptime)
     }
 
+    Function("startRecording") { () -> Bool in
+      return self.engine.startRecording()
+    }
+
+    Function("stopRecording") { () -> [String: Any] in
+      return self.engine.stopRecording()
+    }
+
     Function("info") { () -> [String: Any] in
       return self.engine.info()
     }
