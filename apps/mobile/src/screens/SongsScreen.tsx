@@ -33,7 +33,8 @@ export function SongsScreen() {
       const r = Engine.stemsLastRun();
       if (r.phase && !['done', 'error'].includes(r.phase)) {
         const where = { decode: 'reading the song', load: 'loading the model', separate: 'separating', write: 'saving' }[r.phase] ?? r.phase;
-        return `Last time the app was stopped while ${where} (free memory then: ${Math.round(r.freeAfterLoadMB ?? r.freeMB ?? 0)} MB). Please tell Claude this line.`;
+        const used = (r as { usedByLoadMB?: number }).usedByLoadMB;
+        return `Last time the app was stopped while ${where} (free memory then: ${Math.round(r.freeAfterLoadMB ?? r.freeMB ?? 0)} MB${used ? `, loading had used ${Math.round(used)} MB` : ''}). Please tell Claude this line.`;
       }
     } catch { /* no record */ }
     return '';

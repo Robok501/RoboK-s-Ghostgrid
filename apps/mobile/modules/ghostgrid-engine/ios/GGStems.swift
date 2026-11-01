@@ -209,11 +209,29 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
     let opts = try ORTSessionOptions()
     try opts.setIntraOpNumThreads(Int32(max(2, min(4, ProcessInfo.processInfo.activeProcessorCount))))
     // keep memory down on a phone: no pre-packed copies of the weights, weights outside the arena, basic graph fusions only
-    try opts.setGraphOptimizationLevel(.basic)
+    // no graph rewriting at all: on the phone, optimising this model's graph took the app past its 4 GB limit
+    try opts.setGraphOptimizationLevel(.none)
     try opts.addConfigEntry(withKey: "session.disable_prepacking", value: "1")
     try opts.addConfigEntry(withKey: "session.use_device_allocator_for_initializers", value: "1")
-    let session = try ORTSession(env: env, modelPath: modelPath, sessionOptions: opts)
-    mark("separate", ["freeAfterLoadMB": Self.freeMB()])
+    // while the model loads (one long call), note the lowest free memory every 0.2 s, so a kill can be traced
+    let startFree = Self.freeMB()
+    var lowest = startFree
+    let watch = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+    watch.schedule(deadline: .now(), repeating: 0.2)
+    watch.setEventHandler { [weak self] in
+      let f = Self.freeMB()
+      if f < lowest { lowest = f; self?.mark("load", ["freeMB": startFree, "lowestFreeMB": f, "usedByLoadMB": startFree - f]) }
+    }
+    watch.resume()
+    let session: ORTSession
+    do {
+      session = try ORTSession(env: env, modelPath: modelPath, sessionOptions: opts)
+      watch.cancel()
+    } catch {
+      watch.cancel()
+      throw error
+    }
+    mark("separate", ["freeAfterLoadMB": Self.freeMB(), "usedByLoadMB": startFree - lowest])
     let inName = try session.inputNames().first ?? "mix"
     let outName = try session.outputNames().first ?? "stems"
 
