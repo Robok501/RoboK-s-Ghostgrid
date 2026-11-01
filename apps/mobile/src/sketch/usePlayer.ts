@@ -12,7 +12,8 @@ import {
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 
-const AHEAD = 0.5;
+/** Bars are scheduled this far ahead, so a busy moment on the screen never makes the groove stumble. */
+const AHEAD = 1.2;
 const sound = (name: string) => DRUM_SOUNDS.indexOf(name as (typeof DRUM_SOUNDS)[number]);
 
 export interface PlayPos { bar: number; step: number }
@@ -84,6 +85,8 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
   const [pos, setPos] = useState<PlayPos | null>(null);
   const [rec, setRec] = useState<null | 'count' | 'rec'>(null);
   const [countBeat, setCountBeat] = useState(0);
+  /** last playback problem, shown on screen instead of failing silently */
+  const [error, setError] = useState('');
 
   const R = useRef({
     timer: null as ReturnType<typeof setInterval> | null,
@@ -198,8 +201,11 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     r.withGroove = !recording || (sk.current.recMode === 'layer' && clickOk);
     r.rec = recording ? { phase: 'count', start: 0, bars: Math.max(1, I.bars.length), beat: 60 / I.bpm, hits: [], source, clickOk } : null;
     if (recording && source === 'voice' && !Engine.startRecording()) { r.rec = null; onRec.current(I, -2, 'voice'); return; }
-    pump();
-    r.timer = setInterval(pump, 50);
+    try { pump(); } catch (e) { setError(`Playback problem: ${(e as Error).message}`); r.rec = null; return; }
+    setError('');
+    r.timer = setInterval(() => {
+      try { pump(); } catch (e) { setError(`Playback problem: ${(e as Error).message}`); stop(); }
+    }, 50);
     setPlaying(true);
     setRec(recording ? 'count' : null);
     activateKeepAwakeAsync('sketch').catch(() => {});
@@ -241,5 +247,5 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
   useEffect(() => on('restart', () => stop()), [on, stop]);
   useEffect(() => () => stop(), [stop]);
 
-  return { playing, pos, rec, countBeat, recSource: R.current.rec?.source ?? null, play: () => begin(false), record: (src: RecSource = 'pads') => begin(true, src), stop };
+  return { playing, pos, rec, countBeat, error, recSource: R.current.rec?.source ?? null, play: () => begin(false), record: (src: RecSource = 'pads') => begin(true, src), stop };
 }

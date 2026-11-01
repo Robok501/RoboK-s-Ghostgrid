@@ -2,9 +2,9 @@
  * Step grid editor. One page shows a whole bar or part of one (half a bar on a phone held upright);
  * swipe sideways to move through the idea. Row labels stay put on the left.
  */
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { INSTRUMENT, barGrid, countLabel, type Idea, type InstrumentId, type NoteState } from '@ghostgrid/core';
+import { INSTRUMENT, barGrid, countLabel, type Bar, type Grid, type Idea, type InstrumentId, type NoteState } from '@ghostgrid/core';
 import { C, F } from '../theme';
 import type { PlayPos } from './usePlayer';
 
@@ -45,7 +45,11 @@ export function GridPager({ idea, rows, cell, width, pageBeats, selectedBar, pos
     if (i >= 0) go(i, false);
   }, [pos, pages]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const rowH = cell + GAP;
+  // only the page under the playhead re-renders while playing (pages are memoised)
+  const playKey = pos ? `${pos.bar}:${pos.step}` : '';
+  const toggleCb = useRef(onToggle);
+  toggleCb.current = onToggle;
+  const toggleRef = useCallback((b: number, id: InstrumentId, st: number) => toggleCb.current(b, id, st), []);
   return (
     <View style={{ flexDirection: 'row' }}>
       <View style={{ width: LABEL_W }}>
@@ -73,43 +77,53 @@ export function GridPager({ idea, rows, cell, width, pageBeats, selectedBar, pos
           shown.current = i;
           if (pages[i] && pages[i].bar !== selectedBar) onBar(pages[i].bar);
         }}
-        extraData={[rows, cell, pos, idea]}
-        renderItem={({ item: p }) => {
-          const g = barGrid(idea, p.bar), n = p.to - p.from;
-          const cw = Math.min(cell, (pageW - 6 - GAP * n) / n);
-          const bar = idea.bars[p.bar];
-          return (
-            <View style={{ width: pageW, paddingRight: 6 }}>
-              <View style={[s.countRow, { height: 22 }]}>
-                {Array.from({ length: n }, (_, k) => {
-                  const st = p.from + k;
-                  return <Text key={k} style={[s.count, { width: cw, marginRight: GAP }, st % g === 0 && s.countBeat]}>{countLabel(st, g)}</Text>;
-                })}
-              </View>
-              {rows.map((id) => (
-                <View key={id} style={{ flexDirection: 'row', height: rowH }}>
-                  {Array.from({ length: n }, (_, k) => {
-                    const st = p.from + k;
-                    const v = (bar?.n[id][st] ?? 0) as NoteState;
-                    const now = pos && pos.bar === p.bar && pos.step === st;
-                    return (
-                      <Pressable key={k} onPress={() => onToggle(p.bar, id, st)} accessibilityRole="button"
-                        accessibilityLabel={`${INSTRUMENT[id].name} ${countLabel(st, g)}`}
-                        style={[s.cell, { width: cw, height: cell, marginRight: GAP }, st % g === 0 && !v && s.cellBeat, cellStyle(v, id), now && s.cellNow]}>
-                        <Text style={[s.cellTxt, v === 2 && { color: C.accentInk }]}>{mark(v, id)}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ))}
-              <View style={s.barTag}><Text style={s.barTagTxt}>Bar {p.bar + 1}{p.from > 0 || p.to < idea.beats * g ? ` · ${p.from / g + 1}–${p.to / g}` : ''}</Text></View>
-            </View>
-          );
-        }}
+        extraData={playKey}
+        initialNumToRender={2}
+        windowSize={3}
+        maxToRenderPerBatch={2}
+        removeClippedSubviews
+        renderItem={({ item: p }) => (
+          <PageView p={p} bar={idea.bars[p.bar]} g={barGrid(idea, p.bar)} full={idea.beats * barGrid(idea, p.bar)} rows={rows} cell={cell} pageW={pageW}
+            playStep={pos && pos.bar === p.bar && pos.step >= p.from && pos.step < p.to ? pos.step : -1} onToggle={toggleRef} />
+        )}
       />
     </View>
   );
 }
+
+const PageView = memo(function PageView({ p, bar, g, full, rows, cell, pageW, playStep, onToggle }: {
+  p: Page; bar: Bar | undefined; g: Grid; full: number; rows: InstrumentId[]; cell: number; pageW: number; playStep: number;
+  onToggle: (bar: number, id: InstrumentId, step: number) => void;
+}) {
+  const n = p.to - p.from, rowH = cell + GAP;
+  const cw = Math.min(cell, (pageW - 6 - GAP * n) / n);
+  return (
+    <View style={{ width: pageW, paddingRight: 6 }}>
+      <View style={[s.countRow, { height: 22 }]}>
+        {Array.from({ length: n }, (_, k) => {
+          const st = p.from + k;
+          return <Text key={k} style={[s.count, { width: cw, marginRight: GAP }, st % g === 0 && s.countBeat]}>{countLabel(st, g)}</Text>;
+        })}
+      </View>
+      {rows.map((id) => (
+        <View key={id} style={{ flexDirection: 'row', height: rowH }}>
+          {Array.from({ length: n }, (_, k) => {
+            const st = p.from + k;
+            const v = (bar?.n[id][st] ?? 0) as NoteState;
+            return (
+              <Pressable key={k} onPress={() => onToggle(p.bar, id, st)} accessibilityRole="button"
+                accessibilityLabel={`${INSTRUMENT[id].name} ${countLabel(st, g)}`}
+                style={[s.cell, { width: cw, height: cell, marginRight: GAP }, st % g === 0 && !v && s.cellBeat, cellStyle(v, id), playStep === st && s.cellNow]}>
+                <Text style={[s.cellTxt, v === 2 && { color: C.accentInk }]}>{mark(v, id)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
+      <View style={s.barTag}><Text style={s.barTagTxt}>Bar {p.bar + 1}{p.from > 0 || p.to < full ? ` · ${p.from / g + 1}–${p.to / g}` : ''}</Text></View>
+    </View>
+  );
+});
 
 function cellStyle(v: NoteState, id: InstrumentId) {
   if (v === 1) return { backgroundColor: C.fg };

@@ -174,7 +174,7 @@ export function SketchScreen() {
   };
 
   // ---- grid
-  const rows = visibleRows(idea);
+  const rows = useMemo(() => visibleRows(idea), [idea]);
   const hidden = INSTRUMENTS.filter((i) => !rows.includes(i.id));
   const toggle = (b: number, id: InstrumentId, st: number) => {
     const v = idea.bars[b].n[id][st];
@@ -307,7 +307,7 @@ export function SketchScreen() {
       </View>
       {!phoneSideways && ribbon}
 
-      {!!notice && <Text style={s.notice}>{notice}</Text>}
+      {!!(player.error || notice) && <Text style={s.notice}>{player.error || notice}</Text>}
 
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         {scoreVisible && (

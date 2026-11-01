@@ -113,17 +113,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [update, start]);
   const setMic = useCallback((onOff: boolean) => start(S.current.keepBt, onOff), [start]);
 
+  // Pedal moves (dozens of messages a second), pad hits and mic levels are shown on screen, but every change of
+  // this context re-renders every screen. So the displayed values update at most ~8 times a second;
+  // the hits themselves still go to the listeners immediately.
+  const shown = useRef({ pedal: null as number | null, hit: '', level: 0, timer: null as ReturnType<typeof setTimeout> | null });
+  const flushShown = useCallback(() => {
+    const v = shown.current;
+    v.timer = null;
+    setPedal(v.pedal); setLastHit(v.hit); setMicLevel(v.level);
+  }, []);
+  const showLater = useCallback(() => { if (!shown.current.timer) shown.current.timer = setTimeout(flushShown, 120); }, [flushShown]);
+
   useEffect(() => {
     start(S.current.keepBt, false);
     setSources(Engine.midiSources());
     const subs = [
       Engine.addListener('onRouteChange', (i) => setInfo(i)),
       Engine.addListener('onMidiSources', (e) => setSources(e.sources)),
-      Engine.addListener('onMicLevel', (e) => setMicLevel(e.level)),
+      Engine.addListener('onMicLevel', (e) => { shown.current.level = e.level; showLater(); }),
       Engine.addListener('onControl', (e) => {
         if (e.cc !== HH_PEDAL_CC) return;
         pedalRef.current = e.value;
-        setPedal(e.value);
+        shown.current.pedal = e.value; showLater();
       }),
       Engine.addListener('onPadHit', (e) => {
         if (learnRef.current) {
@@ -136,13 +147,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const h = resolveNote(S.current.pads, e.note, e.velocity, pedalRef.current);
         const key = h.id ? (h.open ? 'hh+o' : h.id) : `n${e.note}`;
         const name = h.id ? PAD_NAMES[key as PadKey] : `Note ${e.note}`;
-        setLastHit(`Note ${e.note} → ${h.id ? name : 'not mapped'} · velocity ${e.velocity}`);
+        shown.current.hit = `Note ${e.note} → ${h.id ? name : 'not mapped'} · velocity ${e.velocity}`; showLater();
         emit('pad', { time: e.time, note: e.note, vel: e.velocity, key, name, state: stateFor(S.current.pads, h), mapped: !!h.id });
       }),
       Engine.addListener('onCaptureHit', (e) => emit('mic', { time: e.time, peak: e.peak })),
     ];
     return () => { subs.forEach((s) => s.remove()); Engine.stop(); };
-  }, [start, emit, update]);
+  }, [start, emit, update, showLater]);
 
   const value = useMemo<Ctx>(() => ({
     settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,

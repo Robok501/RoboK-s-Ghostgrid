@@ -37,12 +37,14 @@ export function Score({ idea, width, style, count, selectedBar, playBar, onSelec
   idea: Idea; width: number; style: NotationStyle; count: boolean;
   selectedBar: number | null; playBar?: number | null; onSelectBar?: (b: number) => void;
 }) {
-  const hl = playBar ?? selectedBar;
-  const e = useMemo(() => engrave(idea, { width, count, style, selectedBar: hl }), [idea, width, count, style, hl]);
+  // the playing bar is marked with an overlay, so the score isn't re-drawn every bar during playback
+  const e = useMemo(() => engrave(idea, { width, count, style, selectedBar }), [idea, width, count, style, selectedBar]);
+  const pb = playBar !== null && playBar !== undefined ? e.bars[playBar] : null;
   const xml = useMemo(() => `<svg xmlns="http://www.w3.org/2000/svg" width="${e.width}" height="${e.height}" viewBox="0 0 ${e.width} ${e.height}">${themeSvg(e.svg)}</svg>`, [e]);
   return (
     <View style={{ width: e.width, height: e.height }}>
       <SvgXml xml={xml} width={e.width} height={e.height} />
+      {pb && <View pointerEvents="none" style={{ position: 'absolute', left: pb.x0, top: pb.top - 44, width: pb.barW, height: pb.h + 30, borderRadius: 8, backgroundColor: C.accentSoft, borderWidth: 1, borderColor: C.accent }} />}
       {onSelectBar && e.bars.map((b, i) => b && (
         <Pressable key={i} onPress={() => onSelectBar(i)} accessibilityRole="button" accessibilityLabel={`Bar ${i + 1}`}
           style={{ position: 'absolute', left: b.x0, top: b.top - 44, width: b.barW, height: b.h + 30 }} />
