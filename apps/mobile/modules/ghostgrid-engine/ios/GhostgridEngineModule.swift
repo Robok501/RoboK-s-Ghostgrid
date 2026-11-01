@@ -5,17 +5,23 @@ import CoreAudioKit
 /// Bridge between JavaScript and the native engine. Implements the engine interface from the architecture memo (§5).
 public class GhostgridEngineModule: Module {
   private let engine = GGEngine()
+  private let stems = GGStems()
+  private let stemPlayer = GGStemPlayer()
+  private let stemQueue = DispatchQueue(label: "ghostgrid.separate", qos: .userInitiated)
 
   public func definition() -> ModuleDefinition {
     Name("GhostgridEngine")
 
-    Events("onPadHit", "onControl", "onMidiSources", "onCaptureHit", "onMicLevel", "onRouteChange")
+    Events("onPadHit", "onControl", "onMidiSources", "onCaptureHit", "onMicLevel", "onRouteChange", "onStemsProgress")
 
     OnCreate {
       self.engine.emit = { [weak self] name, body in
         self?.sendEvent(name, body)
       }
       self.engine.setupMidi()
+      self.stems.emit = { [weak self] name, body in
+        self?.sendEvent(name, body)
+      }
     }
 
     OnDestroy {
@@ -68,6 +74,58 @@ public class GhostgridEngineModule: Module {
     Function("stopRecording") { () -> [String: Any] in
       return self.engine.stopRecording()
     }
+
+    // MARK: stems (song separation and practice player)
+
+    Function("stemsModelStatus") { (name: String) -> [String: Any] in
+      return self.stems.modelStatus(name)
+    }
+
+    AsyncFunction("stemsDownloadModel") { (url: String, name: String, promise: Promise) in
+      self.stems.downloadModel(from: url, name: name) { result in
+        switch result {
+        case .success: promise.resolve(self.stems.modelStatus(name))
+        case .failure(let e): promise.reject("E_DOWNLOAD", e.localizedDescription)
+        }
+      }
+    }
+
+    Function("stemsCancelDownload") {
+      self.stems.cancelDownload()
+    }
+
+    Function("stemsDeleteModel") { (name: String) in
+      self.stems.deleteModel(name)
+    }
+
+    /// Separate a song file into drums.caf and nodrums.caf in `outDir` (file paths, not URLs). Resolves with the duration.
+    AsyncFunction("stemsSeparate") { (input: String, outDir: String, model: String, promise: Promise) in
+      self.stemQueue.async {
+        do {
+          let d = try self.stems.separate(input: URL(fileURLWithPath: input), outDir: URL(fileURLWithPath: outDir), modelName: model)
+          promise.resolve(d)
+        } catch {
+          promise.reject("E_SEPARATE", error.localizedDescription)
+        }
+      }
+    }
+
+    Function("stemsCancel") {
+      self.stems.cancel()
+    }
+
+    AsyncFunction("stemsLoad") { (drums: String?, rest: String) -> Double in
+      return try self.stemPlayer.load(drumsPath: drums, restPath: rest)
+    }
+    Function("stemsUnload") { self.stemPlayer.unload() }
+    Function("stemsPlay") { try self.stemPlayer.play() }
+    Function("stemsPause") { self.stemPlayer.pause() }
+    Function("stemsSeek") { (t: Double) in try self.stemPlayer.seek(t) }
+    Function("stemsPosition") { () -> Double in self.stemPlayer.position() }
+    Function("stemsIsPlaying") { () -> Bool in self.stemPlayer.isPlaying() }
+    Function("stemsSetVolumes") { (drums: Double, rest: Double) in self.stemPlayer.setVolumes(drums: drums, rest: rest) }
+    Function("stemsSetRate") { (r: Double) in self.stemPlayer.setRate(r) }
+    Function("stemsSetLoop") { (a: Double, b: Double, on: Bool) in try self.stemPlayer.setLoop(a: a, b: b, on: on) }
 
     Function("info") { () -> [String: Any] in
       return self.engine.info()

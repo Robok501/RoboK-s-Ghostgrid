@@ -25,6 +25,7 @@ type Events = {
   onCaptureHit: (e: CaptureHitEvent) => void;
   onMicLevel: (e: { level: number }) => void;
   onRouteChange: (e: EngineInfo) => void;
+  onStemsProgress: (e: { phase: 'download' | 'decode' | 'load' | 'separate' | 'write'; progress: number; bytes?: number }) => void;
 };
 
 declare class GhostgridEngineModule extends NativeModule<Events> {
@@ -39,6 +40,24 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   setClickSound(name: 'click' | 'wood' | 'cowbell' | 'hat'): void;
   uptimeToEngine(uptime: number): number;
   info(): EngineInfo;
+  // stems: separation and practice player
+  stemsModelStatus(name: string): { present: boolean; bytes: number; path: string };
+  stemsDownloadModel(url: string, name: string): Promise<{ present: boolean; bytes: number; path: string }>;
+  stemsCancelDownload(): void;
+  stemsDeleteModel(name: string): void;
+  /** file paths (not file:// URLs); resolves with the duration in seconds */
+  stemsSeparate(input: string, outDir: string, model: string): Promise<number>;
+  stemsCancel(): void;
+  stemsLoad(drums: string | null, rest: string): Promise<number>;
+  stemsUnload(): void;
+  stemsPlay(): void;
+  stemsPause(): void;
+  stemsSeek(t: number): void;
+  stemsPosition(): number;
+  stemsIsPlaying(): boolean;
+  stemsSetVolumes(drums: number, rest: number): void;
+  stemsSetRate(rate: number): void;
+  stemsSetLoop(a: number, b: number, on: boolean): void;
   /** Keep the raw mic signal (voice to notes). Returns false when the mic is off. */
   startRecording(): boolean;
   /** Stop; the samples are in a file of 32-bit floats (little-endian, mono). */

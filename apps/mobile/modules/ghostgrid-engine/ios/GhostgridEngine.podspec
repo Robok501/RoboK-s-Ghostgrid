@@ -12,6 +12,8 @@ Pod::Spec.new do |s|
   s.swift_version  = '5.9'
 
   s.dependency 'ExpoModulesCore'
+  # on-device stem separation (HT-Demucs drums model, downloaded on first use)
+  s.dependency 'onnxruntime-objc', '>= 1.20.0'
   s.frameworks = 'AVFoundation', 'CoreMIDI', 'CoreAudioKit'
 
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
