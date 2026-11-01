@@ -180,6 +180,16 @@ export function SketchScreen() {
     const v = idea.bars[b].n[id][st];
     commit(setNote(idea, b, id, st, cycleState(INSTRUMENT[id], v)));
   };
+  /** Clear the selected bar, or every bar; the rows and bar count stay, Undo brings the notes back. */
+  const clearNotes = () => {
+    player.stop();
+    setTake(null);
+    if (scope === 'bar') { commit(clearBar(idea, selBar)); say(`Bar ${selBar + 1} cleared. Undo brings it back.`); return; }
+    let next = idea;
+    for (let b = 0; b < idea.bars.length; b++) next = clearBar(next, b);
+    commit(next);
+    say('All bars cleared. Undo brings them back.');
+  };
   const curGrid = scope === 'bar' ? barGrid(idea, selBar) : idea.grid;
   const cycleGrid = () => {
     const g = nextGrid(curGrid);
@@ -317,6 +327,10 @@ export function SketchScreen() {
             ))}
             {idea.bars.length < MAX_BARS && <Chip label="+ Bar" onPress={() => { commit(addBar(idea)); setBar(idea.bars.length); setScope('bar'); }} />}
           </ScrollView>
+          <Pressable onPress={clearNotes} style={s.clearBtn} accessibilityRole="button" accessibilityLabel={scope === 'bar' ? `Clear bar ${selBar + 1}` : 'Clear all bars'}>
+            <Text style={s.clearTxt}>Clear</Text>
+            <Text style={s.clearSub}>{scope === 'bar' ? `bar ${selBar + 1}` : 'all bars'}</Text>
+          </Pressable>
           <Pressable onPress={cycleGrid} style={s.gridBtn} accessibilityRole="button" accessibilityLabel={`Grid ${GRID_NAMES[curGrid]}, tap to change`}>
             <Text style={s.gridBtnTxt}>{GRID_NAMES[curGrid]}</Text>
             <Text style={s.gridBtnSub}>{scope === 'bar' ? `bar ${selBar + 1}` : 'all bars'}</Text>
@@ -491,6 +505,9 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingBottom: 16, gap: 8 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bars: { gap: 6, paddingVertical: 4, alignItems: 'center' },
+  clearBtn: { minWidth: 64, minHeight: 52, borderRadius: 14, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  clearTxt: { color: C.fg, fontSize: 15, fontWeight: '700' },
+  clearSub: { color: C.muted, fontSize: 10 },
   gridBtn: { minWidth: 96, minHeight: 52, borderRadius: 14, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   gridBtnTxt: { color: C.accentInk, fontSize: 17, fontWeight: '800', fontFamily: F.display },
   gridBtnSub: { color: C.accentInk, fontSize: 10, opacity: 0.75 },
