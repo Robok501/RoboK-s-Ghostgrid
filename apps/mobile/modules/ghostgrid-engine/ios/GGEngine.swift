@@ -123,7 +123,8 @@ final class GGEngine {
       let input = e.inputNode
       let inFormat = input.outputFormat(forBus: 0)
       if inFormat.channelCount > 0 {
-        micThreshold = Float(0.5 * pow(0.6, sensitivity - 1))
+        // sensitivity 1–10: 5 ≈ 0.02 full scale, so a soft spoken "ts" still counts; the noise guard below rejects room hiss
+        micThreshold = Float(0.12 * pow(0.65, sensitivity - 1))
         micFloor = 0.003
         micHold = 0
         input.installTap(onBus: 0, bufferSize: 512, format: inFormat) { [weak self] buffer, when in
@@ -412,7 +413,7 @@ final class GGEngine {
       if a > micPeak { micPeak = a }
       if micHold > 0 {
         micHold -= 1
-      } else if a > micThreshold && a > micFloor * 6 {
+      } else if a > micThreshold && a > micFloor * 8 {
         let t = hostToEngine(host) + Double(i) / sr - inputLatency
         emit?("onCaptureHit", ["time": t, "peak": Double(a)])
         micHold = Int(sr * 0.08)

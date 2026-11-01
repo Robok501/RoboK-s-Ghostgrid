@@ -224,19 +224,24 @@ export function analyze(data: Float32Array, sr: number, samples: Samples, ghostP
     if (env[i] > mx) mx = env[i];
     if (henv[i] > hmx) hmx = henv[i];
   }
-  const floorF = 0.06 * 0.7 ** (sens - 5), ratio = 2.4 * 0.93 ** (sens - 5);
-  const jump = (e: Float32Array, m: number, i: number) => {
+  // Level needed for a hit: a multiple of the room's noise floor (so one loud boom doesn't hide soft "ts"),
+  // never below a small share of the loudest sound.
+  const noiseOf = (e: Float32Array) => { const c = Array.from(e).sort((a, b) => a - b); return c[Math.floor(c.length * 0.2)] || 1e-6; };
+  const noise = noiseOf(env), hnoise = noiseOf(henv);
+  const over = 20 * 0.8 ** (sens - 5), ratio = 2.4 * 0.93 ** (sens - 5);
+  const jump = (e: Float32Array, m: number, nf: number, i: number) => {
     let avg = 0;
     for (let k = 2; k <= 7; k++) avg += e[i - k];
     avg /= 6;
-    return e[i] > m * floorF && e[i] > avg * ratio + m * 0.01 && e[i] >= e[i - 1];
+    return e[i] > Math.max(nf * over, m * 0.004) && env[i] > noise * over * 0.5 && e[i] > avg * ratio + m * 0.004 && e[i] >= e[i - 1];
   };
   const ons: { t: number; start: number; peak: number }[] = [];
   let lastI = -1e9, lastPk = 0;
   const gap = Math.round(0.09 / 0.005);
   for (let i = 8; i < nh; i++) {
     if (i - lastI < gap) continue;
-    if (!jump(env, mx, i) && !jump(henv, hmx, i)) continue;
+    // the high-frequency envelope catches soft "ts", but the full signal must still be above half the floor (room hiss)
+    if (!jump(env, mx, noise, i) && !jump(henv, hmx, hnoise, i)) continue;
     let pk = 0;
     for (let k = 0; k < 12 && i + k < nh; k++) pk = Math.max(pk, env[i + k]);
     // still ringing from the last hit and not much louder: same sound, not a new hit
@@ -244,10 +249,27 @@ export function analyze(data: Float32Array, sr: number, samples: Samples, ghostP
     ons.push({ t: (i * hop) / sr, start: Math.max(0, (i - 1) * hop), peak: pk });
     lastI = i; lastPk = pk;
   }
-  const hits: Hit[] = ons.map((o, j) => {
+  // a soft lead-in (the "m" before "boom") followed within 130 ms by the real attack is one sound: keep the louder one
+  for (let j = ons.length - 1; j > 0; j--) {
+    if (ons[j].t - ons[j - 1].t > 0.13) continue;
+    if (ons[j].peak > ons[j - 1].peak * 1.5) ons.splice(j - 1, 1);
+    else if (ons[j - 1].peak > ons[j].peak * 1.5) ons.splice(j, 1);
+  }
+  let hits: Hit[] = ons.map((o, j) => {
     const lim = Math.min((ons[j + 1] ? ons[j + 1].start : data.length) - o.start, Math.round(sr * 0.3));
     const f = featVec(data.subarray(o.start, o.start + lim), sr);
     return { t: o.t, peak: o.peak, f, ...decide(f, samples) };
+  });
+  // lip pops, tongue clicks and breath ticks: very short and much softer than the sounds around them
+  if (hits.length >= 4) {
+    const pk = hits.map((h) => h.peak).sort((a, b) => a - b), med = pk[pk.length >> 1];
+    hits = hits.filter((h) => !(h.f.dec <= 15 && h.peak < med * 0.35));
+  }
+  // a loud "boom" keeps rumbling (and can clip the mic): soft low sounds right after it belong to it
+  hits = hits.filter((h, j) => {
+    if (h.f.c > 1000) return true;
+    for (let q = j - 1; q >= 0 && h.t - hits[q].t < 0.6; q--) if (hits[q].f.c < 800 && hits[q].peak > h.peak * 6) return false;
+    return true;
   });
   finalize(hits, samples, ghostPct);
   return { hits, env, hop, sr, dur: data.length / sr };

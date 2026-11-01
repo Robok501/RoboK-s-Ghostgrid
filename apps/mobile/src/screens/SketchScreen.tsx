@@ -146,9 +146,9 @@ export function SketchScreen() {
         const data = readVoiceFile(f.path);
         const name = SOUNDS.find((x) => x.k === k)!.name;
         const a = analyze(data, f.sampleRate, {}, 45, settings.micSens);
-        // keep only as many as you said (the loudest), so stray detections don't become examples
-        const wanted = teachCount > 0 ? Math.min(TEACH_MAX, teachCount) : TEACH_MAX;
-        const vecs = a.hits.slice().sort((x, y) => y.peak - x.peak).slice(0, wanted).map((h) => h.f.v);
+        // keep the loudest (at most six); much softer detections are breaths, pops or room noise, not examples
+        const loud = a.hits.length ? Math.max(...a.hits.map((h) => h.peak)) : 0;
+        const vecs = a.hits.filter((h) => h.peak >= loud * 0.2).sort((x, y) => y.peak - x.peak).slice(0, TEACH_MAX).map((h) => h.f.v);
         try { setTeachWav({ uri: saveWav(data, f.sampleRate, `ghostgrid-teach-${k}.wav`), name, heard: a.hits.length }); } catch { /* sharing is optional */ }
         if (vecs.length >= 2) {
           setSketch({ voice: addSamples(sk.voice, k, vecs) });

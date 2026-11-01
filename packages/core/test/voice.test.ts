@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addSamples, analyze, knn, reclassify, usesOwnSounds, type Samples, type SoundKey } from '../src/voice';
-import { SR, track, type SynthKind } from './synth';
+import { SR, rng, track, type SynthKind } from './synth';
 
 // a 16-hit groove with ghost snares (quiet) and open hi-hats
 const truth: [SoundKey, number][] = [
@@ -62,6 +62,7 @@ describe('recognition', () => {
 
 describe('sensitivity and features', () => {
   const soft = track([['bd', 1], ['sn', 0.04], ['hh', 1], ['sn', 0.04]], 0.3);
+  { const R = rng(3); for (let i = 0; i < soft.length; i++) soft[i] += R() * 0.0015; } // room noise
   it('finds very soft hits only at high sensitivity', () => {
     expect(analyze(soft, SR, {}, 45, 2).hits.length).toBe(2);
     expect(analyze(soft, SR, {}, 45, 9).hits.length).toBe(4);
