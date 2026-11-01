@@ -7,7 +7,6 @@ public class GhostgridEngineModule: Module {
   private let engine = GGEngine()
   private let stems = GGStems()
   private let stemPlayer = GGStemPlayer()
-  private let stemQueue = DispatchQueue(label: "ghostgrid.separate", qos: .userInitiated)
 
   public func definition() -> ModuleDefinition {
     Name("GhostgridEngine")
@@ -100,7 +99,9 @@ public class GhostgridEngineModule: Module {
 
     /// Separate a song file into drums.caf and nodrums.caf in `outDir` (file paths, not URLs). Resolves with the duration.
     AsyncFunction("stemsSeparate") { (input: String, outDir: String, model: String, promise: Promise) in
-      self.stemQueue.async {
+      // Loading this model walks a very deep graph; the 512 KB stack of a normal background queue is too small
+      // (the app was closed while loading with 4 GB free). A dedicated thread with a large stack avoids that.
+      let worker = Thread {
         do {
           let d = try self.stems.separate(input: URL(fileURLWithPath: input), outDir: URL(fileURLWithPath: outDir), modelName: model)
           promise.resolve(d)
@@ -108,6 +109,10 @@ public class GhostgridEngineModule: Module {
           promise.reject("E_SEPARATE", error.localizedDescription)
         }
       }
+      worker.stackSize = 64 << 20
+      worker.qualityOfService = .userInitiated
+      worker.name = "ghostgrid.separate"
+      worker.start()
     }
 
     /// Where the last separation got to (phase, free memory). A phase other than done/error means iOS stopped the app.
