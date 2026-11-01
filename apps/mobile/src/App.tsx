@@ -7,12 +7,14 @@ import { AppProvider } from './AppContext';
 import { ClickScreen } from './screens/ClickScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SketchScreen } from './screens/SketchScreen';
+import { SongsScreen } from './screens/SongsScreen';
 import { C, F } from './theme';
 
-type Tab = 'click' | 'sketch' | 'kit';
+type Tab = 'click' | 'sketch' | 'songs' | 'kit';
 const TABS: { id: Tab; label: string; glyph: string }[] = [
   { id: 'click', label: 'Click', glyph: '♩' },
   { id: 'sketch', label: 'Sketch', glyph: '𝄢' },
+  { id: 'songs', label: 'Songs', glyph: '♫' },
   { id: 'kit', label: 'Kit & settings', glyph: '⚙︎' },
 ];
 
@@ -40,6 +42,8 @@ function Shell() {
         {/* keep Click mounted so the click keeps running while you look at other tabs */}
         <View style={[s.page, tab !== 'click' && s.hidden]} pointerEvents={tab === 'click' ? 'auto' : 'none'}><ClickScreen /></View>
         {tab === 'sketch' && <View style={s.page}><SketchScreen /></View>}
+        {/* Songs stays mounted too, so a song keeps playing while you look at the score or the click */}
+        <View style={[s.page, tab !== 'songs' && s.hidden]} pointerEvents={tab === 'songs' ? 'auto' : 'none'}><SongsScreen /></View>
         {tab === 'kit' && <View style={s.page}><SettingsScreen /></View>}
       </View>
       <View style={[s.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }]} accessibilityRole="tablist">

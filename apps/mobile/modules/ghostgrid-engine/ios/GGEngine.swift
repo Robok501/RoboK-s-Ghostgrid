@@ -46,7 +46,7 @@ final class GGEngine {
   private var recBuf: [Float] = []
   private var recStart: Double = 0
   private var recRate: Double = 48_000
-  private let recMaxSeconds: Double = 120
+  private let recMaxSeconds: Double = 600
 
   // MARK: mic state (tap thread only)
   private var micThreshold: Float = 0.07
