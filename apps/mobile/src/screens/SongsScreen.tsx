@@ -203,6 +203,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   const [pos, setPos] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState(false);
+  const [err, setErr] = useState('');
   const mix: Mix = song.separated ? song.mix ?? 'nodrums' : 'full';
   const rate = song.rate ?? 1, drumVol = song.drumVol ?? 1;
   const A = song.loopA ?? 0, B = song.loopB ?? dur, loopOn = !!song.loop && B - A > 0.3;
@@ -228,7 +229,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     Engine.stemsSetVolumes(d, r);
   }, [ready, mix, drumVol]);
   useEffect(() => { if (ready) Engine.stemsSetRate(rate); }, [ready, rate]);
-  useEffect(() => { if (ready) Engine.stemsSetLoop(A, B, loopOn); }, [ready, A, B, loopOn]);
+  useEffect(() => { if (ready) { try { Engine.stemsSetLoop(A, B, loopOn); } catch { /* applied on next play */ } } }, [ready, A, B, loopOn]);
 
   // playhead
   useEffect(() => {
@@ -243,9 +244,16 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   const toggle = () => {
     if (!ready) return;
     if (playing) { Engine.stemsPause(); setPlaying(false); setPos(Engine.stemsPosition()); }
-    else { Engine.stemsPlay(); setPlaying(true); }
+    else {
+      try { Engine.stemsPlay(); setPlaying(true); setErr(''); }
+      catch (e) { setErr(`Couldn't play: ${(e as Error).message}`); }
+    }
   };
-  const seek = (t: number) => { const v = Math.max(0, Math.min(dur, t)); Engine.stemsSeek(v); setPos(v); };
+  const seek = (t: number) => {
+    const v = Math.max(0, Math.min(dur, t));
+    try { Engine.stemsSeek(v); } catch (e) { setErr(`Couldn't jump there: ${(e as Error).message}`); }
+    setPos(v);
+  };
 
   return (
     <Card title={song.name}>
@@ -265,6 +273,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
         )
       )}
 
+      {!!err && <Text style={s.err}>{err}</Text>}
       <Timeline pos={pos} dur={dur} a={song.loop ? A : null} b={song.loop ? B : null} onSeek={seek} />
       <View style={s.timeRow}>
         <Text style={s.time}>{fmtTime(pos)}</Text>
@@ -339,6 +348,7 @@ function Bar({ value }: { value: number }) {
 const s = StyleSheet.create({
   scroll: { padding: 16, gap: 14, paddingBottom: 32 },
   notice: { color: C.accent, fontSize: 14 },
+  err: { color: C.late, fontSize: 14 },
   btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 6, alignItems: 'center' },
   dim: { color: C.muted, fontSize: 12 },
   songRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 6, borderRadius: 10 },
