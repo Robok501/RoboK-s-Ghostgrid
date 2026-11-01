@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import os
 import onnxruntime_objc
 
 /// On-device stem separation for practice: the drums are separated with an HT-Demucs drums model (ONNX),
@@ -152,6 +153,27 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
 
   func cancel() { cancelled = true }
 
+  // MARK: - Breadcrumbs: if iOS kills the app (usually for memory), the next start can say where it stopped.
+
+  static var logURL: URL {
+    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    return base.appendingPathComponent("stems-last-run.json")
+  }
+  static func freeMB() -> Double { Double(os_proc_available_memory()) / 1_048_576 }
+
+  private func mark(_ phase: String, _ extra: [String: Any] = [:]) {
+    var info: [String: Any] = ["phase": phase, "time": Date().timeIntervalSince1970, "freeMB": Self.freeMB()]
+    for (k, v) in extra { info[k] = v }
+    if let data = try? JSONSerialization.data(withJSONObject: info) { try? data.write(to: Self.logURL, options: .atomic) }
+  }
+
+  func lastRun() -> [String: Any] {
+    guard let data = try? Data(contentsOf: Self.logURL),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+    return obj
+  }
+
   /// Separate `input` into drums.caf and nodrums.caf in `outDir`. Returns the duration in seconds.
   func separate(input: URL, outDir: URL, modelName: String) throws -> Double {
     cancelled = false
@@ -159,6 +181,7 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
     guard FileManager.default.fileExists(atPath: modelPath) else {
       throw NSError(domain: "Ghostgrid", code: 30, userInfo: [NSLocalizedDescriptionKey: "The separation model isn't downloaded yet"])
     }
+    mark("decode")
     emit?("onStemsProgress", ["phase": "decode", "progress": 0.0])
     var (l, r) = try Self.readStereo(input)
     let n = l.count
@@ -173,12 +196,24 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
     let std = max(1e-5, sqrt(varSum / Double(n)))
     let fm = Float(mean), fs = Float(std)
 
+    // The model needs roughly its own size again while loading. Refuse politely instead of being killed by iOS.
+    let needMB = 900.0
+    if Self.freeMB() < needMB {
+      mark("error", ["message": "not enough memory", "freeMB": Self.freeMB()])
+      throw NSError(domain: "Ghostgrid", code: 34, userInfo: [NSLocalizedDescriptionKey:
+        "Not enough free memory (\(Int(Self.freeMB())) MB, needs about \(Int(needMB)) MB). Close other apps and try again."])
+    }
+    mark("load", ["seconds": Double(n) / Self.sampleRate])
     emit?("onStemsProgress", ["phase": "load", "progress": 0.0])
     let env = try ORTEnv(loggingLevel: .warning)
     let opts = try ORTSessionOptions()
-    try opts.setIntraOpNumThreads(Int32(max(2, min(6, ProcessInfo.processInfo.activeProcessorCount))))
-    try opts.setGraphOptimizationLevel(.all)
+    try opts.setIntraOpNumThreads(Int32(max(2, min(4, ProcessInfo.processInfo.activeProcessorCount))))
+    // keep memory down on a phone: no pre-packed copies of the weights, weights outside the arena, basic graph fusions only
+    try opts.setGraphOptimizationLevel(.basic)
+    try opts.addConfigEntry(withKey: "session.disable_prepacking", value: "1")
+    try opts.addConfigEntry(withKey: "session.use_device_allocator_for_initializers", value: "1")
     let session = try ORTSession(env: env, modelPath: modelPath, sessionOptions: opts)
+    mark("separate", ["freeAfterLoadMB": Self.freeMB()])
     let inName = try session.inputNames().first ?? "mix"
     let outName = try session.outputNames().first ?? "stems"
 
@@ -215,8 +250,10 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
         ws[s + i] += wi
       }
       emit?("onStemsProgress", ["phase": "separate", "progress": Double(k + 1) / Double(starts.count)])
+      if k == 0 { mark("separate", ["segments": starts.count, "done": 1]) }
     }
 
+    mark("write")
     emit?("onStemsProgress", ["phase": "write", "progress": 1.0])
     // drums = weighted average of the segments; the rest = the song minus the drums (in place, to save memory)
     for i in 0..<n {
@@ -230,6 +267,7 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
     try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
     try Self.writeStereo(outDir.appendingPathComponent("drums.caf"), dl, dr)
     try Self.writeStereo(outDir.appendingPathComponent("nodrums.caf"), l, r)
+    mark("done")
     return Double(n) / Self.sampleRate
   }
 }

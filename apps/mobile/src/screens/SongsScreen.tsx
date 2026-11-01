@@ -27,7 +27,17 @@ export function SongsScreen() {
   const [model, setModel] = useState(() => Engine.stemsModelStatus(MODEL_NAME));
   const [dl, setDl] = useState<Progress>(null);
   const [work, setWork] = useState<{ id: string; p: Progress } | null>(null);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(() => {
+    // if iOS stopped the app during the last separation, say where (and how much memory there was)
+    try {
+      const r = Engine.stemsLastRun();
+      if (r.phase && !['done', 'error'].includes(r.phase)) {
+        const where = { decode: 'reading the song', load: 'loading the model', separate: 'separating', write: 'saving' }[r.phase] ?? r.phase;
+        return `Last time the app was stopped while ${where} (free memory then: ${Math.round(r.freeAfterLoadMB ?? r.freeMB ?? 0)} MB). Please tell Claude this line.`;
+      }
+    } catch { /* no record */ }
+    return '';
+  });
   const [recording, setRecording] = useState<number | null>(null);
   const micWasOff = useRef(false);
   const song = songs.find((s) => s.id === cur) ?? null;
@@ -177,7 +187,7 @@ export function SongsScreen() {
           <Row label="HT-Demucs drums" hint={`${Math.round(model.bytes / 1e6)} MB on this phone`} first>
             <Btn label="Remove" onPress={() => { Engine.stemsDeleteModel(MODEL_NAME); setModel(Engine.stemsModelStatus(MODEL_NAME)); }} />
           </Row>
-          <Note>For your own practice. Stems stay in the app and can't be exported.</Note>
+          <Note>For your own practice. Stems stay in the app and can't be exported. Free memory now: {Math.round(Engine.stemsFreeMemoryMB())} MB.</Note>
         </Card>
       )}
     </ScrollView>

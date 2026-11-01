@@ -110,6 +110,15 @@ public class GhostgridEngineModule: Module {
       }
     }
 
+    /// Where the last separation got to (phase, free memory). A phase other than done/error means iOS stopped the app.
+    Function("stemsLastRun") { () -> [String: Any] in
+      return self.stems.lastRun()
+    }
+
+    Function("stemsFreeMemoryMB") { () -> Double in
+      return GGStems.freeMB()
+    }
+
     Function("stemsCancel") {
       self.stems.cancel()
     }

@@ -48,6 +48,9 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   /** file paths (not file:// URLs); resolves with the duration in seconds */
   stemsSeparate(input: string, outDir: string, model: string): Promise<number>;
   stemsCancel(): void;
+  /** last separation: phase reached (decode/load/separate/write/done/error), free memory then */
+  stemsLastRun(): { phase?: string; freeMB?: number; freeAfterLoadMB?: number; message?: string; seconds?: number };
+  stemsFreeMemoryMB(): number;
   stemsLoad(drums: string | null, rest: string): Promise<number>;
   stemsUnload(): void;
   stemsPlay(): void;
