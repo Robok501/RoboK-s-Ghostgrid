@@ -5,7 +5,7 @@
  * Layout: iPad shows score and full grid together; iPhone upright shows the score above a half-bar grid you swipe;
  * iPhone sideways shows a full bar of grid and only shows the score while playing.
  */
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
@@ -26,8 +26,11 @@ import { readVoiceFile, useSketchPlayer } from '../sketch/usePlayer';
 import { C, F } from '../theme';
 import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle } from '../ui';
 
+/** Examples per taught sound; teaching stops by itself once this many are heard. */
+const TEACH_MAX = 6;
+
 export function SketchScreen() {
-  const { settings, setSketch, mic, setMic } = useApp();
+  const { settings, setSketch, mic, setMic, on } = useApp();
   const sk = settings.sketch;
   const style = useMemo(() => notationStyle(sk.style, sk.custom), [sk.style, sk.custom]);
   const win = useWindowDimensions();
@@ -93,8 +96,23 @@ export function SketchScreen() {
     player.stop();
     if (!(await ensureMic())) return;
     if (!Engine.startRecording()) { say('The microphone is off.'); return; }
+    setTeachCount(0);
     setTeaching(k);
   };
+  // live count of sounds heard while teaching; stops by itself after TEACH_MAX
+  const [teachCount, setTeachCount] = useState(0);
+  const finishRef = useRef<(keep: boolean) => void>(() => {});
+  useEffect(() => {
+    if (!teaching) return;
+    let n = 0, done: ReturnType<typeof setTimeout> | null = null;
+    const off = on('mic', () => {
+      if (done) return;
+      n += 1;
+      setTeachCount(n);
+      if (n >= TEACH_MAX) done = setTimeout(() => finishRef.current(true), 600);
+    });
+    return () => { off(); if (done) clearTimeout(done); };
+  }, [teaching, on]);
   const finishTeach = (keep: boolean) => {
     const k = teaching;
     setTeaching(null);
@@ -111,6 +129,7 @@ export function SketchScreen() {
     } catch { say('Recording failed.'); }
     setTimeout(releaseMic, 50);
   };
+  finishRef.current = finishTeach;
 
   const switchTo = (id: string) => {
     player.stop();
@@ -381,7 +400,11 @@ export function SketchScreen() {
         {teaching && (
           <View style={s.teach}>
             <Text style={s.teachTitle}>{SOUNDS.find((x) => x.k === teaching)!.name}</Text>
-            <Text style={s.teachSay}>Say “{SOUNDS.find((x) => x.k === teaching)!.say}” 4 to 6 times, with a short pause in between.</Text>
+            <Text style={s.teachSay}>Say “{SOUNDS.find((x) => x.k === teaching)!.say}” {TEACH_MAX} times, with a short pause in between.</Text>
+            <View style={s.teachDots} accessibilityLabel={`${teachCount} of ${TEACH_MAX} heard`}>
+              {Array.from({ length: TEACH_MAX }, (_, i) => <View key={i} style={[s.teachDot, i < teachCount && s.teachDotOn]} />)}
+            </View>
+            <Text style={s.teachCount}>{teachCount ? `${Math.min(teachCount, TEACH_MAX)} heard` : 'listening…'}</Text>
             <View style={s.btnRow}>
               <Btn label="Cancel" onPress={() => finishTeach(false)} />
               <Btn label="Done" primary onPress={() => finishTeach(true)} style={{ minWidth: 140 }} />
@@ -427,5 +450,9 @@ const s = StyleSheet.create({
   status: { color: C.fg, fontSize: 15, fontWeight: '600' },
   teach: { position: 'absolute', left: 0, right: 0, bottom: 0, top: 0, backgroundColor: 'rgba(15,18,20,0.96)', alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
   teachTitle: { color: C.accent, fontSize: 30, fontWeight: '800', fontFamily: F.display },
+  teachDots: { flexDirection: 'row', gap: 10, paddingTop: 6 },
+  teachDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.muted },
+  teachDotOn: { backgroundColor: C.accent, borderColor: C.accent },
+  teachCount: { color: C.muted, fontSize: 15, fontVariant: ['tabular-nums'] },
   teachSay: { color: C.fg, fontSize: 18, textAlign: 'center', lineHeight: 26 },
 });
