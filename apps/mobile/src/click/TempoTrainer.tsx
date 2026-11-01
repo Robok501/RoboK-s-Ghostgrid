@@ -25,7 +25,7 @@ function playClips(clips: Clip[], gap = 0.9): Seg_[] {
   let t = Engine.now() + 0.15;
   return clips.map((c) => {
     const r = renderClip(c);
-    for (const e of r.events) Engine.scheduleDrum(t + e.t, DRUM_SOUNDS.indexOf(e.sound));
+    for (const e of r.events) Engine.scheduleDrum(t + e.t, DRUM_SOUNDS.indexOf(e.sound), 1);
     const seg = { from: t, to: t + r.length, r };
     t += r.length + gap;
     return seg;

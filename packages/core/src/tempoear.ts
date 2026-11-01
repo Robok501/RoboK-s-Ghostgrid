@@ -6,7 +6,7 @@
 
 export type Groove = 'click' | 'rock' | 'funk' | 'shuffle' | 'halftime' | 'busy';
 /** Sounds the engine can play for clips. The index is what the native engine receives. */
-export const DRUM_SOUNDS = ['kick', 'snare', 'ghost', 'hat', 'hatAcc', 'open', 'click', 'clickAcc'] as const;
+export const DRUM_SOUNDS = ['kick', 'snare', 'ghost', 'hat', 'hatAcc', 'open', 'click', 'clickAcc', 'tom1', 'tom2', 'ftom', 'ride', 'crash', 'hhFoot', 'rim'] as const;
 export type DrumSound = (typeof DRUM_SOUNDS)[number];
 
 export const GROOVE_NAMES: Record<Groove, string> = {

@@ -1,5 +1,5 @@
 /** Quantize: place timed hits on the grid of an idea, and guess the tempo of a recording. */
-import { INSTRUMENTS, MAX_BARS, emptyBar, steps, type Grid, type Idea, type InstrumentId, type NoteState } from './groove';
+import { INSTRUMENTS, MAX_BARS, emptyBar, steps, type Bar, type Grid, type Idea, type InstrumentId, type NoteState } from './groove';
 
 export interface TimedHit { t: number; cls: InstrumentId; v?: NoteState; acc?: boolean }
 
@@ -25,14 +25,17 @@ export function guessTempo(times: number[], grid: Grid, min = 60, max = 180): nu
 export interface Placement { bar: number; step: number; hit: TimedHit }
 
 /** Snap hits to grid steps measured from `t0` (beat 1). Hits beyond the bar limit are left out. */
-export function quantize(hits: TimedHit[], t0: number, idea: Pick<Idea, 'bpm' | 'beats' | 'grid'>, maxBars = MAX_BARS): Placement[] {
-  const sd = 60 / idea.bpm / idea.grid, n = steps(idea), out: Placement[] = [];
+export function quantize(hits: TimedHit[], t0: number, idea: Pick<Idea, 'bpm' | 'beats' | 'grid'> & { bars?: Bar[] }, maxBars = MAX_BARS): Placement[] {
+  const beat = 60 / idea.bpm, out: Placement[] = [];
   for (const h of hits) {
-    const x = (h.t - t0) / sd;
-    if (x < -0.5) continue;
-    const s = Math.round(x), bar = Math.floor(s / n);
+    const x = (h.t - t0) / beat;
+    if (x < -0.5 / idea.grid) continue;
+    let bar = Math.floor(Math.max(0, x) / idea.beats);
+    const g = idea.bars?.[bar]?.grid ?? idea.grid;
+    let s = Math.max(0, Math.round((x - bar * idea.beats) * g));
+    if (s >= idea.beats * g) { bar++; s = 0; }
     if (bar >= maxBars) continue;
-    out.push({ bar, step: s % n, hit: h });
+    out.push({ bar, step: s, hit: h });
   }
   return out;
 }

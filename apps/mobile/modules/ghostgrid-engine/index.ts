@@ -33,8 +33,8 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   requestMicPermission(): Promise<boolean>;
   now(): number;
   scheduleClick(time: number, level: number): void;
-  /** Tempo-trainer drum voice, index into DRUM_SOUNDS from @ghostgrid/core. */
-  scheduleDrum(time: number, sound: number): void;
+  /** Drum voice, index into DRUM_SOUNDS from @ghostgrid/core; gain 1 = normal. */
+  scheduleDrum(time: number, sound: number, gain: number): void;
   cancelAfter(time: number): void;
   setClickSound(name: 'click' | 'wood' | 'cowbell' | 'hat'): void;
   uptimeToEngine(uptime: number): number;

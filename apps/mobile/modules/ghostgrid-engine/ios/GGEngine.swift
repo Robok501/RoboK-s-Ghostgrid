@@ -26,8 +26,8 @@ final class GGEngine {
   private var rendered: Int64 = 0
   private var mapFrame: Int64 = 0
   private var mapHost: UInt64 = 0
-  private var pending: [(frame: Int64, buf: Int)] = []
-  private var voices: [(buf: Int, pos: Int)] = []
+  private var pending: [(frame: Int64, buf: Int, gain: Float)] = []
+  private var voices: [(buf: Int, pos: Int, gain: Float)] = []
   /// All playable buffers: 0–2 = click (soft, normal, accent), then the drum voices for the tempo trainer.
   private var clicks: [[Float]] = []
   private let hostToSeconds: Double = {
@@ -148,16 +148,17 @@ final class GGEngine {
     let frame = Int64((time * sampleRate).rounded())
     let buf = min(max(level, 1), 3) - 1
     os_unfair_lock_lock(lock)
-    if frame >= rendered { pending.append((frame, buf)) }
+    if frame >= rendered { pending.append((frame, buf, 1)) }
     os_unfair_lock_unlock(lock)
   }
 
-  /// Drum voice for tempo-trainer clips: 0 kick, 1 snare, 2 ghost snare, 3 hat, 4 accented hat, 5 open hat, 6 click, 7 accented click.
-  func scheduleDrum(time: Double, sound: Int) {
+  /// Drum voice, index into DRUM_SOUNDS (@ghostgrid/core): kick, snare, ghost, hat, hatAcc, open, click, clickAcc,
+  /// tom1, tom2, ftom, ride, crash, hhFoot, rim. `gain` scales the hit (accents, ghosts).
+  func scheduleDrum(time: Double, sound: Int, gain: Double) {
     let frame = Int64((time * sampleRate).rounded())
     os_unfair_lock_lock(lock)
     let buf = 3 + sound
-    if sound >= 0 && buf < clicks.count && frame >= rendered { pending.append((frame, buf)) }
+    if sound >= 0 && buf < clicks.count && frame >= rendered { pending.append((frame, buf, Float(gain))) }
     os_unfair_lock_unlock(lock)
   }
 
@@ -299,7 +300,24 @@ final class GGEngine {
     func click(_ f: Double, _ gain: Double) -> [Float] {
       render(0.045) { t in sin(2 * .pi * f * t) * min(1, t / 0.0015) * exp(-t / 0.009) * gain }
     }
-    return [kick, snare(0.8), snare(0.18), hat(0.05, 0.16), hat(0.06, 0.3), hat(0.35, 0.22), click(1320, 0.6), click(1760, 0.95)]
+    func tom(_ f0: Double, _ dur: Double) -> [Float] {
+      render(dur) { t in
+        let phase = 2 * .pi * (f0 * t + f0 * 0.5 * 0.04 * (1 - exp(-t / 0.04)))
+        return sin(phase) * exp(-t / (dur / 4)) * attack(t) * 0.7
+      }
+    }
+    func sq(_ freq: Double, _ t: Double) -> Double { sin(2 * .pi * freq * t) >= 0 ? 1 : -1 }
+    func cymbal(_ dur: Double, _ gain: Double, _ bell: Double) -> [Float] {
+      var p1 = 0.0, p2 = 0.0
+      return render(dur) { t in
+        let n = noise(); let h1 = n - p1; p1 = n; let h2 = h1 - p2; p2 = h1
+        let metal = (sq(3140, t) + sq(4410, t) * 0.7 + sq(5930, t) * 0.5) * 0.08
+        return (h2 * 0.6 + metal + sin(2 * .pi * 2350 * t) * bell * exp(-t / 0.25)) * exp(-t / (dur / 5)) * attack(t) * gain
+      }
+    }
+    let rim = render(0.05) { t in (sin(2 * .pi * 1700 * t) * 0.6 + noise() * 0.3) * exp(-t / 0.008) * attack(t) * 0.7 }
+    return [kick, snare(0.8), snare(0.18), hat(0.05, 0.16), hat(0.06, 0.3), hat(0.35, 0.22), click(1320, 0.6), click(1760, 0.95),
+            tom(210, 0.5), tom(160, 0.55), tom(105, 0.7), cymbal(0.9, 0.16, 0.25), cymbal(1.8, 0.3, 0.0), hat(0.04, 0.12), rim]
   }
 
   /// Convert a time in seconds since boot (UITouch / React Native touch timestamps) to engine seconds.
@@ -322,7 +340,7 @@ final class GGEngine {
     while i < pending.count {
       let e = pending[i]
       if e.frame < end {
-        voices.append((buf: e.buf, pos: -Int(max(0, e.frame - start))))
+        voices.append((buf: e.buf, pos: -Int(max(0, e.frame - start)), gain: e.gain))
         pending.swapAt(i, pending.count - 1)
         pending.removeLast()
       } else {
@@ -338,9 +356,10 @@ final class GGEngine {
       for v in 0..<voices.count {
         let samples = clicks[voices[v].buf]
         let pos = voices[v].pos
+        let gain = voices[v].gain
         for f in 0..<n {
           let p = pos + f
-          if p >= 0 && p < samples.count { first[f] += samples[p] }
+          if p >= 0 && p < samples.count { first[f] += samples[p] * gain }
         }
         voices[v].pos = pos + n
       }

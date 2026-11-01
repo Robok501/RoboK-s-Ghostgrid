@@ -1,7 +1,8 @@
 /** Kit & settings: audio route, e-drum pairing and pad map (incl. learning pads), velocity rules, calibrations. */
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { PAD_NAMES, notesFor, type PadKey } from '@ghostgrid/core';
+import React, { useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { INSTRUMENTS, NOTATION_STYLES, PAD_NAMES, exampleIdea, notationStyle, notesFor, staffName, type PadKey } from '@ghostgrid/core';
+import { Score } from '../sketch/Score';
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 import { C } from '../theme';
@@ -10,7 +11,11 @@ import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle, Value } from '../ui';
 const LEARN_ORDER: PadKey[] = ['bd', 'sn', 'hh', 'hh+o', 'hf', 't1', 't2', 'ft', 'rd', 'cr'];
 
 export function SettingsScreen() {
-  const { info, error, settings, setKeepBt, setPads, setClick, sources, pedal, lastHit, learning, setLearning, mic } = useApp();
+  const { info, error, settings, setKeepBt, setPads, setClick, setSketch, sources, pedal, lastHit, learning, setLearning, mic } = useApp();
+  const sk = settings.sketch;
+  const style = useMemo(() => notationStyle(sk.style, sk.custom), [sk.style, sk.custom]);
+  const example = useMemo(() => exampleIdea(), []);
+  const { width } = useWindowDimensions();
   const p = settings.pads, calib = settings.click.calib;
   const bt = info?.route === 'bluetooth';
 
@@ -52,6 +57,37 @@ export function SettingsScreen() {
         <View style={s.btnRow}><Btn label="Forget learned pads" onPress={() => setPads((x) => ({ ...x, custom: {} }))} /></View>
       </Card>
 
+      <Card title="Notation">
+        <Note>How the score is written. Switching only redraws it; your grooves don't change.</Note>
+        <View style={s.chips}>
+          {NOTATION_STYLES.map((st) => <Chip key={st.id} label={st.name} on={sk.style === st.id} onPress={() => setSketch({ style: st.id })} />)}
+          <Chip label="Custom" on={sk.style === 'custom'} onPress={() => setSketch({ style: 'custom', custom: sk.custom.map && Object.keys(sk.custom.map).length ? sk.custom : { voices: style.voices, map: { ...style.map } } })} />
+        </View>
+        <Note>{style.blurb}</Note>
+        {sk.style === 'custom' && (
+          <>
+            <Row label="Voices" hint="hands up, feet down — or all in one">
+              <Seg options={[{ value: 2, label: 'Two' }, { value: 1, label: 'One' }]} value={sk.custom.voices} onChange={(voices) => setSketch({ custom: { ...sk.custom, voices: voices as 1 | 2 } })} />
+            </Row>
+            {INSTRUMENTS.map((ins) => {
+              const pl = style.map[ins.id];
+              const set = (patch: Partial<typeof pl>) => setSketch({ custom: { ...sk.custom, map: { ...sk.custom.map, [ins.id]: { ...pl, ...patch } } } });
+              return (
+                <Row key={ins.id} label={ins.name} hint={staffName(pl.step)}>
+                  <View style={s.inline}>
+                    <Seg small options={[{ value: 'note', label: '●' }, { value: 'x', label: '×' }]} value={pl.head} onChange={(head) => set({ head: head as 'x' | 'note' })} />
+                    <Stepper value={pl.step} min={-4} max={12} onChange={(step) => set({ step })} />
+                  </View>
+                </Row>
+              );
+            })}
+          </>
+        )}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <Score idea={example} width={Math.max(560, width - 64)} style={style} count={false} selectedBar={null} />
+        </ScrollView>
+      </Card>
+
       <Card title="Calibration">
         <Note>Set in Click → Coach with Calibrate (8 hits on the click). Reset here.</Note>
         {(['tap', 'mic', 'pads'] as const).map((k, i) => (
@@ -64,7 +100,7 @@ export function SettingsScreen() {
         ))}
       </Card>
 
-      <Text style={s.footer}>Ghostgrid 0.2 · settings stay on this device</Text>
+      <Text style={s.footer}>Ghostgrid 0.3 · settings and ideas stay on this device</Text>
     </ScrollView>
   );
 }

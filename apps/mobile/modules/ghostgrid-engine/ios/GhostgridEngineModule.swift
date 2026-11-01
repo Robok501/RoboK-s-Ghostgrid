@@ -44,8 +44,8 @@ public class GhostgridEngineModule: Module {
       self.engine.scheduleClick(time: time, level: level)
     }
 
-    Function("scheduleDrum") { (time: Double, sound: Int) in
-      self.engine.scheduleDrum(time: time, sound: sound)
+    Function("scheduleDrum") { (time: Double, sound: Int, gain: Double) in
+      self.engine.scheduleDrum(time: time, sound: sound, gain: gain)
     }
 
     Function("cancelAfter") { (time: Double) in

@@ -5,7 +5,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { HH_PEDAL_CC, PAD_NAMES, learnPad, resolveNote, stateFor, type NoteState, type PadKey, type PadSettings } from '@ghostgrid/core';
 import Engine, { type EngineInfo } from '../modules/ghostgrid-engine';
-import { loadSettings, saveSettings, type AppSettings, type ClickSettings, type EarSettings } from './store';
+import { loadSettings, saveSettings, type AppSettings, type ClickSettings, type EarSettings, type SketchSettings } from './store';
 
 export interface PadEvent { time: number; note: number; vel: number; key: string; name: string; state: NoteState; mapped: boolean }
 export interface MicEvent { time: number; peak: number }
@@ -15,6 +15,7 @@ type Listener<K extends keyof EventMap> = (e: EventMap[K]) => void;
 interface Ctx {
   settings: AppSettings;
   setClick: (patch: Partial<ClickSettings> | ((c: ClickSettings) => Partial<ClickSettings>)) => void;
+  setSketch: (patch: Partial<SketchSettings>) => void;
   setEar: (patch: Partial<EarSettings> | ((e: EarSettings) => Partial<EarSettings>)) => void;
   setKeepBt: (v: boolean) => void;
   setPads: (fn: (p: PadSettings) => PadSettings) => void;
@@ -74,6 +75,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setEar = useCallback<Ctx['setEar']>((patch) => {
     update((s) => ({ ...s, ear: { ...s.ear, ...(typeof patch === 'function' ? patch(s.ear) : patch) } }));
   }, [update]);
+  const setSketch = useCallback<Ctx['setSketch']>((patch) => update((s) => ({ ...s, sketch: { ...s.sketch, ...patch } })), [update]);
   const setPads = useCallback<Ctx['setPads']>((fn) => update((s) => ({ ...s, pads: fn(s.pads) })), [update]);
 
   const start = useCallback(async (keepBt: boolean, withMic: boolean) => {
@@ -133,8 +135,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [start, emit, update]);
 
   const value = useMemo<Ctx>(() => ({
-    settings, setClick, setEar, setKeepBt, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
-  }), [settings, setClick, setEar, setKeepBt, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on]);
+    settings, setClick, setEar, setSketch, setKeepBt, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
+  }), [settings, setClick, setEar, setSketch, setKeepBt, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

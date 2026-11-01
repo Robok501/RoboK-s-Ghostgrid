@@ -20,7 +20,7 @@ describe('quantize', () => {
   });
   it('drops hits before beat 1 and past the bar limit', () => {
     expect(quantize([{ t: 0.5, cls: 'bd' }], 1, { bpm: 100, beats: 4, grid: 4 })).toEqual([]);
-    expect(quantize([{ t: 1 + 16 * 8 * sd, cls: 'bd' }], 1, { bpm: 100, beats: 4, grid: 4 })).toEqual([]);
+    expect(quantize([{ t: 1 + 16 * 64 * sd, cls: 'bd' }], 1, { bpm: 100, beats: 4, grid: 4 })).toEqual([]);
   });
 });
 

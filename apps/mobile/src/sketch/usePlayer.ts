@@ -1,0 +1,167 @@
+/**
+ * Sketch playback and recording on the native engine. Bars are scheduled a little ahead, one at a time, from the
+ * latest idea, so edits are heard from the next bar. Recording counts in one bar, then captures e-drum hits.
+ */
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import {
+  DRUM_SOUNDS, INSTRUMENTS, barGrid, barSteps, ideaToRaw, soundFor, stepTime, withRaw, type Idea, type InstrumentId, type RawNote,
+} from '@ghostgrid/core';
+import Engine from '../../modules/ghostgrid-engine';
+import { useApp } from '../AppContext';
+
+const AHEAD = 0.5;
+const sound = (name: string) => DRUM_SOUNDS.indexOf(name as (typeof DRUM_SOUNDS)[number]);
+
+export interface PlayPos { bar: number; step: number }
+type RecState = null | { phase: 'count' | 'rec'; start: number; bars: number; beat: number; hits: RawNote[] };
+
+export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: number) => void) {
+  const { info, on, settings } = useApp();
+  const ideaRef = useRef(idea);
+  ideaRef.current = idea;
+  const onRec = useRef(onRecorded);
+  onRec.current = onRecorded;
+  const sk = useRef(settings.sketch);
+  sk.current = settings.sketch;
+  const calibPads = useRef(settings.click.calib.pads);
+  calibPads.current = settings.click.calib.pads;
+  const outLat = useRef(0);
+  outLat.current = info?.outputLatency ?? 0;
+
+  const [playing, setPlaying] = useState(false);
+  const [pos, setPos] = useState<PlayPos | null>(null);
+  const [rec, setRec] = useState<null | 'count' | 'rec'>(null);
+  const [countBeat, setCountBeat] = useState(0);
+
+  const R = useRef({
+    timer: null as ReturnType<typeof setInterval> | null,
+    nextT: 0, nextBar: 0, loopBars: 0,
+    starts: [] as { t: number; bar: number; beat: number; g: number }[],
+    rec: null as RecState, withGroove: true, recorded: 0,
+  });
+
+  const scheduleBar = (t: number, b: number, notes: boolean) => {
+    const I = ideaRef.current;
+    const bar = I.bars[b];
+    if (notes && bar) {
+      for (let s = 0; s < barSteps(I, b); s++) for (const ins of INSTRUMENTS) {
+        const v = bar.n[ins.id][s];
+        if (!v) continue;
+        const sd = soundFor(ins.id, v);
+        Engine.scheduleDrum(t + stepTime(I, b, s) - stepTime(I, b, 0), sound(sd.sound), sd.gain);
+      }
+    }
+    if (sk.current.click || R.current.rec) {
+      const beat = 60 / I.bpm;
+      for (let k = 0; k < I.beats; k++) Engine.scheduleDrum(t + k * beat, sound(k === 0 ? 'clickAcc' : 'click'), 0.7);
+    }
+  };
+
+  const stop = useCallback(() => {
+    const r = R.current;
+    if (r.timer) clearInterval(r.timer);
+    r.timer = null;
+    try { Engine.cancelAfter(Engine.now()); } catch { /* restarting */ }
+    const wasRec = r.rec;
+    r.rec = null;
+    r.starts = [];
+    setPlaying(false); setPos(null); setRec(null);
+    deactivateKeepAwake('sketch');
+    if (wasRec && wasRec.phase === 'rec') finishRecording(wasRec);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const finishRecording = (r: NonNullable<RecState>) => {
+    const I = ideaRef.current;
+    const start = 0, end = r.bars * I.beats;
+    let base = ideaToRaw(I);
+    if (sk.current.recMode === 'replace') base = base.filter((n) => n.beat < start - 1e-6 || n.beat >= end - 1e-6);
+    const hits = r.hits.filter((h) => h.beat > -0.5 && h.beat < end - 0.1).map((h) => ({ ...h, beat: Math.max(0, h.beat) }));
+    if (!hits.length) { onRec.current(I, 0); return; }
+    const used = new Set<InstrumentId>([...(I.rows ?? []), ...hits.map((h) => h.id)]);
+    const next = withRaw({ ...I, rows: I.rows ? [...used] : undefined }, [...base, ...hits], I.bars.length);
+    onRec.current(next, hits.length);
+  };
+
+  const pump = useCallback(() => {
+    const r = R.current, I = ideaRef.current;
+    const now = Engine.now();
+    while (r.nextT < now + AHEAD) {
+      if (r.rec && r.rec.phase === 'count') {
+        // count-in bar: click only
+        const beat = 60 / I.bpm;
+        for (let k = 0; k < I.beats; k++) Engine.scheduleDrum(r.nextT + k * beat, sound(k === 0 ? 'clickAcc' : 'click'), 0.8);
+        r.starts.push({ t: r.nextT, bar: -1, beat, g: 1 });
+        r.rec.phase = 'rec';
+        r.rec.start = r.nextT + I.beats * beat;
+        r.nextT = r.rec.start;
+        r.nextBar = 0;
+        continue;
+      }
+      if (r.rec && r.nextBar >= r.rec.bars) { r.nextT = Infinity; break; }
+      const b = r.nextBar % Math.max(1, I.bars.length);
+      scheduleBar(r.nextT, b, r.withGroove);
+      r.starts.push({ t: r.nextT, bar: b, beat: 60 / I.bpm, g: barGrid(I, b) });
+      if (r.starts.length > 16) r.starts.shift();
+      r.nextT += I.beats * (60 / I.bpm);
+      r.nextBar = b + 1;
+    }
+    if (r.rec && r.nextT === Infinity) {
+      const last = r.starts[r.starts.length - 1];
+      if (last && now - outLat.current > last.t + I.beats * last.beat + 0.3) stop();
+    }
+  }, [stop]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const begin = useCallback((recording: boolean) => {
+    stop();
+    const r = R.current, I = ideaRef.current;
+    r.nextT = Engine.now() + 0.15;
+    r.nextBar = 0;
+    r.starts = [];
+    r.withGroove = !recording || sk.current.recMode === 'layer';
+    r.rec = recording ? { phase: 'count', start: 0, bars: Math.max(1, I.bars.length), beat: 60 / I.bpm, hits: [] } : null;
+    pump();
+    r.timer = setInterval(pump, 50);
+    setPlaying(true);
+    setRec(recording ? 'count' : null);
+    activateKeepAwakeAsync('sketch').catch(() => {});
+  }, [pump, stop]);
+
+  // playhead
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    const tick = () => {
+      const r = R.current;
+      const heard = Engine.now() - outLat.current;
+      let cur: (typeof r.starts)[number] | null = null;
+      for (const s of r.starts) if (s.t <= heard) cur = s;
+      if (cur) {
+        if (cur.bar < 0) { setRec('count'); setCountBeat(Math.min(ideaRef.current.beats, Math.floor((heard - cur.t) / cur.beat) + 1)); setPos(null); }
+        else {
+          if (r.rec) setRec('rec');
+          const step = Math.floor(((heard - cur.t) / cur.beat) * cur.g);
+          setPos((p) => (p && p.bar === cur!.bar && p.step === step ? p : { bar: cur!.bar, step }));
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
+
+  // e-drum hits while recording
+  useEffect(() => on('pad', (e) => {
+    const r = R.current.rec;
+    if (!r || !e.mapped) return;
+    const id = (e.key === 'hh+o' ? 'hh' : e.key) as InstrumentId;
+    if (!INSTRUMENTS.some((i) => i.id === id)) return;
+    const t = e.time - outLat.current + calibPads.current / 1000;
+    r.hits.push({ beat: (t - r.start) / r.beat, id, v: e.state });
+  }), [on]);
+
+  useEffect(() => on('restart', () => stop()), [on, stop]);
+  useEffect(() => () => stop(), [stop]);
+
+  return { playing, pos, rec, countBeat, play: () => begin(false), record: () => begin(true), stop };
+}

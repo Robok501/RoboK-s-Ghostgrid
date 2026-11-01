@@ -4,7 +4,8 @@
  * rests, triplet numbers, ledger lines, ghost-note brackets, accents and open hi-hat marks.
  * Output uses CSS classes (ln, ink, stk, …) so the host app styles it for its theme.
  */
-import { INSTRUMENTS, countLabel, steps, type Idea, type Instrument, type NoteState } from './groove';
+import { INSTRUMENTS, barGrid, barSteps, countLabel, type Idea, type Instrument, type NoteState } from './groove';
+import { DEFAULT_STYLE, type NotationStyle, type StaffPlace } from './notation';
 
 export interface EngraveOptions {
   /** available width in px */
@@ -13,16 +14,23 @@ export interface EngraveOptions {
   selectedBar?: number | null;
   /** count labels (1 e & a) under the staff */
   count?: boolean;
+  /** staff positions, noteheads and voices */
+  style?: NotationStyle;
 }
 export interface BarBox { x0: number; barW: number; top: number; slotW: number; h: number }
 export interface Engraving { svg: string; width: number; height: number; bars: BarBox[] }
 
 const SP = 8; // space between staff lines
 const r1 = (v: number) => Math.round(v * 10) / 10;
+let STYLE: NotationStyle = DEFAULT_STYLE;
+const P = (i: Instrument): StaffPlace => STYLE.map[i.id];
+const isUp = (i: Instrument) => STYLE.voices === 1 || i.up;
 
 export function engrave(idea: Idea, opts: EngraveOptions): Engraving {
-  const W = opts.width, g = idea.grid, n = steps(idea), nb = idea.bars.length, count = opts.count ?? true;
-  const lead = 48, lead2 = 30, minBar = n * (g === 4 ? 19 : g === 3 ? 26 : 30) + 20;
+  STYLE = opts.style ?? DEFAULT_STYLE;
+  const W = opts.width, nb = idea.bars.length, count = opts.count ?? true;
+  const lead = 48, lead2 = 30;
+  const minBar = Math.max(...idea.bars.map((_, b) => { const g = barGrid(idea, b); return barSteps(idea, b) * (g === 4 ? 19 : g === 3 ? 26 : 30); })) + 20;
   let bpl = Math.max(1, Math.min(4, Math.floor((W - lead) / minBar)));
   const lines = Math.ceil(nb / bpl);
   bpl = Math.ceil(nb / lines);
@@ -46,7 +54,7 @@ export function engrave(idea: Idea, opts: EngraveOptions): Engraving {
       o += engraveBar(idea, b, x0, barW, top, count);
       if (b === nb - 1) o += `<line class="stk" x1="${r1(xb - 6)}" x2="${r1(xb - 6)}" y1="${top}" y2="${top + 4 * SP}"/><rect class="ink" x="${r1(xb - 3.5)}" y="${top}" width="3.5" height="${4 * SP}"/>`;
       else o += `<line class="stk" x1="${r1(xb)}" x2="${r1(xb)}" y1="${top}" y2="${top + 4 * SP}"/>`;
-      bars[b] = { x0, barW, top, slotW: (barW - 16) / n, h: sysH - 26 };
+      bars[b] = { x0, barW, top, slotW: (barW - 16) / barSteps(idea, b), h: sysH - 26 };
       o += `<rect class="hitr" data-bar="${b}" x="${r1(x0)}" y="${top - 44}" width="${r1(barW)}" height="${sysH - 14}"/>`;
     }
   }
@@ -57,12 +65,12 @@ interface Head { i: Instrument; v: NoteState }
 interface Note { s: number; v: number; x: number; hs: Head[]; yTop: number; yBot: number }
 
 function engraveBar(idea: Idea, b: number, x0: number, barW: number, top: number, count: boolean): string {
-  const bar = idea.bars[b], g = idea.grid, n = steps(idea), Y = (st: number) => top + ((8 - st) * SP) / 2;
+  const bar = idea.bars[b], g = barGrid(idea, b), n = barSteps(idea, b), Y = (st: number) => top + ((8 - st) * SP) / 2;
   const slotW = (barW - 16) / n, X = (s: number) => x0 + 10 + slotW * (s + 0.5);
   let o = '';
   if (count) for (let s = 0; s < n; s++) o += `<text class="${s % g ? 'cnt' : 'cntb'}" x="${r1(X(s))}" y="${top + 32 + 60}" text-anchor="middle">${countLabel(s, g)}</text>`;
-  for (const up of [true, false]) {
-    const ins = INSTRUMENTS.filter((i) => i.up === up), has = (s: number) => ins.some((i) => bar.n[i.id][s] > 0);
+  for (const up of STYLE.voices === 1 ? [true] : [true, false]) {
+    const ins = INSTRUMENTS.filter((i) => isUp(i) === up), has = (s: number) => ins.some((i) => bar.n[i.id][s] > 0);
     const restY = up ? Y(7) : Y(0.5);
     const all = Array.from({ length: n }, (_, s) => s);
     if (!all.some(has)) {
@@ -87,7 +95,7 @@ function engraveBar(idea: Idea, b: number, x0: number, barW: number, top: number
         const d = (k < on.length - 1 ? on[k + 1] : base + g) - s;
         const v = g === 4 ? d : g === 2 ? 2 * d : d === 1 ? 2 : 4;
         const hs = ins.filter((i) => bar.n[i.id][s] > 0).map((i) => ({ i, v: bar.n[i.id][s] }));
-        const ys = hs.map((h) => Y(h.i.step));
+        const ys = hs.map((h) => Y(P(h.i).step));
         return { s, v, x: X(s), hs, yTop: Math.min(...ys), yBot: Math.max(...ys) };
       });
       const tuplet = g === 3 && !(notes.length === 1 && notes[0].s === base);
@@ -131,16 +139,17 @@ function engraveBar(idea: Idea, b: number, x0: number, barW: number, top: number
 
 function heads(nt: Note, up: boolean, Y: (st: number) => number, top: number): string {
   let o = '';
-  const hs = nt.hs.slice().sort((a, b) => a.i.step - b.i.step);
+  const hs = nt.hs.slice().sort((a, b) => P(a.i).step - P(b.i).step);
   let prev = -99, prevD = false;
   for (const h of hs) {
-    const st = h.i.step, y = Y(st);
+    const st = P(h.i).step, y = Y(st);
     let x = nt.x, d = false;
     // a second (adjacent staff steps) puts the upper head on the other side of the stem
     if (st - prev === 1 && !prevD) { d = true; x += up ? 9.6 : -9.6; }
     prev = st; prevD = d;
+    for (let l = -2; l >= st; l -= 2) o += `<line class="stk" x1="${r1(x - 8)}" x2="${r1(x + 8)}" y1="${Y(l)}" y2="${Y(l)}"/>`;
     for (let l = 10; l <= st; l += 2) o += `<line class="stk" x1="${r1(x - 8)}" x2="${r1(x + 8)}" y1="${Y(l)}" y2="${Y(l)}"/>`;
-    if (h.i.x) o += `<path class="stk xh" d="M${r1(x - 4.4)} ${r1(y - 3.9)}L${r1(x + 4.4)} ${r1(y + 3.9)}M${r1(x - 4.4)} ${r1(y + 3.9)}L${r1(x + 4.4)} ${r1(y - 3.9)}"/>`;
+    if (P(h.i).head === 'x') o += `<path class="stk xh" d="M${r1(x - 4.4)} ${r1(y - 3.9)}L${r1(x + 4.4)} ${r1(y + 3.9)}M${r1(x - 4.4)} ${r1(y + 3.9)}L${r1(x + 4.4)} ${r1(y - 3.9)}"/>`;
     else o += `<ellipse class="ink" cx="${r1(x)}" cy="${y}" rx="5" ry="3.7" transform="rotate(-20 ${r1(x)} ${y})"/>`;
     if (h.v === 3 && h.i.alt === 'ghost') o += `<path class="stk" d="M${r1(x - 8)} ${y - 5}Q${r1(x - 11.5)} ${y} ${r1(x - 8)} ${y + 5}M${r1(x + 8)} ${y - 5}Q${r1(x + 11.5)} ${y} ${r1(x + 8)} ${y + 5}"/>`;
     const my = up ? top - 44 : top + 70;
@@ -166,8 +175,8 @@ function rest(kind: 'q' | 'e' | 's', x: number, cy: number): string {
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /** A complete, self-styled SVG document (black on white) for export or printing. */
-export function scoreDocument(idea: Idea, width = 900, count = true): string {
-  const e = engrave(idea, { width, count, selectedBar: null });
+export function scoreDocument(idea: Idea, width = 900, count = true, style?: NotationStyle): string {
+  const e = engrave(idea, { width, count, selectedBar: null, style });
   const swing = idea.swing && idea.grid !== 3 ? ` · swing ${idea.swing}%` : '';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -40 ${e.width} ${e.height + 40}" width="${e.width}" height="${e.height + 40}"><style>.ln{stroke:#111;stroke-width:1;opacity:.5}.ink{fill:#111}.stk{stroke:#111;fill:none;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}.xh{stroke-width:1.7}.rq{stroke-width:2.3}.cnt{fill:#666;font:500 10px Helvetica,Arial,sans-serif}.cntb{fill:#111;font:700 11px Helvetica,Arial,sans-serif}.ts{fill:#111;font:800 21px "Arial Narrow",Arial,sans-serif}.trip{fill:#111;font:italic 600 11px Helvetica,Arial,sans-serif}.bnum{fill:#666;font:600 10px monospace}.selr,.hitr{display:none}.ttl{fill:#111;font:700 16px Helvetica,Arial,sans-serif}.sub{fill:#666;font:400 11px Helvetica,Arial,sans-serif}</style><rect x="0" y="-40" width="${e.width}" height="${e.height + 40}" fill="#fff"/><text class="ttl" x="6" y="-16">${esc(idea.name)}</text><text class="sub" x="${e.width - 6}" y="-16" text-anchor="end">♩ = ${idea.bpm}${swing}</text>${e.svg}</svg>`;
