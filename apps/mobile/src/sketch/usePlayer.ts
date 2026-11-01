@@ -4,7 +4,7 @@
  * or your voice (beatbox) through the mic, which is recognised after you stop.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
   DRUM_SOUNDS, INSTRUMENTS, SOUND, analyze, barGrid, barSteps, ideaToRaw, soundFor, stepTime, withRaw, type Idea, type InstrumentId, type RawNote, type SoundKey,
@@ -22,8 +22,24 @@ export interface VoiceTake {
   before: Idea;
   base: RawNote[];
   hits: { beat: number; k: SoundKey; v: number[]; margin?: number; acc?: boolean }[];
+  /** the take as a WAV file, for sharing */
+  wav?: string;
 }
 type RecState = null | { phase: 'count' | 'rec'; start: number; bars: number; beat: number; hits: RawNote[]; source: RecSource; clickOk: boolean };
+
+/** Save samples as a 16-bit mono WAV in the app's cache (for sharing a recording). Returns the file URI. */
+export function saveWav(data: Float32Array, sr: number, name: string): string {
+  const n = data.length, buf = new ArrayBuffer(44 + n * 2), d = new DataView(buf);
+  const str = (o: number, s: string) => { for (let i = 0; i < s.length; i++) d.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); d.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+  d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true); d.setUint32(24, Math.round(sr), true);
+  d.setUint32(28, Math.round(sr) * 2, true); d.setUint16(32, 2, true); d.setUint16(34, 16, true); str(36, 'data'); d.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) d.setInt16(44 + i * 2, Math.max(-1, Math.min(1, data[i])) * 32767, true);
+  const f = new File(Paths.cache, name);
+  try { if (f.exists) f.delete(); } catch { /* overwrite */ }
+  f.writeSync(new Uint8Array(buf));
+  return f.uri;
+}
 
 /** Read the raw float file written by the native recorder. */
 export function readVoiceFile(path: string): Float32Array {
@@ -119,8 +135,10 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
         const end = r.bars * I.beats;
         let base = ideaToRaw(I);
         if (sk.current.recMode === 'replace') base = base.filter((n) => n.beat >= end - 1e-6);
+        let wav: string | undefined;
+        try { wav = saveWav(data, f.sampleRate, `ghostgrid-take-${Math.round(I.bpm)}bpm.wav`); } catch { wav = undefined; }
         take = {
-          before: I, base,
+          before: I, base, wav,
           hits: a.hits
             .map((h) => ({ beat: (f.startTime + h.t - outLat.current + calibMic.current / 1000 - r.start) / r.beat, k: h.k, v: h.f.v, margin: h.margin, acc: h.acc }))
             .filter((h) => h.beat > -0.5 && h.beat < end - 0.1),

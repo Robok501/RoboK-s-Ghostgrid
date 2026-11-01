@@ -22,7 +22,7 @@ import { useApp } from '../AppContext';
 import { GridPager } from '../sketch/GridPager';
 import { Score } from '../sketch/Score';
 import { freshIdea, loadIdeas, saveIdeas, type IdeaStore } from '../sketch/ideas';
-import { applyTake, readVoiceFile, useSketchPlayer, type VoiceTake } from '../sketch/usePlayer';
+import { applyTake, readVoiceFile, saveWav, useSketchPlayer, type VoiceTake } from '../sketch/usePlayer';
 import { C, F } from '../theme';
 import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle } from '../ui';
 
@@ -48,6 +48,11 @@ export function SketchScreen() {
   const micWasOff = useRef(false);
   const [take, setTake] = useState<VoiceTake | null>(null);
   const [pick, setPick] = useState<number | null>(null);
+  const [teachWav, setTeachWav] = useState<{ uri: string; name: string; heard: number } | null>(null);
+  const shareWav = async (uri: string) => {
+    try { await Sharing.shareAsync(uri, { mimeType: 'audio/wav', UTI: 'com.microsoft.waveform-audio', dialogTitle: 'Ghostgrid recording' }); }
+    catch (e) { say(`Couldn't share: ${(e as Error).message}`); }
+  };
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState('');
   const [sideView, setSideView] = useState<'auto' | 'grid' | 'score'>('auto');
@@ -138,11 +143,16 @@ export function SketchScreen() {
     try {
       const f = Engine.stopRecording();
       if (keep && k) {
-        const a = analyze(readVoiceFile(f.path), f.sampleRate, {}, 45, settings.micSens);
-        const vecs = a.hits.slice().sort((x, y) => y.peak - x.peak).slice(0, 8).map((h) => h.f.v);
+        const data = readVoiceFile(f.path);
+        const name = SOUNDS.find((x) => x.k === k)!.name;
+        const a = analyze(data, f.sampleRate, {}, 45, settings.micSens);
+        // keep only as many as you said (the loudest), so stray detections don't become examples
+        const wanted = teachCount > 0 ? Math.min(TEACH_MAX, teachCount) : TEACH_MAX;
+        const vecs = a.hits.slice().sort((x, y) => y.peak - x.peak).slice(0, wanted).map((h) => h.f.v);
+        try { setTeachWav({ uri: saveWav(data, f.sampleRate, `ghostgrid-teach-${k}.wav`), name, heard: a.hits.length }); } catch { /* sharing is optional */ }
         if (vecs.length >= 2) {
           setSketch({ voice: addSamples(sk.voice, k, vecs) });
-          say(`${SOUNDS.find((x) => x.k === k)!.name}: learned ${vecs.length} examples.`);
+          say(`${name}: learned ${vecs.length} examples${a.hits.length > vecs.length ? ` (${a.hits.length - vecs.length} extra sounds ignored)` : ''}.`);
         } else say('Heard too few sounds. Try again, 4 to 6 times, with a short pause between them.');
       }
     } catch { say('Recording failed.'); }
@@ -346,7 +356,10 @@ export function SketchScreen() {
                 <Chip label="Remove" onPress={() => correct(pick, null)} />
               </View>
             )}
-            <View style={s.btnRow}><Btn label="Looks good" onPress={() => { setTake(null); setPick(null); }} /></View>
+            <View style={s.btnRow}>
+              <Btn label="Looks good" onPress={() => { setTake(null); setPick(null); }} />
+              {!!take.wav && <Btn label="Share recording" onPress={() => shareWav(take.wav!)} />}
+            </View>
           </Card>
         )}
       </ScrollView>
@@ -430,7 +443,11 @@ export function SketchScreen() {
                 );
               })}
               <Row label="Ghost notes" hint="snares softer than this share of a normal snare"><Stepper value={sk.ghostPct} min={20} max={70} step={5} format={(v) => `${v}%`} onChange={(ghostPct) => setSketch({ ghostPct })} /></Row>
-              <View style={s.btnRow}><Btn label="Forget taught sounds" onPress={() => setSketch({ voice: {} })} /></View>
+              {teachWav && <Note>Last teaching take: {teachWav.name}, {teachWav.heard} sound{teachWav.heard === 1 ? '' : 's'} detected in the recording.</Note>}
+              <View style={s.btnRow}>
+                {teachWav && <Btn label="Share last recording" onPress={() => shareWav(teachWav.uri)} />}
+                <Btn label="Forget taught sounds" onPress={() => setSketch({ voice: {} })} />
+              </View>
             </Card>}
 
             {show('export') && <Card title="Export">
