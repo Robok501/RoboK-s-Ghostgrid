@@ -18,6 +18,7 @@ interface Ctx {
   setSketch: (patch: Partial<SketchSettings>) => void;
   setEar: (patch: Partial<EarSettings> | ((e: EarSettings) => Partial<EarSettings>)) => void;
   setKeepBt: (v: boolean) => void;
+  setMicSens: (v: number) => void;
   setPads: (fn: (p: PadSettings) => PadSettings) => void;
   info: EngineInfo | null;
   error: string;
@@ -44,6 +45,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [info, setInfo] = useState<EngineInfo | null>(null);
   const [error, setError] = useState('');
   const [mic, setMicState] = useState(false);
+  const micRef = useRef(false);
+  micRef.current = mic;
   const [sources, setSources] = useState<string[]>([]);
   const [pedal, setPedal] = useState<number | null>(null);
   const [lastHit, setLastHit] = useState('');
@@ -86,7 +89,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setError('Microphone access is off. Allow it in Settings → Ghostgrid.');
         withMic = false;
       }
-      const i = await Engine.start(keepBt, withMic, 5);
+      const i = await Engine.start(keepBt, withMic, S.current.micSens);
       Engine.setClickSound(S.current.click.sound);
       setInfo(i);
       setMicState(i.mic);
@@ -101,6 +104,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update((s) => ({ ...s, keepBt: v }));
     start(v, mic);
   }, [update, start, mic]);
+  const sensTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setMicSens = useCallback((v: number) => {
+    update((s) => ({ ...s, micSens: v }));
+    // the live hit detector takes the new value when the engine restarts; wait until the stepper settles
+    if (sensTimer.current) clearTimeout(sensTimer.current);
+    sensTimer.current = setTimeout(() => { if (micRef.current) start(S.current.keepBt, true); }, 600);
+  }, [update, start]);
   const setMic = useCallback((onOff: boolean) => start(S.current.keepBt, onOff), [start]);
 
   useEffect(() => {
@@ -135,8 +145,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [start, emit, update]);
 
   const value = useMemo<Ctx>(() => ({
-    settings, setClick, setEar, setSketch, setKeepBt, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
-  }), [settings, setClick, setEar, setSketch, setKeepBt, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on]);
+    settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
+  }), [settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

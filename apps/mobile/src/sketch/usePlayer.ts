@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { File } from 'expo-file-system';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
-  DRUM_SOUNDS, INSTRUMENTS, analyze, barGrid, barSteps, ideaToRaw, soundFor, stepTime, withRaw, type Idea, type InstrumentId, type RawNote,
+  DRUM_SOUNDS, INSTRUMENTS, SOUND, analyze, barGrid, barSteps, ideaToRaw, soundFor, stepTime, withRaw, type Idea, type InstrumentId, type RawNote, type SoundKey,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
@@ -17,6 +17,12 @@ const sound = (name: string) => DRUM_SOUNDS.indexOf(name as (typeof DRUM_SOUNDS)
 
 export interface PlayPos { bar: number; step: number }
 export type RecSource = 'pads' | 'voice';
+/** A voice take, kept so its hits can be checked and corrected (each correction also teaches the recogniser). */
+export interface VoiceTake {
+  before: Idea;
+  base: RawNote[];
+  hits: { beat: number; k: SoundKey; v: number[]; margin?: number; acc?: boolean }[];
+}
 type RecState = null | { phase: 'count' | 'rec'; start: number; bars: number; beat: number; hits: RawNote[]; source: RecSource; clickOk: boolean };
 
 /** Read the raw float file written by the native recorder. */
@@ -25,7 +31,21 @@ export function readVoiceFile(path: string): Float32Array {
   return new Float32Array(bytes.slice().buffer, 0, Math.floor(bytes.length / 4));
 }
 
-export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: number, source: RecSource) => void) {
+/** Notes of a take: the sound decides instrument and ghost/open; loud hits become accents. */
+export function takeNotes(t: VoiceTake): RawNote[] {
+  return t.hits.map((h) => {
+    const s = SOUND[h.k];
+    return { beat: Math.max(0, h.beat), id: s.cls, v: (s.v === 3 ? 3 : h.acc ? 2 : 1) as RawNote['v'] };
+  });
+}
+export function applyTake(t: VoiceTake): Idea {
+  const notes = takeNotes(t);
+  const I = t.before;
+  const used = new Set<InstrumentId>([...(I.rows ?? []), ...notes.map((n) => n.id)]);
+  return withRaw({ ...I, rows: I.rows ? [...used] : undefined }, [...t.base, ...notes], I.bars.length);
+}
+
+export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: number, source: RecSource, take?: VoiceTake) => void) {
   const { info, on, settings } = useApp();
   const ideaRef = useRef(idea);
   ideaRef.current = idea;
@@ -37,6 +57,8 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
   calibPads.current = settings.click.calib.pads;
   const calibMic = useRef(settings.click.calib.mic);
   calibMic.current = settings.click.calib.mic;
+  const micSens = useRef(settings.micSens);
+  micSens.current = settings.micSens;
   const route = useRef(info?.route);
   route.current = info?.route;
   const outLat = useRef(0);
@@ -89,15 +111,24 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
   const finishRecording = (r: NonNullable<RecState>) => {
     const I = ideaRef.current;
     if (r.source === 'voice') {
+      let take: VoiceTake | null = null;
       try {
         const f = Engine.stopRecording();
         const data = readVoiceFile(f.path);
-        const a = analyze(data, f.sampleRate, sk.current.voice, sk.current.ghostPct);
-        r.hits = a.hits.map((h) => ({
-          beat: (f.startTime + h.t - outLat.current + calibMic.current / 1000 - r.start) / r.beat,
-          id: h.cls, v: (h.acc ? 2 : h.v || 1) as RawNote['v'],
-        }));
-      } catch { r.hits = []; }
+        const a = analyze(data, f.sampleRate, sk.current.voice, sk.current.ghostPct, micSens.current);
+        const end = r.bars * I.beats;
+        let base = ideaToRaw(I);
+        if (sk.current.recMode === 'replace') base = base.filter((n) => n.beat >= end - 1e-6);
+        take = {
+          before: I, base,
+          hits: a.hits
+            .map((h) => ({ beat: (f.startTime + h.t - outLat.current + calibMic.current / 1000 - r.start) / r.beat, k: h.k, v: h.f.v, margin: h.margin, acc: h.acc }))
+            .filter((h) => h.beat > -0.5 && h.beat < end - 0.1),
+        };
+      } catch { take = null; }
+      if (!take || !take.hits.length) { onRec.current(I, 0, 'voice'); return; }
+      onRec.current(applyTake(take), take.hits.length, 'voice', take);
+      return;
     }
     const start = 0, end = r.bars * I.beats;
     let base = ideaToRaw(I);

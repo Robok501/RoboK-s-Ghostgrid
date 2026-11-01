@@ -37,6 +37,8 @@ export interface AppSettings {
   ear: EarSettings;
   keepBt: boolean;
   pads: PadSettings;
+  /** microphone sensitivity 1–10: live hits (Coach, teaching) and voice recognition */
+  micSens: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -51,6 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ear: { unlocked: 0, best: {}, openAll: false, rung: 0 },
   sketch: { style: 'weinberg', custom: { voices: 2, map: {} }, count: true, click: false, recMode: 'replace', voice: {}, ghostPct: 45 },
   keepBt: true,
+  micSens: 5,
   pads: { ...DEFAULT_PAD_SETTINGS, preset: 'roland' },
 };
 
@@ -66,6 +69,7 @@ export function loadSettings(): AppSettings {
       ear: { ...DEFAULT_SETTINGS.ear, ...(saved.ear || {}) },
       sketch: { ...DEFAULT_SETTINGS.sketch, ...(saved.sketch || {}) },
       keepBt: saved.keepBt ?? DEFAULT_SETTINGS.keepBt,
+      micSens: saved.micSens ?? DEFAULT_SETTINGS.micSens,
       pads: { ...DEFAULT_SETTINGS.pads, ...(saved.pads || {}) },
     };
   } catch {

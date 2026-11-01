@@ -11,7 +11,7 @@ import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle, Value } from '../ui';
 const LEARN_ORDER: PadKey[] = ['bd', 'sn', 'hh', 'hh+o', 'hf', 't1', 't2', 'ft', 'rd', 'cr'];
 
 export function SettingsScreen() {
-  const { info, error, settings, setKeepBt, setPads, setClick, setSketch, sources, pedal, lastHit, learning, setLearning, mic } = useApp();
+  const { info, error, settings, setKeepBt, setMicSens, setPads, setClick, setSketch, sources, pedal, lastHit, learning, setLearning, mic } = useApp();
   const sk = settings.sketch;
   const style = useMemo(() => notationStyle(sk.style, sk.custom), [sk.style, sk.custom]);
   const example = useMemo(() => exampleIdea(), []);
@@ -28,7 +28,8 @@ export function SettingsScreen() {
         <Row label="Output delay" hint="measured by iOS; Bluetooth adds most of it"><Value>{info ? `${Math.round(info.outputLatency * 1000)} ms` : '–'}</Value></Row>
         <Row label="Sample rate"><Value>{info ? `${Math.round(info.sampleRate)} Hz` : '–'}</Value></Row>
         <Toggle label="Keep click on Bluetooth" hint="also while the microphone listens" value={settings.keepBt} onChange={setKeepBt} />
-        <Row label="Microphone"><Value>{mic ? 'on (Coach · Mic)' : 'off'}</Value></Row>
+        <Row label="Microphone"><Value>{mic ? 'on' : 'off'}</Value></Row>
+        <Row label="Mic sensitivity" hint="Coach · Mic, voice to notes and teaching"><Stepper value={settings.micSens} min={1} max={10} onChange={setMicSens} /></Row>
       </Card>
 
       <Card title="E-drum">

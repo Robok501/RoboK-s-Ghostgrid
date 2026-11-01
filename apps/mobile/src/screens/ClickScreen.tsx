@@ -216,6 +216,7 @@ function Status({ c, cur, running }: { c: ClickSettings; cur: ClickStep | null; 
 function ModeSettings({ c, setClick, setInput, k }: {
   c: ClickSettings; setClick: ReturnType<typeof useApp>['setClick']; setInput: (i: CoachInput) => void; k: ReturnType<typeof useClick>;
 }) {
+  const { settings, setMicSens } = useApp();
   switch (c.mode) {
     case 'gap':
       return <>
@@ -241,6 +242,7 @@ function ModeSettings({ c, setClick, setInput, k }: {
       return <>
         <Row label="Input"><Seg small options={[{ value: 'tap', label: 'Tap' }, { value: 'mic', label: 'Mic' }, { value: 'pads', label: 'E-drum' }]} value={c.input} onChange={(v) => setInput(v as CoachInput)} /></Row>
         {c.input === 'mic' && <Note>Use headphones or Bluetooth to your module, so the mic hears your drums and not the click.</Note>}
+        {c.input === 'mic' && <Row label="Mic sensitivity" hint="higher hears softer hits"><Stepper value={settings.micSens} min={1} max={10} onChange={setMicSens} /></Row>}
         {c.input === 'pads' && <Note>Pair your e-drum under Kit & settings. Every pad is scored, with a breakdown per pad.</Note>}
         {c.level >= 2 && <Row label="Grade against"><Seg options={[{ value: 'beat', label: 'Beats' }, { value: 'sub', label: 'Subdivisions' }]} value={c.grade} onChange={(v) => setClick({ grade: v as 'beat' | 'sub' })} /></Row>}
         <Row label="Window"><Seg small options={[{ value: 10, label: 'Pro ±10' }, { value: 15, label: '±15' }, { value: 25, label: 'Easy ±25' }]} value={c.tol} onChange={(tol) => setClick({ tol })} /></Row>

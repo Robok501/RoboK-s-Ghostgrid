@@ -14,7 +14,7 @@ import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import {
   GRID_NAMES, INSTRUMENTS, MAX_BARS, UndoStack, addBar, addRow, barGrid, buildMidi, clearBar, cycleState, deleteBar, duplicateBar,
-  SOUNDS, addSamples, analyze, importMidi, newId, nextGrid, taughtSounds, usesOwnSounds, notationStyle, scoreDocument, setBarGrid, setBeats, setGrid, setNote, textTab, tidyRows, visibleRows,
+  SOUND, SOUNDS, addSamples, analyze, importMidi, newId, nextGrid, staleSamples, taughtSounds, usesOwnSounds, notationStyle, scoreDocument, setBarGrid, setBeats, setGrid, setNote, textTab, tidyRows, visibleRows,
   INSTRUMENT, type Idea, type InstrumentId, type SoundKey,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -22,7 +22,7 @@ import { useApp } from '../AppContext';
 import { GridPager } from '../sketch/GridPager';
 import { Score } from '../sketch/Score';
 import { freshIdea, loadIdeas, saveIdeas, type IdeaStore } from '../sketch/ideas';
-import { readVoiceFile, useSketchPlayer } from '../sketch/usePlayer';
+import { applyTake, readVoiceFile, useSketchPlayer, type VoiceTake } from '../sketch/usePlayer';
 import { C, F } from '../theme';
 import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle } from '../ui';
 
@@ -30,7 +30,7 @@ import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle } from '../ui';
 const TEACH_MAX = 6;
 
 export function SketchScreen() {
-  const { settings, setSketch, mic, setMic, on } = useApp();
+  const { settings, setSketch, mic, setMic, on, setMicSens } = useApp();
   const sk = settings.sketch;
   const style = useMemo(() => notationStyle(sk.style, sk.custom), [sk.style, sk.custom]);
   const win = useWindowDimensions();
@@ -46,6 +46,8 @@ export function SketchScreen() {
   const [sheet, setSheet] = useState<null | 'ideas' | 'export' | 'voice' | 'settings' | 'all'>(null);
   const [teaching, setTeaching] = useState<SoundKey | null>(null);
   const micWasOff = useRef(false);
+  const [take, setTake] = useState<VoiceTake | null>(null);
+  const [pick, setPick] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState('');
   const [sideView, setSideView] = useState<'auto' | 'grid' | 'score'>('auto');
@@ -66,7 +68,8 @@ export function SketchScreen() {
   const say = (t: string) => { setNotice(t); setTimeout(() => setNotice((n) => (n === t ? '' : n)), 4500); };
 
   const releaseMic = () => { if (micWasOff.current) { micWasOff.current = false; setMic(false); } };
-  const player = useSketchPlayer(idea, (next, count, source) => {
+  const player = useSketchPlayer(idea, (next, count, source, tk) => {
+    setTake(tk ?? null); setPick(null);
     if (source === 'voice') setTimeout(releaseMic, 50);
     if (count === -2) { say('The microphone is off. Allow it in Settings → Ghostgrid.'); return; }
     if (count < 0) return;
@@ -89,6 +92,22 @@ export function SketchScreen() {
   const recordVoice = async () => {
     if (player.rec) { player.stop(); return; }
     if (await ensureMic()) player.record('voice');
+  };
+
+  // ---- checking a voice take: change a hit's sound (that also teaches it) or remove it
+  const correct = (i: number, k: SoundKey | null) => {
+    if (!take) return;
+    const h = take.hits[i];
+    const hits = k ? take.hits.map((x, j) => (j === i ? { ...x, k, margin: 1 } : x)) : take.hits.filter((_, j) => j !== i);
+    const next = { ...take, hits };
+    if (k && k !== h.k) setSketch({ voice: addSamples(sk.voice, k, [h.v]) });
+    setTake(next);
+    setPick(null);
+    commit({ ...applyTake(next), id: idea.id, name: idea.name, bpm: idea.bpm }, false);
+  };
+  const where = (beat: number) => {
+    const b = Math.floor(beat / idea.beats + 1e-6), inBar = beat - b * idea.beats;
+    return `${b + 1}.${Math.floor(inBar + 1e-6) + 1}`;
   };
 
   // ---- teaching your own beatbox sounds
@@ -119,7 +138,7 @@ export function SketchScreen() {
     try {
       const f = Engine.stopRecording();
       if (keep && k) {
-        const a = analyze(readVoiceFile(f.path), f.sampleRate, {});
+        const a = analyze(readVoiceFile(f.path), f.sampleRate, {}, 45, settings.micSens);
         const vecs = a.hits.slice().sort((x, y) => y.peak - x.peak).slice(0, 8).map((h) => h.f.v);
         if (vecs.length >= 2) {
           setSketch({ voice: addSamples(sk.voice, k, vecs) });
@@ -305,6 +324,31 @@ export function SketchScreen() {
             <Chip label="Clean up empty rows" onPress={() => { commit(tidyRows(idea), false); setAdding(false); }} />
           </View>
         )}
+
+        {take && !player.rec && (
+          <Card title="Check what I heard">
+            <Note>Tap a hit to fix it. Every fix also teaches your voice. Hits marked ? were a close call.</Note>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.takeRow}>
+              {take.hits.map((h, i) => {
+                const unsure = h.margin !== undefined && h.margin < 0.25;
+                return (
+                  <Pressable key={i} onPress={() => setPick(pick === i ? null : i)} style={[s.takeHit, unsure && s.takeUnsure, pick === i && s.takePick]}
+                    accessibilityRole="button" accessibilityLabel={`${SOUND[h.k].name} at ${where(h.beat)}${unsure ? ', not sure' : ''}`}>
+                    <Text style={[s.takeLetter, pick === i && { color: C.bg }]}>{SOUND[h.k].letter}{unsure ? '?' : ''}</Text>
+                    <Text style={[s.takeWhere, pick === i && { color: C.bg }]}>{where(h.beat)}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {pick !== null && take.hits[pick] && (
+              <View style={s.chips}>
+                {SOUNDS.map((x) => <Chip key={x.k} label={x.name} on={x.k === take.hits[pick].k} onPress={() => correct(pick, x.k)} />)}
+                <Chip label="Remove" onPress={() => correct(pick, null)} />
+              </View>
+            )}
+            <View style={s.btnRow}><Btn label="Looks good" onPress={() => { setTake(null); setPick(null); }} /></View>
+          </Card>
+        )}
       </ScrollView>
 
       {!phoneSideways && (
@@ -370,6 +414,10 @@ export function SketchScreen() {
             {show('voice') && <Card title="Voice to notes">
               <Note>Press Voice, wait for the count-in, and beatbox the groove: “boom” for kick, “ka” or “psh” for snare, “ts” for hi-hat. When you stop, the hits are recognised and written into the bars. Use headphones or Bluetooth so the mic doesn't hear the click; on the phone speaker you only get the count-in.</Note>
               <Row label="Recognition"><Text style={[s.status, own && { color: C.good }]}>{own ? 'Your own sounds' : 'Built-in rules'}</Text></Row>
+              <Row label="Mic sensitivity" hint="higher hears softer sounds; lower ignores breaths and room noise">
+                <Stepper value={settings.micSens} min={1} max={10} onChange={setMicSens} />
+              </Row>
+              {staleSamples(sk.voice) && <Note>Recognition was upgraded: teach your sounds again (the old examples are ignored).</Note>}
               {!own && <Note>Teach at least Kick, Snare and Hi-hat closed with your own voice: recognition gets much better.</Note>}
             </Card>}
             {show('voice') && <Card title="Teach your sounds">
@@ -450,6 +498,12 @@ const s = StyleSheet.create({
   status: { color: C.fg, fontSize: 15, fontWeight: '600' },
   teach: { position: 'absolute', left: 0, right: 0, bottom: 0, top: 0, backgroundColor: 'rgba(15,18,20,0.96)', alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
   teachTitle: { color: C.accent, fontSize: 30, fontWeight: '800', fontFamily: F.display },
+  takeRow: { gap: 6, paddingVertical: 6 },
+  takeHit: { minWidth: 48, minHeight: 52, borderRadius: 12, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  takeUnsure: { borderWidth: 2, borderColor: C.late },
+  takePick: { backgroundColor: C.fg },
+  takeLetter: { color: C.fg, fontSize: 18, fontWeight: '800', fontFamily: F.mono },
+  takeWhere: { color: C.muted, fontSize: 10, fontVariant: ['tabular-nums'] },
   teachDots: { flexDirection: 'row', gap: 10, paddingTop: 6 },
   teachDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.muted },
   teachDotOn: { backgroundColor: C.accent, borderColor: C.accent },

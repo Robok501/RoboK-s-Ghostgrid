@@ -59,3 +59,20 @@ describe('recognition', () => {
     expect(usesOwnSounds({ bd: s.bd, sn: s.sn })).toBe(false);
   });
 });
+
+describe('sensitivity and features', () => {
+  const soft = track([['bd', 1], ['sn', 0.04], ['hh', 1], ['sn', 0.04]], 0.3);
+  it('finds very soft hits only at high sensitivity', () => {
+    expect(analyze(soft, SR, {}, 45, 2).hits.length).toBe(2);
+    expect(analyze(soft, SR, {}, 45, 9).hits.length).toBe(4);
+  });
+  it('keeps one hit for a long open hi-hat', () => {
+    expect(analyze(track([['hho', 1], ['hho', 1]], 0.6), SR, {}).hits.length).toBe(2);
+  });
+  it('ignores taught examples from an older feature set', async () => {
+    const { staleSamples, taughtSounds } = await import('../src/voice');
+    const old: Samples = { bd: [[1, 2, 3], [1, 2, 3]] };
+    expect(staleSamples(old)).toBe(true);
+    expect(taughtSounds(old)).toEqual([]);
+  });
+});
