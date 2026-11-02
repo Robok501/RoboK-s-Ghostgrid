@@ -44,16 +44,19 @@ export function calibrationFromHits(rawMs: number[], limit = 250): number {
   return Math.max(-limit, Math.min(limit, Math.round(-med)));
 }
 
-/** Rolling hit log, overall and per pad, limited to the last `size` hits. */
+/**
+ * Hit log, overall and per pad. Scores count the whole session (up to `size` hits, ten thousand by default:
+ * it used to be 32, so the count stopped at 32 and the scores only covered the last few bars).
+ */
 export class HitLog {
   all: number[] = [];
   byPad: Record<string, number[]> = {};
   /** recent hits with the moment they were played (seconds, any clock), for drawing them on a moving timeline */
   events: { t: number; off: number; pad?: string }[] = [];
-  constructor(public size = 32) {}
+  constructor(public size = 10_000) {}
   add(offsetMs: number, pad?: string, t = Date.now() / 1000) {
     this.events.push({ t, off: offsetMs, pad });
-    if (this.events.length > 4 * this.size) this.events.shift();
+    if (this.events.length > 400) this.events.shift();
     this.all.push(offsetMs);
     if (this.all.length > this.size) this.all.shift();
     if (pad) {

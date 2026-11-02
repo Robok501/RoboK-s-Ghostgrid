@@ -41,7 +41,7 @@ export function useClick() {
     timer: null as ReturnType<typeof setInterval> | null,
     grid: [] as number[],
     visual: [] as { t: number; st: ClickStep }[],
-    log: new HitLog(32),
+    log: new HitLog(),
     calibrating: null as CoachInput | null,
     calibRaw: [] as number[],
     outLat: 0,

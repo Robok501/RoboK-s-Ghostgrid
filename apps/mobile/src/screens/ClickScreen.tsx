@@ -112,11 +112,13 @@ export function ClickScreen({ active = true }: { active?: boolean }) {
         {showPad && (
           <CoachPanel input={c.input} running={k.running} last={k.last} log={k.log} tol={c.tol}
             calibrating={k.calibrating} calibCount={k.calibCount} micLevel={micLevel}
-            onTap={(ms) => { if (!k.running) k.start(); else k.tap(ms); }} onPlay={() => (k.running ? k.stop() : k.start())} />
+            onTap={(ms) => { if (!k.running) k.start(); else k.tap(ms); }} onPlay={() => (k.running ? k.stop() : k.start())} onReset={k.resetHits} />
         )}
       </ScrollView>
 
       <View style={s.playBar}>
+        {/* restart: from the top (a ramp back to its start tempo, a program back to section A) with fresh scores */}
+        {k.running && <Btn label="↺ Restart" onPress={() => { k.resetHits(); k.start(); }} />}
         <Btn label={k.running ? 'Stop' : 'Play'} primary active={k.running} onPress={() => (k.running ? k.stop() : k.start())} style={{ flex: 1 }} />
       </View>
 
@@ -258,7 +260,10 @@ function ModeSettings({ c, setClick, setInput, k }: {
         {c.input === 'mic' && <Row label="Mic sensitivity" hint="higher hears softer hits"><Stepper value={settings.micSens} min={1} max={10} onChange={setMicSens} /></Row>}
         {c.input === 'pads' && <Note>Pair your e-drum in Settings. Every pad is scored, with a breakdown per pad.</Note>}
         {c.level >= 2 && <Row label="Grade against"><Seg options={[{ value: 'beat', label: 'Beats' }, { value: 'sub', label: 'Subdivisions' }]} value={c.grade} onChange={(v) => setClick({ grade: v as 'beat' | 'sub' })} /></Row>}
-        <Row label="Window"><Seg small options={[{ value: 10, label: 'Pro ±10' }, { value: 15, label: '±15' }, { value: 25, label: 'Easy ±25' }]} value={c.tol} onChange={(tol) => setClick({ tol })} /></Row>
+        <Row label="On-time window" hint="how far from the click still counts as on time">
+          <Seg small options={[{ value: 15, label: '±15' }, { value: 25, label: '±25' }, { value: 40, label: '±40' }]} value={c.tol} onChange={(tol) => setClick({ tol })} />
+        </Row>
+        <Note>±15 ms is tight (studio work), ±25 ms a good everyday goal, ±40 ms for starting out or fast, busy playing.</Note>
         {c.level >= 4 && <Row label="Latency fix" hint="shifts every reading"><Stepper value={c.calib[fixKey]} min={-250} max={250} step={2} format={(v) => `${v > 0 ? '+' : ''}${v} ms`} onChange={(v) => setClick((cc) => ({ calib: { ...cc.calib, [fixKey]: v } }))} /></Row>}
         <View style={s.btnRow}>
           <Btn label={k.calibrating ? `Calibrating ${k.calibCount}/8` : 'Calibrate'} onPress={() => k.startCalibration(c.input)} />
@@ -313,5 +318,5 @@ const s = StyleSheet.create({
   secCard: { borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingHorizontal: 10, marginVertical: 4 },
   secHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 },
   secTitle: { color: C.fg, fontSize: 15, fontWeight: '700' },
-  playBar: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line, backgroundColor: C.bg },
+  playBar: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line, backgroundColor: C.bg },
 });

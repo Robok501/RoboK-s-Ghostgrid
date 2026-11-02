@@ -384,7 +384,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     } catch (e) { setErr(`Couldn't share: ${(e as Error).message}`); }
   };
   const [, bump] = useState(0);
-  const logRef = useRef(new HitLog(32));
+  const logRef = useRef(new HitLog());
   const [last, setLast] = useState<number | null>(null);
   const coachInput: CoachInput = song.coachInput ?? 'pads';
   const R = useRef({ map, rate, outLat: 0, calib: settings.click.calib, grade: song.grade ?? 1, coach: !!song.coach, playing });
@@ -470,6 +470,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       </View>
 
       <View style={s.transport}>
+        <Btn label="↺" onPress={() => { seek(loopOn ? A : 0); logRef.current.reset(); setLast(null); bump((x) => x + 1); }} />
         <Btn label="−5 s" onPress={() => seek(pos - 5)} />
         <Btn label={playing ? 'Pause' : 'Play'} primary active={playing} disabled={!ready || separating} onPress={toggle} style={{ flex: 1 }} />
         <Btn label="+5 s" onPress={() => seek(pos + 5)} />
@@ -477,7 +478,8 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
 
       {song.coach && (
         <CoachPanel input={coachInput} running={playing} last={last} log={logRef.current} tol={settings.click.tol}
-          calibrating={null} calibCount={0} micLevel={micLevel} onTap={tap} />
+          calibrating={null} calibCount={0} micLevel={micLevel} onTap={tap}
+          onReset={() => { logRef.current.reset(); setLast(null); bump((x) => x + 1); }} />
       )}
 
       <Row label="Listen to" first>
@@ -536,7 +538,6 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
           <Row label="Input"><Seg small options={[{ value: 'pads', label: 'E-drum' }, { value: 'mic', label: 'Mic' }, { value: 'tap', label: 'Tap' }]} value={coachInput} onChange={(v) => setCoachInput(v as CoachInput)} /></Row>
           <Row label="Grade against"><Seg small options={[{ value: 1, label: 'Beats' }, { value: 2, label: '8ths' }, { value: 4, label: '16ths' }]} value={song.grade ?? 1} onChange={(v) => update(song.id, { grade: v as 1 | 2 | 4 })} /></Row>
           {coachInput === 'mic' && <Note>Use headphones or Bluetooth so the mic hears your drums, not the song.</Note>}
-          <View style={s.btnRow}><Btn label="Reset hits" onPress={() => { logRef.current.reset(); setLast(null); bump((x) => x + 1); }} /></View>
         </>
       )}
 

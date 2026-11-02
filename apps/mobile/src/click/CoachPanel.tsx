@@ -13,8 +13,8 @@ import { CALIB_HITS } from './useClick';
 
 /** how many seconds of hits a timeline shows */
 const SPAN = 6;
-/** the timeline's top and bottom edge, in ms early or late */
-const RANGE = 60;
+/** the timeline's top and bottom edge, in ms early or late (more with a wide window) */
+const RANGE_MIN = 60;
 const GROUPS: { key: string; name: string; pads: string[] }[] = [
   { key: 'bd', name: 'Kick', pads: ['bd'] },
   { key: 'sn', name: 'Snare', pads: ['sn', 'rim'] },
@@ -22,11 +22,13 @@ const GROUPS: { key: string; name: string; pads: string[] }[] = [
 ];
 const colorOf = (pct: number | null) => (pct === null ? C.muted : pct >= 85 ? C.good : pct >= 60 ? C.accent : C.late);
 
-export function CoachPanel({ input, running, log, tol, calibrating, calibCount, micLevel, onTap, onPlay }: {
+export function CoachPanel({ input, running, log, tol, calibrating, calibCount, micLevel, onTap, onPlay, onReset }: {
   input: CoachInput; running: boolean; last?: number | null; log: HitLog; tol: number;
   calibrating: CoachInput | null; calibCount: number; micLevel: number; onTap: (ms: number) => void;
   /** a small Play / Stop inside the square (left out where Play sits right above it) */
   onPlay?: () => void;
+  /** clear the scores and timelines (keeps playing) */
+  onReset?: () => void;
 }) {
   // the timelines move while playing
   const [now, setNow] = useState(() => Date.now() / 1000);
@@ -50,6 +52,12 @@ export function CoachPanel({ input, running, log, tol, calibrating, calibCount, 
     <View style={[s.tile, perPad && s.tileHalf]}>
       <View style={s.tileHead}>
         <Text style={s.tileName}>{perPad ? 'Whole kit' : 'Your timing'}</Text>
+        <View style={{ flex: 1 }} />
+        {onReset && all.n > 0 && (
+          <Pressable onPress={onReset} style={s.reset} accessibilityRole="button" accessibilityLabel="Reset scores" hitSlop={6}>
+            <Text style={s.resetTxt}>↺</Text>
+          </Pressable>
+        )}
         {onPlay && (
           <Pressable onPress={onPlay} style={[s.play, running && s.playOn]} accessibilityRole="button" accessibilityLabel={running ? 'Stop' : 'Play'} hitSlop={6}>
             <Text style={[s.playTxt, running && { color: C.accentInk }]}>{running ? '■' : '▶'}</Text>
@@ -107,8 +115,9 @@ function tendency(mean: number, sd: number, tol: number): string {
 /** A moving timeline: newest hits on the right, early above the line, late below; the band is the window. */
 function Lane({ events, t, tol, tall }: { events: { t: number; off: number }[]; t: number; tol: number; tall?: boolean }) {
   // early at the top, late at the bottom; way off stays just inside the edge
+  const RANGE = Math.max(RANGE_MIN, tol * 1.8);
   const y = (off: number) => 50 + (Math.max(-RANGE, Math.min(RANGE, off)) / RANGE) * 40;
-  const band = (Math.min(tol, RANGE) / RANGE) * 40;
+  const band = (tol / RANGE) * 40;
   const shown = events.filter((e) => e.t > t - SPAN);
   return (
     <View style={[s.lane, tall && { height: 70 }]} accessibilityElementsHidden>
@@ -145,6 +154,8 @@ const s = StyleSheet.create({
   play: { width: 44, height: 32, borderRadius: 10, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
   playOn: { backgroundColor: C.fg },
   playTxt: { color: C.accentInk, fontSize: 14, fontWeight: '800' },
+  reset: { width: 40, height: 32, borderRadius: 10, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', marginRight: 6 },
+  resetTxt: { color: C.fg, fontSize: 18, fontWeight: '700' },
   lane: { height: 58, borderRadius: 8, backgroundColor: C.surface, overflow: 'hidden' },
   band: { position: 'absolute', left: 0, right: 0, backgroundColor: C.accentSoft },
   centre: { position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: C.muted, opacity: 0.6 },

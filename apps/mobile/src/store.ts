@@ -39,16 +39,19 @@ export interface AppSettings {
   pads: PadSettings;
   /** microphone sensitivity 1–10: live hits (Coach, teaching) and voice recognition */
   micSens: number;
+  /** settings version, for one-time changes when defaults move */
+  v?: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  v: 2,
   click: {
     level: 4, mode: 'basic', bpm: 100, beats: 4, unit: 4, sub: 1, sound: 'click', levels: [3, 2, 2, 2], groups: null,
     gapOn: DEFAULT_CONFIG.gapOn, gapOff: DEFAULT_CONFIG.gapOff,
     dropUnit: 'beats', dropChance: DEFAULT_CONFIG.dropChance, dropLen: DEFAULT_CONFIG.dropLen, dropWarm: DEFAULT_CONFIG.dropWarm,
     rampStep: DEFAULT_CONFIG.rampStep, rampEvery: DEFAULT_CONFIG.rampEvery, rampTarget: DEFAULT_CONFIG.rampTarget,
     program: DEFAULT_CONFIG.program, loop: true,
-    tol: 15, grade: 'beat', input: 'tap', calib: { tap: 0, mic: 0, pads: 0 }, presets: [],
+    tol: 25, grade: 'beat', input: 'tap', calib: { tap: 0, mic: 0, pads: 0 }, presets: [],
   },
   ear: { unlocked: 0, best: {}, openAll: false, rung: 0 },
   sketch: { style: 'weinberg', custom: { voices: 2, map: {} }, count: true, click: false, recMode: 'replace', voice: {}, ghostPct: 45 },
@@ -63,8 +66,11 @@ export function loadSettings(): AppSettings {
   try {
     const f = file();
     if (!f.exists) return DEFAULT_SETTINGS;
-    const saved = JSON.parse(f.textSync()) as Partial<AppSettings>;
+    const saved = JSON.parse(f.textSync()) as Partial<AppSettings> & { v?: number };
+    // version 2: the timing window's default went from ±15 to ±25 ms; move the old default along once
+    if ((saved.v ?? 1) < 2 && saved.click && (saved.click.tol === 15 || saved.click.tol === 10)) saved.click.tol = saved.click.tol === 15 ? 25 : 15;
     return {
+      v: 2,
       click: { ...DEFAULT_SETTINGS.click, ...(saved.click || {}), calib: { ...DEFAULT_SETTINGS.click.calib, ...(saved.click?.calib || {}) } },
       ear: { ...DEFAULT_SETTINGS.ear, ...(saved.ear || {}) },
       sketch: { ...DEFAULT_SETTINGS.sketch, ...(saved.sketch || {}) },
