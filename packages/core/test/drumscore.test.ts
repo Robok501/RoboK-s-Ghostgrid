@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type BeatMap, type Envelope } from '../src/beatmap';
-import { drumHits, hitsToIdea } from '../src/drumscore';
+import { drumHits, hitsToIdea, type DrumHit } from '../src/drumscore';
 import { ideaToRaw } from '../src/groove';
 
 const RATE = 100;
@@ -75,5 +75,18 @@ describe('drums to score', () => {
     const s2 = hitsToIdea(drumHits(env), m, 1 + 2 * 2 - 0.02, 1 + 2 * 6, 'Loop');
     expect(s2.bars).toBe(4);
     expect(ideaToRaw(s2.idea).filter((r) => r.id === 'bd').map((r) => r.beat).slice(0, 2)).toEqual([0, 2]);
+  });
+
+  it('puts the hits in the score grid, not only in the raw notes (a hit is 1; 0 is no note)', () => {
+    const beat = 0.6, m: BeatMap = { beats: Array.from({ length: 17 }, (_, i) => 1 + i * beat), beatsPerBar: 4, downbeat: 0, bpm: 100 } as BeatMap;
+    const hits: DrumHit[] = [0, 1, 2, 3].map((b) => ({ t: 1 + b * beat, id: b % 2 ? 'sn' : 'bd', v: 1, level: 1 }));
+    const s = hitsToIdea(hits, m, 0, 1e9, 'x');
+    const bar = s.idea.bars[0].n;
+    expect(bar.bd.filter((x) => x > 0).length).toBe(2);
+    expect(bar.sn.filter((x) => x > 0).length).toBe(2);
+  });
+  it('makes normal drum hits 1, never 0', () => {
+    const env = kit([[0, 'bd'], [1, 'sn'], [2, 'bd'], [3, 'sn'], ...[0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5].map((x) => [x, 'hh'] as [number, K])], 4).env;
+    expect(drumHits(env).every((h) => h.v === 1 || h.v === 3)).toBe(true);
   });
 });

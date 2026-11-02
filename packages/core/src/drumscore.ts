@@ -14,6 +14,7 @@ import { barStarts, placeOf } from './beatmap';
 import { MAX_BARS, newId, withRaw, type Grid, type Idea, type InstrumentId, type NoteState, type RawNote } from './groove';
 import { suggestGrid } from './midiimport';
 
+/** v: 1 = hit, 3 = ghost snare or open hi-hat (0 would mean no note in the score). */
 export interface DrumHit { t: number; id: 'bd' | 'sn' | 'hh' | 'cr' | 'rd' | 't1' | 't2' | 'ft'; v: NoteState; level: number }
 
 const pct = (xs: ArrayLike<number>, q: number) => {
@@ -111,8 +112,8 @@ export function drumHits(env: Envelope): DrumHit[] {
     const click = RM(e.f) > 3 || RH(e.f) > 3;
     const kick = e.lowOn && click && (r < mid0 ? e.l > Math.max(0.12, kickLevel * 0.3) : e.l > Math.max(0.25, kickLevel * 0.5) && Math.log((e.l + 1e-3) / (e.m + 1e-3)) > -refS + 1.2);
     const snare = r >= mid0 ? e.m > 0.08 : e.m > 0.3 && r > refK + 1.2;
-    if (kick) hits.push({ t, id: 'bd', v: 0, level: e.l });
-    if (snare) hits.push({ t, id: 'sn', v: 0, level: e.m });
+    if (kick) hits.push({ t, id: 'bd', v: 1, level: e.l });
+    if (snare) hits.push({ t, id: 'sn', v: 1, level: e.m });
   }
   // hi-hat and cymbals: attacks in the high band, unless they are just a snare's wires
   const snares = hits.filter((h) => h.id === 'sn');
@@ -133,7 +134,7 @@ export function drumHits(env: Envelope): DrumHit[] {
     if (withKick && !withSnare && h < hat * 0.3) continue;
     if (h < 0.04) continue;
     const rg = ring(high, f, rate);
-    cyms.push({ t, id: rg > 0.6 && h > 0.5 ? 'cr' : 'hh', v: rg > 0.22 && rg <= 0.6 ? 3 : 0, level: h });
+    cyms.push({ t, id: rg > 0.6 && h > 0.5 ? 'cr' : 'hh', v: rg > 0.22 && rg <= 0.6 ? 3 : 1, level: h });
   }
   // ghost snares: much softer than this song's normal snare
   const sl = median(snares.map((s) => s.level));
@@ -160,7 +161,10 @@ export function modelDrumHits(model: ModelHit[], env: Envelope): DrumHit[] {
   const keep = model.filter((h) => h.p >= (MODEL_THRESHOLDS[h.c] ?? 1));
   const rate = env.rate, low = env.low, mid = env.mid ?? env.full;
   // toms: high, mid or floor tom from how much low end the hit has, compared with this song's other tom hits
-  const toms = keep.filter((h) => h.c === 2);
+  // a tom right on a snare that the model is no surer of than the snare: the snare's body ringing, not a tom
+  const snares = keep.filter((h) => h.c === 1);
+  const toms = keep.filter((h) => h.c === 2 && !snares.some((s) => Math.abs(s.t - h.t) <= 0.03 && h.p <= s.p + 0.1));
+  const tomSet = new Set(toms);
   const lowness = (t: number) => {
     const f = Math.round(t * rate);
     let l = 0, m = 0;
@@ -170,8 +174,9 @@ export function modelDrumHits(model: ModelHit[], env: Envelope): DrumHit[] {
   const tl = toms.map((h) => lowness(h.t)), lo = Math.min(...tl), hi = Math.max(...tl);
   const tomId = (x: number): DrumHit['id'] => (hi - lo < 0.8 ? 't1' : x < lo + (hi - lo) / 3 ? 't1' : x < lo + (2 * (hi - lo)) / 3 ? 't2' : 'ft');
   for (const h of keep) {
+    if (h.c === 2 && !tomSet.has(h)) continue;
     const id: DrumHit['id'] | null = h.c === 0 ? 'bd' : h.c === 1 ? 'sn' : h.c === 2 ? tomId(lowness(h.t)) : h.c === 4 || h.c === 5 ? 'rd' : h.c === 6 ? 'cr' : null;
-    if (id) out.push({ t: h.t, id, v: 0, level: Math.max(0, h.v) });
+    if (id) out.push({ t: h.t, id, v: 1, level: Math.max(0, h.v) });
   }
   // ghost snares: well under this song's usual snare velocity
   const sn = out.filter((h) => h.id === 'sn');
