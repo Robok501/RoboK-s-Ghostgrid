@@ -103,8 +103,8 @@ public class GhostgridEngineModule: Module {
       // (the app was closed while loading with 4 GB free). A dedicated thread with a large stack avoids that.
       let worker = Thread {
         do {
-          let d = try self.stems.separate(input: URL(fileURLWithPath: input), outDir: URL(fileURLWithPath: outDir), modelName: model)
-          promise.resolve(d)
+          let report = try self.stems.separate(input: URL(fileURLWithPath: input), outDir: URL(fileURLWithPath: outDir), modelName: model)
+          promise.resolve(report)
         } catch {
           promise.reject("E_SEPARATE", error.localizedDescription)
         }
@@ -122,6 +122,10 @@ public class GhostgridEngineModule: Module {
 
     Function("stemsFreeMemoryMB") { () -> Double in
       return GGStems.freeMB()
+    }
+
+    AsyncFunction("stemsLevels") { (path: String) -> [String: Any] in
+      return try GGStems.levels(URL(fileURLWithPath: path))
     }
 
     Function("stemsCancel") {

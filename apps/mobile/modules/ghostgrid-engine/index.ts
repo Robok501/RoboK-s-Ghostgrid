@@ -14,6 +14,9 @@ export interface EngineInfo {
   mic: boolean;
 }
 
+/** Levels after separation (dB full scale) and how much of the song's energy went to the drums (0–1). */
+export interface SeparationReport { duration: number; mixDb: number; drumsDb: number; restDb: number; drumsShare: number; drumsPeak: number; invalid: number }
+
 export interface PadHitEvent { time: number; note: number; velocity: number; channel: number; source: string }
 export interface CaptureHitEvent { time: number; peak: number }
 export interface ControlEvent { time: number; cc: number; value: number; channel: number; source: string }
@@ -46,7 +49,8 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   stemsCancelDownload(): void;
   stemsDeleteModel(name: string): void;
   /** file paths (not file:// URLs); resolves with the duration in seconds */
-  stemsSeparate(input: string, outDir: string, model: string): Promise<number>;
+  stemsSeparate(input: string, outDir: string, model: string): Promise<SeparationReport>;
+  stemsLevels(path: string): Promise<{ db: number; peak: number; invalid: number }>;
   stemsCancel(): void;
   /** last separation: phase reached (decode/load/separate/write/done/error), free memory then */
   stemsLastRun(): { phase?: string; freeMB?: number; freeAfterLoadMB?: number; message?: string; seconds?: number };

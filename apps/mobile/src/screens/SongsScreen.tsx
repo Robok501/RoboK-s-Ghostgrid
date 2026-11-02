@@ -131,9 +131,11 @@ export function SongsScreen() {
     setWork({ id: s.id, p: { phase: 'decode', progress: 0 } });
     try {
       const dir = ensureDir(s.id);
-      const duration = await Engine.stemsSeparate(originalPath(s), toPath(dir.uri), MODEL_NAME);
-      update(s.id, { separated: true, duration, error: undefined });
-      setNotice('Done. Play it without drums, or with drums only.');
+      const r = await Engine.stemsSeparate(originalPath(s), toPath(dir.uri), MODEL_NAME);
+      const check = { mixDb: r.mixDb, drumsDb: r.drumsDb, restDb: r.restDb, drumsShare: r.drumsShare, invalid: r.invalid };
+      // a new separation means a new drum track: find the beat again
+      update(s.id, { separated: true, duration: r.duration, error: undefined, check, beatMap: undefined });
+      setNotice(r.invalid > 0 ? `Done, but the model gave ${r.invalid} invalid samples (silenced). Tell Claude.` : 'Done. Play it without drums, or with drums only.');
     } catch (e) {
       update(s.id, { error: (e as Error).message });
       setNotice(`Separation stopped: ${(e as Error).message}`);
@@ -375,6 +377,21 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
 
   const barNow = map ? barAt(map, pos) : -1;
 
+  // levels check for songs separated before the report existed
+  useEffect(() => {
+    if (!ready || !song.separated || song.check) return;
+    let alive = true;
+    Promise.all([Engine.stemsLevels(originalPath(song)), Engine.stemsLevels(stemPath(song, 'drums')), Engine.stemsLevels(stemPath(song, 'nodrums'))])
+      .then(([m, d, r]) => {
+        if (!alive) return;
+        const share = 10 ** ((d.db - m.db) / 10);
+        update(song.id, { check: { mixDb: m.db, drumsDb: d.db, restDb: r.db, drumsShare: share, invalid: d.invalid + r.invalid } });
+      }).catch(() => {});
+    return () => { alive = false; };
+  }, [ready, song.separated, song.check]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chk = song.check;
+  const suspicious = !!chk && (chk.invalid > 0 || chk.drumsShare > 0.6 || chk.drumsDb < chk.mixDb - 35);
+
   return (
     <Card title={song.name}>
       {!song.separated && (
@@ -394,6 +411,12 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       )}
 
       {!!err && <Text style={s.err}>{err}</Text>}
+      {song.separated && chk && (
+        <Text style={[s.dim, suspicious && { color: C.late }]}>
+          Separation check: drums {Math.round(chk.drumsDb)} dB · rest {Math.round(chk.restDb)} dB · song {Math.round(chk.mixDb)} dB · drums are {Math.round(chk.drumsShare * 100)} % of the sound
+          {chk.invalid > 0 ? ` · ${chk.invalid} invalid samples` : ''}{suspicious ? ' · this looks wrong, please tell Claude these numbers' : ''}
+        </Text>
+      )}
       <Timeline pos={pos} dur={dur} a={song.loop ? A : null} b={song.loop ? B : null} bars={bars} onSeek={seek} />
       <View style={s.timeRow}>
         <Text style={s.time}>{fmtTime(pos)}{barNow >= 0 ? `  ·  bar ${barNow + 1}` : ''}</Text>

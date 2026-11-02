@@ -300,7 +300,7 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
   }
 
   /// Separate `input` into drums.caf and nodrums.caf in `outDir`. Returns the duration in seconds.
-  func separate(input: URL, outDir: URL, modelName: String) throws -> Double {
+  func separate(input: URL, outDir: URL, modelName: String) throws -> [String: Any] {
     cancelled = false
     let modelPath = Self.modelURL(modelName).path
     guard FileManager.default.fileExists(atPath: modelPath) else {
@@ -398,19 +398,55 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
 
     mark("write")
     emit?("onStemsProgress", ["phase": "write", "progress": 1.0])
-    // drums = weighted average of the segments; the rest = the song minus the drums (in place, to save memory)
+    // drums = weighted average of the segments; the rest = the song minus the drums (in place, to save memory).
+    // Any invalid model output (NaN or infinite) is silenced and counted: one NaN can silence a whole player.
+    var bad = 0
+    var eMix: Double = 0, eDrums: Double = 0, eRest: Double = 0, peakDrums: Float = 0
     for i in 0..<n {
       let d: Float = ws[i] > 0 ? 1 / ws[i] : 0
-      dl[i] *= d
-      dr[i] *= d
-      l[i] -= dl[i]
-      r[i] -= dr[i]
+      var a = dl[i] * d, b = dr[i] * d
+      if !a.isFinite || !b.isFinite { a = 0; b = 0; bad += 1 }
+      dl[i] = a
+      dr[i] = b
+      eMix += Double(l[i] * l[i] + r[i] * r[i])
+      l[i] -= a
+      r[i] -= b
+      eDrums += Double(a * a + b * b)
+      eRest += Double(l[i] * l[i] + r[i] * r[i])
+      peakDrums = max(peakDrums, abs(a), abs(b))
     }
     ws = []
+    let db = { (e: Double) in 10 * log10(max(1e-12, e / Double(2 * n))) }
     try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
     try Self.writeStereo(outDir.appendingPathComponent("drums.caf"), dl, dr)
     try Self.writeStereo(outDir.appendingPathComponent("nodrums.caf"), l, r)
-    mark("done")
-    return Double(n) / Self.sampleRate
+    mark("done", ["invalid": bad])
+    return [
+      "duration": Double(n) / Self.sampleRate,
+      "mixDb": db(eMix), "drumsDb": db(eDrums), "restDb": db(eRest),
+      "drumsShare": eMix > 0 ? eDrums / eMix : 0, "drumsPeak": Double(peakDrums), "invalid": bad,
+    ]
+  }
+
+  /// Level check of a separated song's files (for songs separated before the check existed).
+  static func levels(_ url: URL) throws -> [String: Any] {
+    let file = try AVAudioFile(forReading: url)
+    guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 65_536) else { return [:] }
+    var e: Double = 0, peak: Float = 0, bad = 0, count = 0
+    let chans = Int(file.processingFormat.channelCount)
+    while file.framePosition < file.length {
+      try file.read(into: buf, frameCount: 65_536)
+      let n = Int(buf.frameLength)
+      if n == 0 { break }
+      guard let ch = buf.floatChannelData else { break }
+      for c in 0..<chans {
+        for i in 0..<n {
+          let x = ch[c][i]
+          if !x.isFinite { bad += 1; continue }
+          e += Double(x * x); peak = max(peak, abs(x)); count += 1
+        }
+      }
+    }
+    return ["db": 10 * log10(max(1e-12, e / Double(max(1, count)))), "peak": Double(peak), "invalid": bad]
   }
 }
