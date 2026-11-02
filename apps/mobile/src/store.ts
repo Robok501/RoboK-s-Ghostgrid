@@ -1,5 +1,6 @@
 /** Settings kept on the device (JSON file in the app's documents folder). Nothing leaves the phone. */
 import { File, Paths } from 'expo-file-system';
+import type { LangSetting } from './i18n';
 import { DEFAULT_CONFIG, DEFAULT_PAD_SETTINGS, type CustomStyle, type Level, type PadSettings, type Samples, type Section } from '@ghostgrid/core';
 
 export type ClickSound = 'click' | 'wood' | 'cowbell' | 'hat';
@@ -41,6 +42,8 @@ export interface AppSettings {
   micSens: number;
   /** settings version, for one-time changes when defaults move */
   v?: number;
+  /** app language; 'auto' follows the iPhone */
+  lang: LangSetting;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -57,6 +60,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sketch: { style: 'weinberg', custom: { voices: 2, map: {} }, count: true, click: false, recMode: 'replace', voice: {}, ghostPct: 45 },
   keepBt: true,
   micSens: 5,
+  lang: 'auto',
   pads: { ...DEFAULT_PAD_SETTINGS, preset: 'roland' },
 };
 
@@ -76,6 +80,7 @@ export function loadSettings(): AppSettings {
       sketch: { ...DEFAULT_SETTINGS.sketch, ...(saved.sketch || {}) },
       keepBt: saved.keepBt ?? DEFAULT_SETTINGS.keepBt,
       micSens: saved.micSens ?? DEFAULT_SETTINGS.micSens,
+      lang: saved.lang ?? DEFAULT_SETTINGS.lang,
       pads: { ...DEFAULT_SETTINGS.pads, ...(saved.pads || {}) },
     };
   } catch {

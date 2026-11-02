@@ -15,3 +15,4 @@ export * from './notation';
 export * from './midiimport';
 export * from './beatmap';
 export * from './drumscore';
+export * from './i18n';

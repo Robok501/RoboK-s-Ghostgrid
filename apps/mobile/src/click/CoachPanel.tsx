@@ -10,6 +10,7 @@ import { timingStats, verdict, type HitLog } from '@ghostgrid/core';
 import { C, F } from '../theme';
 import type { CoachInput } from '../store';
 import { CALIB_HITS } from './useClick';
+import { t, t as tr } from '../i18n';
 
 /** how many seconds of hits a timeline shows */
 const SPAN = 6;
@@ -37,37 +38,37 @@ export function CoachPanel({ input, running, log, tol, calibrating, calibCount, 
     const id = setInterval(() => setNow(Date.now() / 1000), 80);
     return () => clearInterval(id);
   }, [running]);
-  const t = running ? Math.max(now, log.events[log.events.length - 1]?.t ?? 0) : log.events[log.events.length - 1]?.t ?? now;
+  const nowT = running ? Math.max(now, log.events[log.events.length - 1]?.t ?? 0) : log.events[log.events.length - 1]?.t ?? now;
 
   const all = timingStats(log.all, tol);
   const lastEv = log.events[log.events.length - 1];
   const lastV = lastEv ? verdict(lastEv.off, tol) : null;
   const perPad = input === 'pads';
-  const hint = calibrating ? `Calibrating ${calibCount}/${CALIB_HITS}: hit right on the click`
-    : !running ? (onPlay ? (perPad ? 'Hit a pad or press Play' : input === 'tap' ? 'Tap here or press Play' : 'Press Play') : 'Press Play')
-    : !all.n ? (input === 'tap' ? 'Tap on every click' : input === 'mic' ? 'Play: the mic hears each hit' : 'Play: every pad is scored')
-    : lastV === 'on' ? 'On time' : lastV === 'early' ? 'Early: lay back a little' : 'Late: push a little';
+  const hint = calibrating ? t('Calibrating {{n}}/{{of}}: hit right on the click', { n: calibCount, of: CALIB_HITS })
+    : t(!running ? (onPlay ? (perPad ? 'Hit a pad or press Play' : input === 'tap' ? 'Tap here or press Play' : 'Press Play') : 'Press Play')
+      : !all.n ? (input === 'tap' ? 'Tap on every click' : input === 'mic' ? 'Play: the mic hears each hit' : 'Play: every pad is scored')
+      : lastV === 'on' ? 'On time' : lastV === 'early' ? 'Early: lay back a little' : 'Late: push a little');
 
   const overall = (
     <View style={[s.tile, perPad && s.tileHalf]}>
       <View style={s.tileHead}>
-        <Text style={s.tileName}>{perPad ? 'Whole kit' : 'Your timing'}</Text>
+        <Text style={s.tileName}>{t(perPad ? 'Whole kit' : 'Your timing')}</Text>
         <View style={{ flex: 1 }} />
         {onReset && all.n > 0 && (
-          <Pressable onPress={onReset} style={s.reset} accessibilityRole="button" accessibilityLabel="Reset scores" hitSlop={6}>
+          <Pressable onPress={onReset} style={s.reset} accessibilityRole="button" accessibilityLabel={t('Reset scores')} hitSlop={6}>
             <Text style={s.resetTxt}>↺</Text>
           </Pressable>
         )}
         {onPlay && (
-          <Pressable onPress={onPlay} style={[s.play, running && s.playOn]} accessibilityRole="button" accessibilityLabel={running ? 'Stop' : 'Play'} hitSlop={6}>
+          <Pressable onPress={onPlay} style={[s.play, running && s.playOn]} accessibilityRole="button" accessibilityLabel={t(running ? 'Stop' : 'Play')} hitSlop={6}>
             <Text style={[s.playTxt, running && { color: C.accentInk }]}>{running ? '■' : '▶'}</Text>
           </Pressable>
         )}
       </View>
       <Text style={[s.pct, { color: colorOf(all.n ? all.score : null) }]}>{all.n ? `${Math.round(all.score)}%` : '–'}</Text>
-      <Text style={s.sub}>{all.n ? `${all.n} hits in the ±${tol} ms window` : `in the ±${tol} ms window`}</Text>
+      <Text style={s.sub}>{all.n ? t('{{count}} hits in the ±{{tol}} ms window', { count: all.n, tol }) : t('in the ±{{tol}} ms window', { tol })}</Text>
       {!!all.n && <Text style={s.sub}>{tendency(all.mean, all.sd, tol)}</Text>}
-      {!perPad && <Lane events={log.events} t={t} tol={tol} tall />}
+      {!perPad && <Lane events={log.events} t={nowT} tol={tol} tall />}
       {input === 'mic' && <View style={s.meter}><View style={[s.meterFill, { width: `${Math.min(100, Math.sqrt(micLevel / 0.6) * 100)}%` }]} /></View>}
     </View>
   );
@@ -84,10 +85,10 @@ export function CoachPanel({ input, running, log, tol, calibrating, calibCount, 
             return (
               <View key={g.key} style={[s.tile, s.tileHalf]}>
                 <View style={s.tileHead}>
-                  <Text style={s.tileName}>{g.name}</Text>
+                  <Text style={s.tileName}>{t(g.name)}</Text>
                   <Text style={[s.tilePct, { color: colorOf(st.n ? st.score : null) }]}>{st.n ? `${Math.round(st.score)}%` : '–'}</Text>
                 </View>
-                <Lane events={ev} t={t} tol={tol} />
+                <Lane events={ev} t={nowT} tol={tol} />
               </View>
             );
           })}
@@ -98,7 +99,7 @@ export function CoachPanel({ input, running, log, tol, calibrating, calibCount, 
   );
 
   return input === 'tap' ? (
-    <Pressable onPressIn={(e) => onTap(e.nativeEvent.timestamp)} accessibilityRole="button" accessibilityLabel="Tap pad: tap on every click"
+    <Pressable onPressIn={(e) => onTap(e.nativeEvent.timestamp)} accessibilityRole="button" accessibilityLabel={t('Tap pad: tap on every click')}
       style={({ pressed }) => [s.pad, pressed && s.padHit]}>{body}</Pressable>
   ) : (
     <View style={s.pad}>{body}</View>
@@ -107,8 +108,8 @@ export function CoachPanel({ input, running, log, tol, calibrating, calibCount, 
 
 /** One line of advice from the average and spread. */
 function tendency(mean: number, sd: number, tol: number): string {
-  const lean = Math.abs(mean) < tol / 3 ? 'centred' : mean < 0 ? `${Math.round(-mean)} ms early on average` : `${Math.round(mean)} ms late on average`;
-  const steady = sd <= tol / 2 ? 'steady' : sd <= tol ? 'a bit uneven' : 'uneven';
+  const lean = Math.abs(mean) < tol / 3 ? t('centred') : mean < 0 ? t('{{ms}} ms early on average', { ms: Math.round(-mean) }) : t('{{ms}} ms late on average', { ms: Math.round(mean) });
+  const steady = t(sd <= tol / 2 ? 'steady' : sd <= tol ? 'a bit uneven' : 'uneven');
   return `${lean}, ${steady}`;
 }
 
@@ -123,8 +124,8 @@ function Lane({ events, t, tol, tall }: { events: { t: number; off: number }[]; 
     <View style={[s.lane, tall && { height: 70 }]} accessibilityElementsHidden>
       <View style={[s.band, { top: `${50 - band}%`, height: `${2 * band}%` }]} />
       <View style={s.centre} />
-      <Text style={[s.edge, { top: 1 }]}>early</Text>
-      <Text style={[s.edge, { bottom: 1 }]}>late</Text>
+      <Text style={[s.edge, { top: 1 }]}>{tr('early')}</Text>
+      <Text style={[s.edge, { bottom: 1 }]}>{tr('late')}</Text>
       {shown.map((e, i) => {
         const v = verdict(e.off, tol), last = i === shown.length - 1;
         return (

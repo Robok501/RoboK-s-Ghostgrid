@@ -14,6 +14,7 @@ import { SketchScreen } from './screens/SketchScreen';
 import { SongsScreen } from './screens/SongsScreen';
 import { C } from './theme';
 import { TopBar } from './ui';
+import { t as tr } from './i18n';
 
 type Tab = 'click' | 'trainer' | 'sketch' | 'songs' | 'settings';
 const TABS: { id: Tab; label: string; glyph: string }[] = [
@@ -36,7 +37,7 @@ export default function App() {
 
 function Shell() {
   const insets = useSafeAreaInsets();
-  const { stopAll, on } = useApp();
+  const { stopAll, on, lang } = useApp();
   const [tab, setTab] = useState<Tab>('click');
   const win = useWindowDimensions();
   const compact = win.width > win.height && Math.min(win.width, win.height) < 600;
@@ -51,7 +52,8 @@ function Shell() {
   return (
     <View style={[s.root, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <StatusBar style="light" />
-      <View style={s.body}>
+      {/* keyed by language: everything redraws when it changes */}
+      <View style={s.body} key={lang}>
         {/* Click and Songs stay mounted, so they keep playing while you look at another tab */}
         <View style={[s.page, tab !== 'click' && s.hidden]} pointerEvents={tab === 'click' ? 'auto' : 'none'}><ClickScreen active={tab === 'click'} /></View>
         {tab === 'trainer' && <View style={s.page}><TopBar title="Tempo trainer" /><TempoTrainer /></View>}
@@ -64,9 +66,9 @@ function Shell() {
         {TABS.map((t) => {
           const on = t.id === tab;
           return (
-            <Pressable key={t.id} onPress={() => go(t.id)} style={[s.tabBtn, compact && s.tabBtnCompact]} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.label}>
+            <Pressable key={t.id} onPress={() => go(t.id)} style={[s.tabBtn, compact && s.tabBtnCompact]} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={tr(t.label)}>
               <Text style={[s.glyph, on && { color: C.accent }]}>{t.glyph}</Text>
-              <Text style={[s.tabLabel, on && { color: C.fg }]}>{t.label}</Text>
+              <Text style={[s.tabLabel, on && { color: C.fg }]}>{tr(t.label)}</Text>
             </Pressable>
           );
         })}

@@ -1,0 +1,4 @@
+{
+ "NSMicrophoneUsageDescription": "Ghostgrid écoute vos coups pour évaluer votre mise en place par rapport au clic.",
+ "NSBluetoothAlwaysUsageDescription": "Ghostgrid se connecte aux modules de batterie MIDI Bluetooth, comme votre batterie électronique."
+}

@@ -23,6 +23,7 @@ import { useApp } from '../AppContext';
 import { GridPager } from '../sketch/GridPager';
 import { Score } from '../sketch/Score';
 import { freshIdea, loadIdeas, saveIdeas, takeNote, type IdeaStore } from '../sketch/ideas';
+import { t } from '../i18n';
 import { applyTake, readVoiceFile, saveWav, useSketchPlayer, type VoiceTake } from '../sketch/usePlayer';
 import { C, F } from '../theme';
 import { Btn, Card, Chip, NavRow, Note, Row, Seg, Stepper, Toggle, TopBar } from '../ui';
@@ -53,7 +54,7 @@ export function SketchScreen() {
   const [teachWav, setTeachWav] = useState<{ uri: string; name: string; heard: number } | null>(null);
   const shareWav = async (uri: string) => {
     try { await Sharing.shareAsync(uri, { mimeType: 'audio/wav', UTI: 'com.microsoft.waveform-audio', dialogTitle: 'Ghostgrid recording' }); }
-    catch (e) { say(`Couldn't share: ${(e as Error).message}`); }
+    catch (e) { say(t("Couldn't share: {{msg}}", { msg: (e as Error).message })); }
   };
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState('');
@@ -79,14 +80,14 @@ export function SketchScreen() {
   const player = useSketchPlayer(idea, (next, count, source, tk) => {
     setTake(tk ?? null); setPick(null);
     if (source === 'voice') setTimeout(releaseMic, 50);
-    if (count === -2) { say('The microphone is off. Allow it in Settings → Ghostgrid.'); return; }
+    if (count === -2) { say(t('The microphone is off. Allow it in Settings → Ghostgrid.')); return; }
     if (count < 0) return;
     if (!count) {
-      say(source === 'voice' ? 'No sounds found. Beatbox a bit louder, close to the phone.' : 'No hits recorded. Is your e-drum connected? See Settings.');
+      say(t(source === 'voice' ? 'No sounds found. Beatbox a bit louder, close to the phone.' : 'No hits recorded. Is your e-drum connected? See Settings.'));
       return;
     }
     commit(next);
-    say(`${source === 'voice' ? 'Heard' : 'Recorded'} ${count} hits. Change the grid if the timing needs a different grid.`);
+    say(t(source === 'voice' ? 'Heard {{count}} hits. Change the grid if the timing needs a different grid.' : 'Recorded {{count}} hits. Change the grid if the timing needs a different grid.', { count }));
   });
 
   /** Mic on for voice work (remember to turn it off again afterwards). */
@@ -94,7 +95,7 @@ export function SketchScreen() {
     if (mic) return true;
     micWasOff.current = true;
     const ok = await setMic(true);
-    if (!ok) { micWasOff.current = false; say('The microphone is off. Allow it in Settings → Ghostgrid.'); }
+    if (!ok) { micWasOff.current = false; say(t('The microphone is off. Allow it in Settings → Ghostgrid.')); }
     return ok;
   };
   const recordVoice = async () => {
@@ -122,7 +123,7 @@ export function SketchScreen() {
   const startTeach = async (k: SoundKey) => {
     player.stop();
     if (!(await ensureMic())) return;
-    if (!Engine.startRecording()) { say('The microphone is off.'); return; }
+    if (!Engine.startRecording()) { say(t('The microphone is off.')); return; }
     setTeachCount(0);
     setTeaching(k);
   };
@@ -155,10 +156,10 @@ export function SketchScreen() {
         try { setTeachWav({ uri: saveWav(data, f.sampleRate, `ghostgrid-teach-${k}.wav`), name, heard: a.hits.length }); } catch { /* sharing is optional */ }
         if (vecs.length >= 2) {
           setSketch({ voice: addSamples(sk.voice, k, vecs) });
-          say(`${name}: learned ${vecs.length} examples${a.hits.length > vecs.length ? ` (${a.hits.length - vecs.length} extra sounds ignored)` : ''}.`);
-        } else say('Heard too few sounds. Try again, 4 to 6 times, with a short pause between them.');
+          say(`${t(name)}: ${t('learned {{count}} examples', { count: vecs.length })}${a.hits.length > vecs.length ? ` (${t('{{count}} extra sounds ignored', { count: a.hits.length - vecs.length })})` : ''}.`);
+        } else say(t('Heard too few sounds. Try again, 4 to 6 times, with a short pause between them.'));
       }
-    } catch { say('Recording failed.'); }
+    } catch { say(t('Recording failed.')); }
     setTimeout(releaseMic, 50);
   };
   finishRef.current = finishTeach;
@@ -187,18 +188,18 @@ export function SketchScreen() {
   const clearNotes = () => {
     player.stop();
     setTake(null);
-    if (scope === 'bar') { commit(clearBar(idea, selBar)); say(`Bar ${selBar + 1} cleared. Undo brings it back.`); return; }
+    if (scope === 'bar') { commit(clearBar(idea, selBar)); say(t('Bar {{n}} cleared. Undo brings it back.', { n: selBar + 1 })); return; }
     let next = idea;
     for (let b = 0; b < idea.bars.length; b++) next = clearBar(next, b);
     commit(next);
-    say('All bars cleared. Undo brings them back.');
+    say(t('All bars cleared. Undo brings them back.'));
   };
   const curGrid = scope === 'bar' ? barGrid(idea, selBar) : idea.grid;
   const cycleGrid = () => {
     const g = nextGrid(curGrid);
     const r = scope === 'bar' ? setBarGrid(idea, selBar, g) : setGrid(idea, g);
     commit(r.idea);
-    say(r.lost ? `${r.lost} note${r.lost > 1 ? 's' : ''} didn't fit ${GRID_NAMES[g]}. Undo brings them back.` : `${scope === 'bar' ? `Bar ${selBar + 1}` : 'All bars'}: ${GRID_NAMES[g]}`);
+    say(r.lost ? t("{{count}} notes didn't fit {{grid}}. Undo brings them back.", { count: r.lost, grid: t(GRID_NAMES[g]) }) : `${scope === 'bar' ? t('Bar {{n}}', { n: selBar + 1 }) : t('All bars')}: ${t(GRID_NAMES[g])}`);
   };
 
   // ---- sizes
@@ -223,15 +224,15 @@ export function SketchScreen() {
       if (/\.(mid|midi)$/i.test(a.name)) {
         const r = importMidi(f.bytesSync(), settings.pads, name);
         addIdea(tidyRows(r.idea));
-        say(`Imported ${r.notes} notes at ${r.idea.bpm} BPM, ${GRID_NAMES[r.idea.grid]}${r.unmapped ? ` · ${r.unmapped} notes not mapped` : ''}${r.truncated ? ` · cut at ${MAX_BARS} bars` : ''}.`);
+        say(`${t('Imported {{count}} notes at {{bpm}} BPM, {{grid}}', { count: r.notes, bpm: r.idea.bpm, grid: t(GRID_NAMES[r.idea.grid]) })}${r.unmapped ? ` · ${t('{{count}} notes not mapped', { count: r.unmapped })}` : ''}${r.truncated ? ` · ${t('cut at {{n}} bars', { n: MAX_BARS })}` : ''}.`);
       } else {
         const i = JSON.parse(f.textSync()) as Idea;
-        if (!Array.isArray(i.bars) || !i.beats || !i.grid) throw new Error('not a Ghostgrid file');
+        if (!Array.isArray(i.bars) || !i.beats || !i.grid) throw new Error(t('not a Ghostgrid file'));
         addIdea(tidyRows({ ...i, id: newId() }));
         say(`Opened ${i.name}.`);
       }
     } catch (e) {
-      say(`Couldn't read that file: ${(e as Error).message}`);
+      say(t("Couldn't read that file: {{msg}}", { msg: (e as Error).message }));
     }
   };
   const safe = (idea.name || 'groove').replace(/[^\w\- ]+/g, '').trim() || 'groove';
@@ -253,7 +254,7 @@ export function SketchScreen() {
       if (kind === 'txt') await shareFile('txt', textTab(idea), 'text/plain', 'public.plain-text');
       if (kind === 'gg') await shareFile('ghostgrid', JSON.stringify(idea), 'application/json', 'public.json');
     } catch (e) {
-      say(`Export failed: ${(e as Error).message}`);
+      say(t('Export failed: {{msg}}', { msg: (e as Error).message }));
     }
   };
 
@@ -261,15 +262,15 @@ export function SketchScreen() {
   const recOn = !!player.rec;
   const recBtn = (
     <Pressable onPress={() => { if (player.rec) player.stop(); else setRecChoice((v) => !v); }} style={[s.rec, recOn && s.recOn]}
-      accessibilityRole="button" accessibilityLabel={recOn ? 'Stop recording' : 'Record'}>
+      accessibilityRole="button" accessibilityLabel={t(recOn ? 'Stop recording' : 'Record')}>
       <View style={[s.recDot, recOn && { backgroundColor: C.fg }]} />
-      <Text style={s.recTxt}>{recOn ? (player.rec === 'count' ? `${player.countBeat || '…'}` : 'Stop') : 'Rec'}</Text>
+      <Text style={s.recTxt}>{recOn ? (player.rec === 'count' ? `${player.countBeat || '…'}` : t('Stop')) : t('Rec')}</Text>
     </Pressable>
   );
   /** one Record button: choose the e-drum or your voice */
   const recPick = recChoice && !player.rec && (
     <View style={s.recPick}>
-      <Text style={s.recPickTitle}>Record from</Text>
+      <Text style={s.recPickTitle}>{t('Record from')}</Text>
       <View style={s.recPickRow}>
         <Btn label="● E-drum" onPress={() => { setRecChoice(false); player.record('pads'); }} style={{ flex: 1 }} />
         <Btn label="◉ Voice" onPress={() => { setRecChoice(false); recordVoice(); }} style={{ flex: 1 }} />
@@ -313,13 +314,13 @@ export function SketchScreen() {
             ))}
             {idea.bars.length < MAX_BARS && <Chip label="+ Bar" onPress={() => { commit(addBar(idea)); setBar(idea.bars.length); setScope('bar'); }} />}
           </ScrollView>
-          <Pressable onPress={clearNotes} style={s.clearBtn} accessibilityRole="button" accessibilityLabel={scope === 'bar' ? `Clear bar ${selBar + 1}` : 'Clear all bars'}>
-            <Text style={s.clearTxt}>Clear</Text>
-            <Text style={s.clearSub}>{scope === 'bar' ? `bar ${selBar + 1}` : 'all bars'}</Text>
+          <Pressable onPress={clearNotes} style={s.clearBtn} accessibilityRole="button" accessibilityLabel={scope === 'bar' ? t('Clear bar {{n}}', { n: selBar + 1 }) : t('Clear all bars')}>
+            <Text style={s.clearTxt}>{t('Clear')}</Text>
+            <Text style={s.clearSub}>{scope === 'bar' ? t('bar {{n}}', { n: selBar + 1 }) : t('all bars')}</Text>
           </Pressable>
-          <Pressable onPress={cycleGrid} style={s.gridBtn} accessibilityRole="button" accessibilityLabel={`Grid ${GRID_NAMES[curGrid]}, tap to change`}>
-            <Text style={s.gridBtnTxt}>{GRID_NAMES[curGrid]}</Text>
-            <Text style={s.gridBtnSub}>{scope === 'bar' ? `bar ${selBar + 1}` : 'all bars'}</Text>
+          <Pressable onPress={cycleGrid} style={s.gridBtn} accessibilityRole="button" accessibilityLabel={t('Grid {{grid}}, tap to change', { grid: t(GRID_NAMES[curGrid]) })}>
+            <Text style={s.gridBtnTxt}>{t(GRID_NAMES[curGrid])}</Text>
+            <Text style={s.gridBtnSub}>{scope === 'bar' ? t('bar {{n}}', { n: selBar + 1 }) : t('all bars')}</Text>
           </Pressable>
         </View>
 
@@ -329,7 +330,7 @@ export function SketchScreen() {
         )}
         {adding && (
           <View style={s.chips}>
-            {hidden.length ? hidden.map((i) => <Chip key={i.id} label={`+ ${i.name}`} onPress={() => { commit(addRow(idea, i.id), false); if (hidden.length <= 1) setAdding(false); }} />)
+            {hidden.length ? hidden.map((i) => <Chip key={i.id} label={`+ ${t(i.name)}`} onPress={() => { commit(addRow(idea, i.id), false); if (hidden.length <= 1) setAdding(false); }} />)
               : <Note>All instruments are showing.</Note>}
             <Chip label="Clean up empty rows" onPress={() => { commit(tidyRows(idea), false); setAdding(false); }} />
           </View>
@@ -343,7 +344,7 @@ export function SketchScreen() {
                 const unsure = h.margin !== undefined && h.margin < 0.25;
                 return (
                   <Pressable key={i} onPress={() => setPick(pick === i ? null : i)} style={[s.takeHit, unsure && s.takeUnsure, pick === i && s.takePick]}
-                    accessibilityRole="button" accessibilityLabel={`${SOUND[h.k].name} at ${where(h.beat)}${unsure ? ', not sure' : ''}`}>
+                    accessibilityRole="button" accessibilityLabel={`${t(SOUND[h.k].name)} ${t('at')} ${where(h.beat)}${unsure ? `, ${t('not sure')}` : ''}`}>
                     <Text style={[s.takeLetter, pick === i && { color: C.bg }]}>{SOUND[h.k].letter}{unsure ? '?' : ''}</Text>
                     <Text style={[s.takeWhere, pick === i && { color: C.bg }]}>{where(h.beat)}</Text>
                   </Pressable>
@@ -352,7 +353,7 @@ export function SketchScreen() {
             </ScrollView>
             {pick !== null && take.hits[pick] && (
               <View style={s.chips}>
-                {SOUNDS.map((x) => <Chip key={x.k} label={x.name} on={x.k === take.hits[pick].k} onPress={() => correct(pick, x.k)} />)}
+                {SOUNDS.map((x) => <Chip key={x.k} label={t(x.name)} on={x.k === take.hits[pick].k} onPress={() => correct(pick, x.k)} />)}
                 <Chip label="Remove" onPress={() => correct(pick, null)} />
               </View>
             )}
@@ -378,7 +379,7 @@ export function SketchScreen() {
       <Modal visible={!!sheet} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSheet(null)}>
         <View style={s.sheet}>
           <View style={s.sheetHead}>
-            <Text style={s.sheetTitle}>{{ menu: 'Sketch', ideas: 'Ideas', export: 'Export', voice: 'Voice to notes', settings: 'Sketch settings' }[sheet ?? 'menu']}</Text>
+            <Text style={s.sheetTitle}>{t({ menu: 'Sketch', ideas: 'Ideas', export: 'Export', voice: 'Voice to notes', settings: 'Sketch settings' }[sheet ?? 'menu'])}</Text>
             <Btn label="Done" onPress={() => setSheet(null)} />
           </View>
           <ScrollView contentContainerStyle={s.sheetScroll} keyboardShouldPersistTaps="handled">
@@ -394,11 +395,11 @@ export function SketchScreen() {
                 {store.ideas.map((i) => <Chip key={i.id} label={i.name} on={i.id === idea.id} onPress={() => switchTo(i.id)} />)}
               </View>
               <Row label="Name">
-                <TextInput value={idea.name} onChangeText={(name) => commit({ ...idea, name }, false)} style={s.input} placeholder="Name" placeholderTextColor={C.muted} />
+                <TextInput value={idea.name} onChangeText={(name) => commit({ ...idea, name }, false)} style={s.input} placeholder={t('Name')} placeholderTextColor={C.muted} />
               </Row>
               <View style={s.btnRow}>
                 <Btn label="+ New idea" onPress={() => { addIdea(freshIdea(store.ideas.length + 1)); setSheet(null); }} />
-                <Btn label="Duplicate" onPress={() => addIdea({ ...JSON.parse(JSON.stringify(idea)), id: newId(), name: `${idea.name} copy` })} />
+                <Btn label="Duplicate" onPress={() => addIdea({ ...JSON.parse(JSON.stringify(idea)), id: newId(), name: t('{{name}} copy', { name: idea.name }) })} />
                 <Btn label="Delete" disabled={store.ideas.length < 2} onPress={() => {
                   const rest = store.ideas.filter((i) => i.id !== idea.id);
                   persist({ ideas: rest, current: rest[0].id }); setBar(0);
@@ -429,8 +430,8 @@ export function SketchScreen() {
             </Card>}
 
             {show('voice') && <Card title="Voice to notes">
-              <Note>Press Voice, wait for the count-in, and beatbox the groove: “boom” for kick, “ka” or “psh” for snare, “ts” for hi-hat. When you stop, the hits are recognised and written into the bars. Use headphones or Bluetooth so the mic doesn't hear the click; on the phone speaker you only get the count-in.</Note>
-              <Row label="Recognition"><Text style={[s.status, own && { color: C.good }]}>{own ? 'Your own sounds' : 'Built-in rules'}</Text></Row>
+              <Note>Tap Rec, choose Voice, wait for the count-in and beatbox the groove: “boom” for kick, “ka” or “psh” for snare, “ts” for hi-hat. When you stop, the hits are recognised and written into the bars. Use headphones or Bluetooth so the mic doesn't hear the click; on the phone speaker you only get the count-in.</Note>
+              <Row label="Recognition"><Text style={[s.status, own && { color: C.good }]}>{t(own ? 'Your own sounds' : 'Built-in rules')}</Text></Row>
               <Row label="Mic sensitivity" hint="higher hears softer sounds; lower ignores breaths and room noise">
                 <Stepper value={settings.micSens} min={1} max={10} onChange={setMicSens} />
               </Row>
@@ -441,13 +442,13 @@ export function SketchScreen() {
               {SOUNDS.map((snd, i) => {
                 const n = sk.voice[snd.k]?.length ?? 0;
                 return (
-                  <Row key={snd.k} label={`${snd.name}${['bd', 'sn', 'hh'].includes(snd.k) ? ' ·' : ''}`} hint={`say “${snd.say}” · ${n ? `${n} examples` : 'not taught'}`} first={i === 0}>
+                  <Row key={snd.k} label={`${t(snd.name)}${['bd', 'sn', 'hh'].includes(snd.k) ? ' ·' : ''}`} hint={`${t('say “{{x}}”', { x: t(snd.say) })} · ${n ? t('{{count}} examples', { count: n }) : t('not taught')}`} first={i === 0}>
                     <Btn label={taught.includes(snd.k) ? 'Again' : 'Teach'} onPress={() => startTeach(snd.k)} />
                   </Row>
                 );
               })}
               <Row label="Ghost notes" hint="snares softer than this share of a normal snare"><Stepper value={sk.ghostPct} min={20} max={70} step={5} format={(v) => `${v}%`} onChange={(ghostPct) => setSketch({ ghostPct })} /></Row>
-              {teachWav && <Note>Last teaching take: {teachWav.name}, {teachWav.heard} sound{teachWav.heard === 1 ? '' : 's'} detected in the recording.</Note>}
+              {teachWav && <Note>{t('Last teaching take: {{name}}, {{count}} sounds detected in the recording.', { name: t(teachWav.name), count: teachWav.heard })}</Note>}
               <View style={s.btnRow}>
                 {teachWav && <Btn label="Share last recording" onPress={() => shareWav(teachWav.uri)} />}
                 <Btn label="Forget taught sounds" onPress={() => setSketch({ voice: {} })} />
@@ -463,17 +464,17 @@ export function SketchScreen() {
               </View>
               <Note>PDF and text tab for reading and printing, MIDI for your DAW or module, a Ghostgrid file to open again in the app (Import).</Note>
             </Card>}
-            <Text style={s.footer}>Notation style: {style.name} · change it in Settings</Text>
+            <Text style={s.footer}>{t('Notation style: {{name}} · change it in Settings', { name: t(style.name) })}</Text>
           </ScrollView>
         </View>
         {teaching && (
           <View style={s.teach}>
-            <Text style={s.teachTitle}>{SOUNDS.find((x) => x.k === teaching)!.name}</Text>
-            <Text style={s.teachSay}>Say “{SOUNDS.find((x) => x.k === teaching)!.say}” {TEACH_MAX} times, with a short pause in between.</Text>
-            <View style={s.teachDots} accessibilityLabel={`${teachCount} of ${TEACH_MAX} heard`}>
+            <Text style={s.teachTitle}>{t(SOUNDS.find((x) => x.k === teaching)!.name)}</Text>
+            <Text style={s.teachSay}>{t('Say “{{x}}” {{n}} times, with a short pause in between.', { x: t(SOUNDS.find((x) => x.k === teaching)!.say), n: TEACH_MAX })}</Text>
+            <View style={s.teachDots} accessibilityLabel={t('{{n}} of {{of}} heard', { n: teachCount, of: TEACH_MAX })}>
               {Array.from({ length: TEACH_MAX }, (_, i) => <View key={i} style={[s.teachDot, i < teachCount && s.teachDotOn]} />)}
             </View>
-            <Text style={s.teachCount}>{teachCount ? `${Math.min(teachCount, TEACH_MAX)} heard` : 'listening…'}</Text>
+            <Text style={s.teachCount}>{teachCount ? t('{{n}} heard', { n: Math.min(teachCount, TEACH_MAX) }) : t('listening…')}</Text>
             <View style={s.btnRow}>
               <Btn label="Cancel" onPress={() => finishTeach(false)} />
               <Btn label="Done" primary onPress={() => finishTeach(true)} style={{ minWidth: 140 }} />

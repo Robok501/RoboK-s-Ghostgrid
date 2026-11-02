@@ -2,11 +2,15 @@
 import React, { useRef } from 'react';
 import { PanResponder, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { C, F, HIT } from './theme';
+import { t } from './i18n';
+
+/** Labels passed as plain text are translated here, so most screens don't need to call t() themselves. */
+const tx = (s: React.ReactNode) => (typeof s === 'string' ? t(s) : s);
 
 export function Card({ title, children, style }: { title?: string; children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[u.card, style]}>
-      {!!title && <Text style={u.cardTitle}>{title.toUpperCase()}</Text>}
+      {!!title && <Text style={u.cardTitle}>{t(title).toUpperCase()}</Text>}
       {children}
     </View>
   );
@@ -16,8 +20,8 @@ export function Row({ label, hint, children, first }: { label: string; hint?: st
   return (
     <View style={[u.row, !first && u.rowLine]}>
       <View style={u.rowText}>
-        <Text style={u.rowLabel}>{label}</Text>
-        {!!hint && <Text style={u.hint}>{hint}</Text>}
+        <Text style={u.rowLabel}>{t(label)}</Text>
+        {!!hint && <Text style={u.hint}>{t(hint)}</Text>}
       </View>
       {children}
     </View>
@@ -31,7 +35,7 @@ export function Value({ children, good }: { children: React.ReactNode; good?: bo
 export function Toggle({ label, hint, value, onChange, first }: { label: string; hint?: string; value: boolean; onChange: (v: boolean) => void; first?: boolean }) {
   return (
     <Row label={label} hint={hint} first={first}>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: C.accent, false: C.line }} accessibilityLabel={label} />
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: C.accent, false: C.line }} accessibilityLabel={t(label)} />
     </Row>
   );
 }
@@ -70,9 +74,9 @@ export function Stepper({ value, onChange, min, max, step = 1, format }: {
   })).current;
   return (
     <View style={u.stepper}>
-      <Pressable {...dn} style={u.stepBtn} accessibilityRole="button" accessibilityLabel="Decrease"><Text style={u.stepTxt}>−</Text></Pressable>
+      <Pressable {...dn} style={u.stepBtn} accessibilityRole="button" accessibilityLabel={t('Decrease')}><Text style={u.stepTxt}>−</Text></Pressable>
       <View {...pan.panHandlers} style={u.stepValBox}><Text style={u.stepVal}>{format ? format(value) : value}</Text></View>
-      <Pressable {...up} style={u.stepBtn} accessibilityRole="button" accessibilityLabel="Increase"><Text style={u.stepTxt}>+</Text></Pressable>
+      <Pressable {...up} style={u.stepBtn} accessibilityRole="button" accessibilityLabel={t('Increase')}><Text style={u.stepTxt}>+</Text></Pressable>
     </View>
   );
 }
@@ -87,7 +91,7 @@ export function Seg<T extends string | number>({ options, value, onChange, small
         return (
           <Pressable key={String(o.value)} disabled={o.disabled} onPress={() => onChange(o.value)} accessibilityRole="button"
             accessibilityState={{ selected: on, disabled: o.disabled }} style={[u.segBtn, small && u.segSmall, wide && { flex: 1 }, on && u.segOn, o.disabled && { opacity: 0.35 }]}>
-            <Text style={[u.segTxt, on && u.segTxtOn]}>{o.label}</Text>
+            <Text style={[u.segTxt, on && u.segTxtOn]}>{t(o.label)}</Text>
           </Pressable>
         );
       })}
@@ -99,9 +103,9 @@ export function Btn({ label, onPress, primary, active, disabled, style }: {
   label: string; onPress: () => void; primary?: boolean; active?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label}
+    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={t(label)}
       style={({ pressed }) => [u.btn, primary && u.primary, active && u.active, disabled && { opacity: 0.4 }, pressed && { opacity: 0.75 }, style]}>
-      <Text style={[u.btnTxt, primary && u.primaryTxt, active && u.activeTxt]}>{label}</Text>
+      <Text style={[u.btnTxt, primary && u.primaryTxt, active && u.activeTxt]}>{t(label)}</Text>
     </Pressable>
   );
 }
@@ -109,11 +113,11 @@ export function Btn({ label, onPress, primary, active, disabled, style }: {
 export function Chip({ label, on, onPress, onRemove }: { label: string; on?: boolean; onPress: () => void; onRemove?: () => void }) {
   return (
     <View style={[u.chip, on && u.chipOn]}>
-      <Pressable onPress={onPress} style={u.chipMain} accessibilityRole="button" accessibilityLabel={label}>
-        <Text style={[u.chipTxt, on && u.chipTxtOn]}>{label}</Text>
+      <Pressable onPress={onPress} style={u.chipMain} accessibilityRole="button" accessibilityLabel={t(label)}>
+        <Text style={[u.chipTxt, on && u.chipTxtOn]}>{t(label)}</Text>
       </Pressable>
       {onRemove && (
-        <Pressable onPress={onRemove} style={u.chipX} accessibilityRole="button" accessibilityLabel={`Remove ${label}`}>
+        <Pressable onPress={onRemove} style={u.chipX} accessibilityRole="button" accessibilityLabel={t('Remove {{name}}', { name: t(label) })}>
           <Text style={u.chipXTxt}>×</Text>
         </Pressable>
       )}
@@ -122,10 +126,10 @@ export function Chip({ label, on, onPress, onRemove }: { label: string; on?: boo
 }
 
 export function Pill({ label, strong }: { label: string; strong?: boolean }) {
-  return <View style={[u.pill, strong && u.pillStrong]}><Text style={[u.pillTxt, strong && u.pillTxtStrong]}>{label.toUpperCase()}</Text></View>;
+  return <View style={[u.pill, strong && u.pillStrong]}><Text style={[u.pillTxt, strong && u.pillTxtStrong]}>{t(label).toUpperCase()}</Text></View>;
 }
 
-export const Note = ({ children }: { children: React.ReactNode }) => <Text style={u.note}>{children}</Text>;
+export const Note = ({ children }: { children: React.ReactNode }) => <Text style={u.note}>{tx(children)}</Text>;
 
 export const u: Record<string, any> = StyleSheet.create({
   card: { backgroundColor: C.surface, borderColor: C.line, borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, gap: 4 },
@@ -169,15 +173,15 @@ export const u: Record<string, any> = StyleSheet.create({
 
 /** Screen title bar: title (and optional subtitle) on the left, actions on the right. Replaces the app-wide header. */
 export function TopBar({ title, sub, onTitle, right, compact }: { title: string; sub?: string; onTitle?: () => void; right?: React.ReactNode; compact?: boolean }) {
-  const t = (
+  const head = (
     <View style={{ flexShrink: 1 }}>
-      <Text style={[u.topTitle, compact && { fontSize: 18 }]} numberOfLines={1}>{title}{onTitle ? <Text style={u.topChevron}> ▾</Text> : null}</Text>
-      {!!sub && <Text style={u.topSub} numberOfLines={1}>{sub}</Text>}
+      <Text style={[u.topTitle, compact && { fontSize: 18 }]} numberOfLines={1}>{t(title)}{onTitle ? <Text style={u.topChevron}> ▾</Text> : null}</Text>
+      {!!sub && <Text style={u.topSub} numberOfLines={1}>{t(sub)}</Text>}
     </View>
   );
   return (
     <View style={[u.topBar, compact && { minHeight: 44, paddingTop: 0 }]}>
-      {onTitle ? <Pressable onPress={onTitle} style={u.topTitleBtn} accessibilityRole="button" accessibilityLabel={`${title}, change`}>{t}</Pressable> : <View style={u.topTitleBtn}>{t}</View>}
+      {onTitle ? <Pressable onPress={onTitle} style={u.topTitleBtn} accessibilityRole="button" accessibilityLabel={t('{{name}}, change', { name: t(title) })}>{head}</Pressable> : <View style={u.topTitleBtn}>{head}</View>}
       <View style={u.topRight}>{right}</View>
     </View>
   );
@@ -189,7 +193,7 @@ export function Sheet({ visible, title, onClose, children }: { visible: boolean;
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={u.sheet}>
         <View style={u.sheetHead}>
-          <Text style={u.sheetTitle}>{title}</Text>
+          <Text style={u.sheetTitle}>{t(title)}</Text>
           <Btn label="Done" onPress={onClose} />
         </View>
         <ScrollView contentContainerStyle={u.sheetBody} keyboardShouldPersistTaps="handled">{children}</ScrollView>
@@ -201,19 +205,19 @@ export function Sheet({ visible, title, onClose, children }: { visible: boolean;
 /** A tappable row that opens something (a sheet or a sub-page): label, current value, chevron. */
 export function NavRow({ label, value, hint, onPress, first }: { label: string; value?: string; hint?: string; onPress: () => void; first?: boolean }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}${value ? `, ${value}` : ''}`}
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${t(label)}${value ? `, ${t(value)}` : ''}`}
       style={({ pressed }) => [u.row, !first && u.rowLine, pressed && { opacity: 0.6 }]}>
       <View style={u.rowText}>
-        <Text style={u.rowLabel}>{label}</Text>
-        {!!hint && <Text style={u.hint}>{hint}</Text>}
+        <Text style={u.rowLabel}>{t(label)}</Text>
+        {!!hint && <Text style={u.hint}>{t(hint)}</Text>}
       </View>
-      <Text style={u.navValue} numberOfLines={1}>{value ? `${value}  ` : ''}<Text style={u.chev}>›</Text></Text>
+      <Text style={u.navValue} numberOfLines={1}>{value ? `${t(value)}  ` : ''}<Text style={u.chev}>›</Text></Text>
     </Pressable>
   );
 }
 
 /** Plain section title (instead of a bordered card) for grouping on a screen. */
-export const SectionTitle = ({ children }: { children: string }) => <Text style={u.section}>{children.toUpperCase()}</Text>;
+export const SectionTitle = ({ children }: { children: string }) => <Text style={u.section}>{t(children).toUpperCase()}</Text>;
 
 Object.assign(u, StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, minHeight: 52, paddingTop: 4 },

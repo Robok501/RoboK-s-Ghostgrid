@@ -3,6 +3,7 @@
  * A graded ladder from "which one is faster?" up to naming a tempo and playing it cold.
  * Pure data and functions: clips are rendered to timed drum events, the app plays them.
  */
+import { tr } from './i18n';
 
 export type Groove = 'click' | 'rock' | 'funk' | 'shuffle' | 'halftime' | 'busy';
 /** Sounds the engine can play for clips. The index is what the native engine receives. */
@@ -151,9 +152,9 @@ function compare(rand: () => number, gap: [number, number], grooves: Groove[], o
   const choices = opts.same ? ['Slower', 'Same', 'Faster'] : ['Slower', 'Faster'];
   const answer = d < 0 ? 0 : d === 0 ? 1 : choices.length - 1;
   return {
-    task: 'compare', prompt: 'Is the second one slower or faster than the first?',
+    task: 'compare', prompt: tr('Is the second one slower or faster than the first?'),
     clips: [{ bpm: a, groove: g1, bars: 2 }, { bpm: b, groove: g2, bars: 2 }],
-    choices, answer, reveal: `First ${a} · second ${b} BPM`,
+    choices, answer, reveal: tr('First {{a}} · second {{b}} BPM', { a, b }),
   };
 }
 
@@ -171,7 +172,7 @@ function choose(rand: () => number, spacing: [number, number], grooves: Groove[]
   }
   return {
     task: 'choose',
-    prompt: feel ? 'What tempo is this, counted in quarter notes on the hi-hat?' : 'Which tempo is this?',
+    prompt: tr(feel ? 'What tempo is this, counted in quarter notes on the hi-hat?' : 'Which tempo is this?'),
     clips: [{ bpm, groove, bars: 2 }],
     choices: options.map((o) => `${o}`), answer: options.indexOf(bpm),
     reveal: `${bpm} BPM · ${GROOVE_NAMES[groove]}`,
@@ -189,7 +190,7 @@ export const LADDER: Rung[] = [
     blurb: 'Learn four reference tempos by heart: 60, 90, 120 and 160. Hear one, name it.',
     make: (r) => {
       const bpm = pick(r, ANCHORS);
-      return { task: 'anchor', prompt: 'Which anchor tempo is this?', clips: [{ bpm, groove: pick(r, ['click', 'rock'] as Groove[]), bars: 2 }], choices: ANCHORS.map(String), answer: ANCHORS.indexOf(bpm), reveal: `${bpm} BPM` };
+      return { task: 'anchor', prompt: tr('Which anchor tempo is this?'), clips: [{ bpm, groove: pick(r, ['click', 'rock'] as Groove[]), bars: 2 }], choices: ANCHORS.map(String), answer: ANCHORS.indexOf(bpm), reveal: `${bpm} BPM` };
     },
   },
   {
@@ -216,7 +217,7 @@ export const LADDER: Rung[] = [
       const bpm = base + slot * 10 + between(r, 1, 8);
       const groove = pick(r, ['rock', 'funk', 'shuffle'] as Groove[]);
       return {
-        task: 'range', prompt: 'Which range is this tempo in?', clips: [{ bpm, groove, bars: 2 }],
+        task: 'range', prompt: tr('Which range is this tempo in?'), clips: [{ bpm, groove, bars: 2 }],
         choices: [0, 1, 2, 3].map((i) => `${base + i * 10}–${base + i * 10 + 9}`), answer: slot, reveal: `${bpm} BPM`,
       };
     },
@@ -226,7 +227,7 @@ export const LADDER: Rung[] = [
     blurb: 'A count-off and one bar of click, then silence. Keep playing quarter notes at that tempo.',
     make: (r) => {
       const bpm = between(r, 70, 150);
-      return { task: 'hold', prompt: `Listen, then keep playing ${PLAY_HITS} quarter notes when the click stops.`, clips: [{ bpm, groove: 'click', bars: 2 }], target: bpm, tol: 5, reveal: `${bpm} BPM` };
+      return { task: 'hold', prompt: tr('Listen, then keep playing {{n}} quarter notes when the click stops.', { n: PLAY_HITS }), clips: [{ bpm, groove: 'click', bars: 2 }], target: bpm, tol: 5, reveal: `${bpm} BPM` };
     },
   },
   {
@@ -237,7 +238,7 @@ export const LADDER: Rung[] = [
       const up = r() < 0.5;
       const to = Math.round(bpm * (up ? 1.12 : 0.88));
       return {
-        task: 'drift', prompt: 'Press “Drifting!” the moment you hear the tempo move.',
+        task: 'drift', prompt: tr('Press “Drifting!” the moment you hear the tempo move.'),
         clips: [{ bpm, groove: pick(r, ['click', 'rock', 'funk'] as Groove[]), bars: 12, driftFrom: between(r, 2, 4), driftTo: to }],
         choices: ['Slower', 'Faster'], answer: up ? 1 : 0, target: bpm, tol: 5, reveal: `${bpm} → ${to} BPM`,
       };
@@ -249,7 +250,7 @@ export const LADDER: Rung[] = [
     make: (r) => {
       const bpm = between(r, 70, 160);
       const groove = pick(r, ['rock', 'funk', 'shuffle'] as Groove[]);
-      return { task: 'memory', prompt: `Remember this tempo. After the countdown, play ${PLAY_HITS} quarter notes.`, clips: [{ bpm, groove, bars: 2 }], target: bpm, tol: 5, reveal: `${bpm} BPM` };
+      return { task: 'memory', prompt: tr('Remember this tempo. After the countdown, play {{n}} quarter notes.', { n: PLAY_HITS }), clips: [{ bpm, groove, bars: 2 }], target: bpm, tol: 5, reveal: `${bpm} BPM` };
     },
   },
   {
@@ -258,7 +259,7 @@ export const LADDER: Rung[] = [
     make: (r) => {
       const bpm = between(r, 66, 172);
       const groove = pick(r, ['rock', 'funk', 'shuffle', 'click'] as Groove[]);
-      return { task: 'name', prompt: 'What tempo is this?', clips: [{ bpm, groove, bars: 4 }], target: bpm, tol: 5, reveal: `${bpm} BPM · ${GROOVE_NAMES[groove]}` };
+      return { task: 'name', prompt: tr('What tempo is this?'), clips: [{ bpm, groove, bars: 4 }], target: bpm, tol: 5, reveal: `${bpm} BPM · ${tr(GROOVE_NAMES[groove])}` };
     },
   },
   {
@@ -277,7 +278,7 @@ export const LADDER: Rung[] = [
     make: (r) => {
       const c: Clip = { bpm: between(r, 80, 160), groove: pick(r, ['rock', 'funk', 'shuffle'] as Groove[]), bars: 4, wander: 0.015, seed: seedOf(r) };
       const avg = Math.round(renderClip(c).avgBpm);
-      return { task: 'name', prompt: 'What is the average tempo?', clips: [c], target: avg, tol: 4, reveal: `Average ${avg} BPM (started at ${c.bpm})` };
+      return { task: 'name', prompt: tr('What is the average tempo?'), clips: [c], target: avg, tol: 4, reveal: tr('Average {{avg}} BPM (started at {{start}})', { avg, start: c.bpm }) };
     },
   },
   {
@@ -285,7 +286,7 @@ export const LADDER: Rung[] = [
     blurb: 'No click at all. You get a number, you play it.',
     make: (r) => {
       const bpm = between(r, 66, 180);
-      return { task: 'cold', prompt: `Play ${PLAY_HITS} quarter notes at ${bpm} BPM.`, clips: [], target: bpm, tol: 3, reveal: `${bpm} BPM` };
+      return { task: 'cold', prompt: tr('Play {{n}} quarter notes at {{bpm}} BPM.', { n: PLAY_HITS, bpm }), clips: [], target: bpm, tol: 3, reveal: `${bpm} BPM` };
     },
   },
 ];
@@ -298,19 +299,19 @@ export interface Grade { ok: boolean; text: string; /** signed error in BPM, whe
 
 export function gradeChoice(q: Question, picked: number): Grade {
   const ok = picked === q.answer;
-  return { ok, text: ok ? 'Right' : `It was ${q.choices?.[q.answer ?? 0]}` };
+  return { ok, text: ok ? tr('Right') : tr('It was {{x}}', { x: tr(q.choices?.[q.answer ?? 0] ?? '') }) };
 }
 
 export function gradeName(q: Question, guess: number): Grade {
   const error = guess - (q.target ?? 0);
   const ok = Math.abs(error) <= (q.tol ?? 5);
-  return { ok, error, text: error === 0 ? 'Spot on' : `${Math.abs(error)} BPM ${error > 0 ? 'too fast' : 'too slow'}` };
+  return { ok, error, text: error === 0 ? tr('Spot on') : tr(error > 0 ? '{{n}} BPM too fast' : '{{n}} BPM too slow', { n: Math.abs(error) }) };
 }
 
 /** Hits played back (seconds). Within `tol` percent of the target passes. */
 export function gradePlayback(q: Question, hits: number[]): Grade & { bpm?: number; spreadMs?: number } {
   const r = bpmFromHits(hits);
-  if (!r) return { ok: false, text: 'Not enough hits to measure' };
+  if (!r) return { ok: false, text: tr('Not enough hits to measure') };
   const target = q.target ?? 0;
   const error = r.bpm - target;
   const pct = (Math.abs(error) / target) * 100;
@@ -318,7 +319,7 @@ export function gradePlayback(q: Question, hits: number[]): Grade & { bpm?: numb
   const bpm = Math.round(r.bpm);
   return {
     ok, error, bpm, spreadMs: r.spreadMs,
-    text: `You played ${bpm} BPM (${pct < 0.5 ? 'spot on' : `${pct.toFixed(1)} % ${error > 0 ? 'fast' : 'slow'}`}), spread ±${Math.round(r.spreadMs)} ms`,
+    text: tr('You played {{bpm}} BPM ({{how}}), spread ±{{ms}} ms', { bpm, ms: Math.round(r.spreadMs), how: pct < 0.5 ? tr('spot on') : tr(error > 0 ? '{{pct}} % fast' : '{{pct}} % slow', { pct: pct.toFixed(1) }) }),
   };
 }
 
@@ -327,17 +328,17 @@ export function gradePlayback(q: Question, hits: number[]): Grade & { bpm?: numb
  * Passes when the direction is right and the tempo had moved no more than `tol` percent when you pressed.
  */
 export function gradeDrift(q: Question, r: RenderedClip, pressedAt: number | null, dir: number | null): Grade {
-  if (pressedAt === null) return { ok: false, text: 'You didn’t catch it' };
+  if (pressedAt === null) return { ok: false, text: tr('You didn’t catch it') };
   const start = q.target ?? r.beats[0].bpm;
   const driftFrom = (q.clips[0].driftFrom ?? 0) * 4;
-  if (pressedAt < (r.beats[driftFrom]?.t ?? 0)) return { ok: false, text: 'Too early: it was still steady' };
+  if (pressedAt < (r.beats[driftFrom]?.t ?? 0)) return { ok: false, text: tr('Too early: it was still steady') };
   const moved = tempoAt(r, pressedAt) - start;
   const pct = (Math.abs(moved) / start) * 100;
   const rightDir = dir === q.answer;
   const ok = rightDir && pct <= (q.tol ?? 5);
   return {
     ok, error: moved,
-    text: `${rightDir ? '' : 'Wrong direction. '}Caught it after ${Math.abs(Math.round(moved))} BPM of drift (${pct.toFixed(1)} %)`,
+    text: (rightDir ? '' : tr('Wrong direction.') + ' ') + tr('Caught it after {{n}} BPM of drift ({{pct}} %)', { n: Math.abs(Math.round(moved)), pct: pct.toFixed(1) }),
   };
 }
 

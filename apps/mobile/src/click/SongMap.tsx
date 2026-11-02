@@ -3,6 +3,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { programLength, sectionLetter, type ClickStep, type Section } from '@ghostgrid/core';
 import { C, F } from '../theme';
+import { t } from '../i18n';
 
 const mmss = (sec: number) => { const s = Math.round(sec); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
@@ -13,8 +14,8 @@ export function SongMap({ program, loop, cur, running, onPlayFrom }: {
   return (
     <View style={s.wrap}>
       <View style={s.top}>
-        <Text style={s.topLabel}>SONG MAP</Text>
-        <Text style={s.topVal}>{total.bars} bars · {mmss(total.seconds)}{loop ? ' · loops' : ''}</Text>
+        <Text style={s.topLabel}>{t('Song map').toUpperCase()}</Text>
+        <Text style={s.topVal}>{t('{{count}} bars', { count: total.bars })} · {mmss(total.seconds)}{loop ? ` · ${t('loops')}` : ''}</Text>
       </View>
       {program.map((sec, i) => {
         const isCur = running && cur?.section === i;
@@ -22,10 +23,10 @@ export function SongMap({ program, loop, cur, running, onPlayFrom }: {
         const w = Math.max(16, Math.min(44, sec.beats * 5));
         return (
           <View key={i} style={[s.sec, i > 0 && s.secLine]}>
-            <Pressable onPress={() => onPlayFrom(i)} style={s.head} accessibilityRole="button" accessibilityLabel={`Play from section ${sectionLetter(i)}`}>
+            <Pressable onPress={() => onPlayFrom(i)} style={s.head} accessibilityRole="button" accessibilityLabel={t('Play from section {{s}}', { s: sectionLetter(i) })}>
               <View style={[s.letter, isCur && s.letterOn]}><Text style={[s.letterTxt, isCur && { color: C.accentInk }]}>{sectionLetter(i)}</Text></View>
-              <Text style={s.meta}><Text style={{ color: C.fg, fontWeight: '600' }}>{sec.bars} bar{sec.bars > 1 ? 's' : ''}</Text> · {sec.beats}/4 · {sec.bpm} BPM · {mmss(dur)}</Text>
-              <Text style={s.from}>▶ FROM HERE</Text>
+              <Text style={s.meta}><Text style={{ color: C.fg, fontWeight: '600' }}>{t('{{count}} bars', { count: sec.bars })}</Text> · {sec.beats}/4 · {sec.bpm} BPM · {mmss(dur)}</Text>
+              <Text style={s.from}>▶ {t('From here').toUpperCase()}</Text>
             </Pressable>
             <View style={s.bars}>
               {Array.from({ length: sec.bars }, (_, b) => {

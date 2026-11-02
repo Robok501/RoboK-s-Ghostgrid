@@ -9,6 +9,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
   DRUM_SOUNDS, INSTRUMENTS, SOUND, analyze, barGrid, barSteps, ideaToRaw, soundFor, stepTime, withRaw, type Idea, type InstrumentId, type RawNote, type SoundKey,
 } from '@ghostgrid/core';
+import { t } from '../i18n';
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 
@@ -201,10 +202,10 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     r.withGroove = !recording || (sk.current.recMode === 'layer' && clickOk);
     r.rec = recording ? { phase: 'count', start: 0, bars: Math.max(1, I.bars.length), beat: 60 / I.bpm, hits: [], source, clickOk } : null;
     if (recording && source === 'voice' && !Engine.startRecording()) { r.rec = null; onRec.current(I, -2, 'voice'); return; }
-    try { pump(); } catch (e) { setError(`Playback problem: ${(e as Error).message}`); r.rec = null; return; }
+    try { pump(); } catch (e) { setError(t('Playback problem: {{msg}}', { msg: (e as Error).message })); r.rec = null; return; }
     setError('');
     r.timer = setInterval(() => {
-      try { pump(); } catch (e) { setError(`Playback problem: ${(e as Error).message}`); stop(); }
+      try { pump(); } catch (e) { setError(t('Playback problem: {{msg}}', { msg: (e as Error).message })); stop(); }
     }, 50);
     setPlaying(true);
     setRec(recording ? 'count' : null);

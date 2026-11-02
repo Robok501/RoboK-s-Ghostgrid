@@ -11,6 +11,7 @@ import {
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 import { C, F } from '../theme';
+import { t } from '../i18n';
 import { Btn, Card, Note, Pill, Row, Seg, Toggle, useHoldRepeat } from '../ui';
 import type { CoachInput } from '../store';
 
@@ -165,7 +166,7 @@ export function TempoTrainer() {
   const answerName = () => {
     const tap = bpmFromHits(R.current.taps);
     const g = gradeName(q, guess);
-    finish({ ...g, extra: tap ? `Your tapping said ${Math.round(tap.bpm)} BPM` : undefined });
+    finish({ ...g, extra: tap ? t('Your tapping said {{bpm}} BPM', { bpm: Math.round(tap.bpm) }) : undefined });
   };
   const driftPress = (e: GestureResponderEvent) => {
     const seg = R.current.segs[0];
@@ -184,16 +185,16 @@ export function TempoTrainer() {
       <Card title="Ladder">
         {tiers.map((list, ti) => (
           <View key={ti} style={s.tier}>
-            <Text style={s.tierName}>{TIER_NAMES[ti + 1]}</Text>
+            <Text style={s.tierName}>{t(TIER_NAMES[ti + 1])}</Text>
             <View style={s.rungs}>
               {list.map(({ r, i }) => {
                 const isOpen = open(i), on_ = i === rungIdx, best = ear.best[r.id];
                 return (
                   <Pressable key={r.id} disabled={!isOpen} onPress={() => startRound(i)} accessibilityRole="button"
                     accessibilityState={{ selected: on_, disabled: !isOpen }} style={[s.rung, on_ && s.rungOn, !isOpen && { opacity: 0.35 }]}>
-                    <Text style={[s.rungTxt, on_ && { color: C.bg }]} numberOfLines={1}>{isOpen ? '' : '🔒 '}{r.name}</Text>
+                    <Text style={[s.rungTxt, on_ && { color: C.bg }]} numberOfLines={1}>{isOpen ? '' : '🔒 '}{t(r.name)}</Text>
                     <Text style={[s.rungSub, on_ && { color: C.bg }, best !== undefined && best >= PASS && !on_ && { color: C.good }]}>
-                      {best === undefined ? (isOpen ? 'new' : 'locked') : `${best >= PASS ? '✓ ' : ''}${best}/${ROUND}`}
+                      {best === undefined ? t(isOpen ? 'new' : 'locked') : `${best >= PASS ? '✓ ' : ''}${best}/${ROUND}`}
                     </Text>
                   </Pressable>
                 );
@@ -203,12 +204,12 @@ export function TempoTrainer() {
         ))}
       </Card>
 
-      <Card title={`${rung.name} · ${TIER_NAMES[rung.tier]}`}>
-        <Note>{rung.blurb}</Note>
+      <Card title={`${t(rung.name)} · ${t(TIER_NAMES[rung.tier])}`}>
+        <Note>{t(rung.blurb)}</Note>
         {phase !== 'done' && (
           <View style={s.progress}>
             {Array.from({ length: ROUND }, (_, i) => <View key={i} style={[s.dot, i < qi && s.dotDone, i === qi && s.dotNow]} />)}
-            <Text style={s.score}>{score} right</Text>
+            <Text style={s.score}>{t('{{n}} right', { n: score })}</Text>
           </View>
         )}
       </Card>
@@ -217,8 +218,8 @@ export function TempoTrainer() {
         <Card>
           <Text style={s.big}>{score}/{ROUND}</Text>
           <Text style={s.center}>{score >= PASS
-            ? (rungIdx + 1 < LADDER.length ? `Passed. ${LADDER[rungIdx + 1].name} is open.` : 'Passed the whole ladder. Respect.')
-            : `${PASS} right unlocks the next one. Again?`}</Text>
+            ? (rungIdx + 1 < LADDER.length ? t('Passed. {{name}} is open.', { name: t(LADDER[rungIdx + 1].name) }) : t('Passed the whole ladder. Respect.'))
+            : t('{{n}} right unlocks the next one. Again?', { n: PASS })}</Text>
           <View style={s.btnRow}>
             <Btn label="Again" onPress={() => startRound(rungIdx)} style={{ flex: 1 }} />
             {rungIdx + 1 < LADDER.length && open(rungIdx + 1) && score >= PASS && <Btn label="Next exercise" onPress={() => startRound(rungIdx + 1)} style={{ flex: 1 }} />}
@@ -232,7 +233,7 @@ export function TempoTrainer() {
             <View style={s.clips}>
               {q.clips.map((_, i) => (
                 <View key={i} style={[s.clip, playingIdx === i && s.clipOn]}>
-                  <Text style={[s.clipTxt, playingIdx === i && { color: C.accentInk }]}>{q.clips.length > 1 ? (i === 0 ? 'First' : 'Second') : playingIdx === i ? 'Playing' : 'Clip'}</Text>
+                  <Text style={[s.clipTxt, playingIdx === i && { color: C.accentInk }]}>{t(q.clips.length > 1 ? (i === 0 ? 'First' : 'Second') : playingIdx === i ? 'Playing' : 'Clip')}</Text>
                 </View>
               ))}
             </View>
@@ -247,7 +248,7 @@ export function TempoTrainer() {
             <View style={s.choices}>
               {q.choices!.map((c, i) => (
                 <Pressable key={c} onPress={() => answerChoice(i)} style={({ pressed: p }) => [s.choice, p && { opacity: 0.7 }]} accessibilityRole="button">
-                  <Text style={s.choiceTxt}>{c}</Text>
+                  <Text style={s.choiceTxt}>{t(c)}</Text>
                 </Pressable>
               ))}
             </View>
@@ -258,8 +259,8 @@ export function TempoTrainer() {
               <GuessDial value={guess} onChange={setGuess} />
               <View style={s.btnRow}>
                 <Pressable onPressIn={(e) => { R.current.taps.push(touchTime(e)); if (R.current.taps.length > 12) R.current.taps.shift(); }}
-                  style={({ pressed: p }) => [s.tapSmall, p && s.padHit]} accessibilityRole="button" accessibilityLabel="Tap along">
-                  <Text style={s.tapSmallTxt}>Tap along</Text>
+                  style={({ pressed: p }) => [s.tapSmall, p && s.padHit]} accessibilityRole="button" accessibilityLabel={t('Tap along')}>
+                  <Text style={s.tapSmallTxt}>{t('Tap along')}</Text>
                 </Pressable>
                 <Btn label="Check" primary onPress={answerName} style={{ flex: 1 }} />
               </View>
@@ -267,16 +268,16 @@ export function TempoTrainer() {
           )}
 
           {q.task === 'drift' && phase === 'playing' && !pressed && (
-            <Pressable onPressIn={driftPress} style={({ pressed: p }) => [s.pad, p && s.padHit]} accessibilityRole="button" accessibilityLabel="Drifting">
-              <Text style={s.padTxt}>Drifting!</Text>
+            <Pressable onPressIn={driftPress} style={({ pressed: p }) => [s.pad, p && s.padHit]} accessibilityRole="button" accessibilityLabel={t('Drifting!')}>
+              <Text style={s.padTxt}>{t('Drifting!')}</Text>
             </Pressable>
           )}
           {q.task === 'drift' && pressed && phase !== 'feedback' && (
             <>
-              <Text style={s.center}>Which way did it go?</Text>
+              <Text style={s.center}>{t('Which way did it go?')}</Text>
               <View style={s.choices}>
                 {q.choices!.map((c, i) => (
-                  <Pressable key={c} onPress={() => driftDir(i)} style={s.choice} accessibilityRole="button"><Text style={s.choiceTxt}>{c}</Text></Pressable>
+                  <Pressable key={c} onPress={() => driftDir(i)} style={s.choice} accessibilityRole="button"><Text style={s.choiceTxt}>{t(c)}</Text></Pressable>
                 ))}
               </View>
             </>
@@ -291,11 +292,11 @@ export function TempoTrainer() {
               </Row>
               {input === 'tap' ? (
                 <Pressable disabled={phase !== 'play'} onPressIn={(e) => addHit(touchTime(e))} style={({ pressed: p }) => [s.pad, p && s.padHit, phase !== 'play' && { opacity: 0.4 }]}
-                  accessibilityRole="button" accessibilityLabel="Tap pad">
-                  <Text style={s.padTxt}>{phase === 'play' ? `${hits}/${PLAY_HITS}` : 'wait…'}</Text>
+                  accessibilityRole="button" accessibilityLabel={t('Tap pad')}>
+                  <Text style={s.padTxt}>{phase === 'play' ? `${hits}/${PLAY_HITS}` : t('wait…')}</Text>
                 </Pressable>
               ) : (
-                <View style={[s.pad, phase !== 'play' && { opacity: 0.4 }]}><Text style={s.padTxt}>{phase === 'play' ? `Play! ${hits}/${PLAY_HITS}` : 'wait…'}</Text></View>
+                <View style={[s.pad, phase !== 'play' && { opacity: 0.4 }]}><Text style={s.padTxt}>{phase === 'play' ? t('Play! {{n}}/{{of}}', { n: hits, of: PLAY_HITS }) : t('wait…')}</Text></View>
               )}
               {phase === 'play' && hits >= 4 && <Btn label="Done" onPress={() => finish(gradePlayback(q, R.current.hits))} />}
             </>

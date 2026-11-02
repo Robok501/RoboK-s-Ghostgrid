@@ -6,6 +6,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTRUMENT, barGrid, countLabel, type Bar, type Grid, type Idea, type InstrumentId, type NoteState } from '@ghostgrid/core';
 import { C, F } from '../theme';
+import { t } from '../i18n';
 import type { PlayPos } from './usePlayer';
 
 export interface Page { bar: number; from: number; to: number }
@@ -59,7 +60,7 @@ export function GridPager({ idea, rows, cell, width, pageBeats, selectedBar, pos
             <Text style={s.labelTxt}>{INSTRUMENT[id].short}</Text>
           </View>
         ))}
-        <Pressable onPress={onAdd} style={[s.add, { height: Math.max(cell, 40) }]} accessibilityRole="button" accessibilityLabel="Add instrument">
+        <Pressable onPress={onAdd} style={[s.add, { height: Math.max(cell, 40) }]} accessibilityRole="button" accessibilityLabel={t('Add instrument')}>
           <Text style={s.addTxt}>+</Text>
         </Pressable>
       </View>
@@ -120,7 +121,7 @@ const PageView = memo(function PageView({ p, bar, g, full, rows, cell, pageW, pl
           })}
         </View>
       ))}
-      <View style={s.barTag}><Text style={s.barTagTxt}>Bar {p.bar + 1}{p.from > 0 || p.to < full ? ` · ${p.from / g + 1}–${p.to / g}` : ''}</Text></View>
+      <View style={s.barTag}><Text style={s.barTagTxt}>{t('Bar {{n}}', { n: p.bar + 1 })}{p.from > 0 || p.to < full ? ` · ${p.from / g + 1}–${p.to / g}` : ''}</Text></View>
     </View>
   );
 });

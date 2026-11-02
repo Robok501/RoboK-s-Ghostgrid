@@ -2,6 +2,7 @@
  * Notation styles: where each instrument sits on the staff, which notehead it gets, and whether hands and feet
  * are written as two voices (hands stems up, feet stems down) or one. Switching style only redraws the score.
  */
+import { tr } from './i18n';
 import { INSTRUMENTS, type InstrumentId } from './groove';
 
 export type Notehead = 'x' | 'note';
@@ -51,5 +52,5 @@ export function staffName(step: number): string {
   const idx = step + 0; // 0 = E4
   const letter = letters[((idx % 7) + 7) % 7];
   const octave = 4 + Math.floor((idx + 2) / 7);
-  return `${letter}${octave} · ${step % 2 === 0 ? 'line' : 'space'}`;
+  return `${letter}${octave} · ${tr(step % 2 === 0 ? 'line' : 'space')}`;
 }

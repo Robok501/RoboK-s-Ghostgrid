@@ -1,0 +1,4 @@
+{
+ "NSMicrophoneUsageDescription": "Ghostgrid hört deine Schläge, um dein Timing am Click zu bewerten.",
+ "NSBluetoothAlwaysUsageDescription": "Ghostgrid verbindet sich mit Bluetooth-MIDI-Drum-Modulen, etwa deinem E-Drum."
+}

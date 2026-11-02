@@ -4,6 +4,10 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { HH_PEDAL_CC, PAD_NAMES, learnPad, resolveNote, stateFor, type NoteState, type PadKey, type PadSettings } from '@ghostgrid/core';
+import { setLanguage, t, type Lang, type LangSetting } from './i18n';
+import { setTranslator } from '@ghostgrid/core';
+// text that core builds (trainer questions and results) is translated too
+setTranslator(t);
 import Engine, { type EngineInfo } from '../modules/ghostgrid-engine';
 import { loadSettings, saveSettings, type AppSettings, type ClickSettings, type EarSettings, type SketchSettings } from './store';
 
@@ -19,6 +23,9 @@ interface Ctx {
   setEar: (patch: Partial<EarSettings> | ((e: EarSettings) => Partial<EarSettings>)) => void;
   setKeepBt: (v: boolean) => void;
   setMicSens: (v: number) => void;
+  /** app language ('auto' = the iPhone's); the screens redraw in it */
+  setLang: (l: LangSetting) => void;
+  lang: Lang;
   setPads: (fn: (p: PadSettings) => PadSettings) => void;
   info: EngineInfo | null;
   error: string;
@@ -84,13 +91,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [update]);
   const setSketch = useCallback<Ctx['setSketch']>((patch) => update((s) => ({ ...s, sketch: { ...s.sketch, ...patch } })), [update]);
   const setPads = useCallback<Ctx['setPads']>((fn) => update((s) => ({ ...s, pads: fn(s.pads) })), [update]);
+  const [lang, setLangNow] = useState<Lang>(() => setLanguage(settings.lang));
+  const setLang = useCallback((l: LangSetting) => { update((s) => ({ ...s, lang: l })); setLangNow(setLanguage(l)); }, [update]);
 
   const start = useCallback(async (keepBt: boolean, withMic: boolean) => {
     emit('restart', null);
     setError('');
     try {
       if (withMic && !(await Engine.requestMicPermission())) {
-        setError('Microphone access is off. Allow it in Settings → Ghostgrid.');
+        setError(t('Microphone access is off. Allow it in Settings → Ghostgrid.'));
         withMic = false;
       }
       const i = await Engine.start(keepBt, withMic, S.current.micSens);
@@ -99,7 +108,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMicState(i.mic);
       return i.mic === withMic;
     } catch (e) {
-      setError(`Audio could not start: ${(e as Error).message}`);
+      setError(t('Audio could not start: {{msg}}', { msg: (e as Error).message }));
       return false;
     }
   }, [emit]);
@@ -145,13 +154,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const k = learnRef.current;
           update((s) => ({ ...s, pads: learnPad(s.pads, e.note, k) }));
           setLearning(null);
-          setLastHit(`Note ${e.note} is now ${PAD_NAMES[k]}`);
+          setLastHit(t('Note {{note}} is now {{pad}}', { note: e.note, pad: t(PAD_NAMES[k]) }));
           return;
         }
         const h = resolveNote(S.current.pads, e.note, e.velocity, pedalRef.current);
         const key = h.id ? (h.open ? 'hh+o' : h.id) : `n${e.note}`;
         const name = h.id ? PAD_NAMES[key as PadKey] : `Note ${e.note}`;
-        shown.current.hit = `Note ${e.note} → ${h.id ? name : 'not mapped'} · velocity ${e.velocity}`; showLater();
+        shown.current.hit = t('Note {{note}} → {{pad}} · velocity {{vel}}', { note: e.note, pad: h.id ? t(name) : t('not mapped'), vel: e.velocity }); showLater();
         emit('pad', { time: e.time, note: e.note, vel: e.velocity, key, name, state: stateFor(S.current.pads, h), mapped: !!h.id });
       }),
       Engine.addListener('onCaptureHit', (e) => emit('mic', { time: e.time, peak: e.peak })),
@@ -162,8 +171,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(() => ({
     stopAll: () => emit('restart', null),
     goTab: (t) => emit('goTab', t),
-    settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
-  }), [settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on, emit]);
+    settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setLang, lang, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
+  }), [settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setLang, lang, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on, emit]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

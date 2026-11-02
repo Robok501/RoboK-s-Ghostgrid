@@ -18,6 +18,7 @@ import type { CoachInput } from '../store';
 import { useApp } from '../AppContext';
 import { readVoiceFile, saveWav } from '../sketch/usePlayer';
 import { addIdeaFromOutside } from '../sketch/ideas';
+import { t } from '../i18n';
 import {
   MODEL_MB, MODEL_NAME, MODEL_URL, deleteSongFiles, ensureDir, fmtTime, loadSongs, newSongId, originalPath, saveSongs, stemPath, toPath,
   type Mix, type Song,
@@ -40,9 +41,9 @@ export function SongsScreen() {
     try {
       const r = Engine.stemsLastRun();
       if (r.phase && !['done', 'error'].includes(r.phase)) {
-        const where = { decode: 'reading the song', load: 'loading the model', separate: 'separating', write: 'saving' }[r.phase] ?? r.phase;
+        const where = t({ decode: 'reading the song', load: 'loading the model', separate: 'separating', write: 'saving' }[r.phase] ?? r.phase);
         const used = (r as { usedByLoadMB?: number }).usedByLoadMB;
-        return `Last time the app was stopped while ${where} (free memory then: ${Math.round(r.freeAfterLoadMB ?? r.freeMB ?? 0)} MB${used ? `, loading had used ${Math.round(used)} MB` : ''}). Please tell Claude this line.`;
+        return t('Last time the app was stopped while {{where}} (free memory then: {{mb}} MB{{used}}). Please tell Claude this line.', { where, mb: Math.round(r.freeAfterLoadMB ?? r.freeMB ?? 0), used: used ? t(', loading had used {{mb}} MB', { mb: Math.round(used) }) : '' });
       }
     } catch { /* no record */ }
     return '';
@@ -69,9 +70,9 @@ export function SongsScreen() {
     setDl({ phase: 'download', progress: 0 });
     try {
       setModel(await Engine.stemsDownloadModel(MODEL_URL, MODEL_NAME));
-      setNotice('Model ready. Import a song and tap Separate.');
+      setNotice(t('Model ready. Import a song and tap Separate.'));
     } catch (e) {
-      setNotice(`Download failed: ${(e as Error).message}`);
+      setNotice(t('Download failed: {{msg}}', { msg: (e as Error).message }));
     }
     setDl(null);
   };
@@ -88,9 +89,9 @@ export function SongsScreen() {
       const s: Song = { id, name: a.name.replace(/\.\w+$/, ''), created: Date.now(), source: 'file', original: `original.${ext}`, rate: 1, mix: 'nodrums', drumVol: 1 };
       add(s);
       setCur(id);
-      setNotice(model.present ? 'Imported. Tap Separate to split off the drums.' : 'Imported. Download the model first, then tap Separate.');
+      setNotice(t(model.present ? 'Imported. Tap Separate to split off the drums.' : 'Imported. Download the model first, then tap Separate.'));
     } catch (e) {
-      setNotice(`Import failed: ${(e as Error).message}`);
+      setNotice(t('Import failed: {{msg}}', { msg: (e as Error).message }));
     }
   };
 
@@ -104,19 +105,19 @@ export function SongsScreen() {
         const data = readVoiceFile(f.path);
         const uri = saveWav(data, f.sampleRate, `rec-${id}.wav`);
         await new File(uri).copy(new File(ensureDir(id), 'original.wav'));
-        add({ id, name: `Room recording ${new Date().toLocaleDateString()}`, created: Date.now(), source: 'mic', original: 'original.wav', duration: data.length / f.sampleRate, rate: 1, mix: 'nodrums', drumVol: 1 });
+        add({ id, name: t('Room recording {{date}}', { date: new Date().toLocaleDateString() }), created: Date.now(), source: 'mic', original: 'original.wav', duration: data.length / f.sampleRate, rate: 1, mix: 'nodrums', drumVol: 1 });
         setCur(id);
       } catch (e) {
-        setNotice(`Recording failed: ${(e as Error).message}`);
+        setNotice(t('Recording failed: {{msg}}', { msg: (e as Error).message }));
       }
       if (micWasOff.current) { micWasOff.current = false; setMic(false); }
       return;
     }
     if (!mic) {
       micWasOff.current = true;
-      if (!(await setMic(true))) { micWasOff.current = false; setNotice('The microphone is off. Allow it in Settings → Ghostgrid.'); return; }
+      if (!(await setMic(true))) { micWasOff.current = false; setNotice(t('The microphone is off. Allow it in Settings → Ghostgrid.')); return; }
     }
-    if (!Engine.startRecording()) { setNotice('The microphone is off.'); return; }
+    if (!Engine.startRecording()) { setNotice(t('The microphone is off.')); return; }
     setRecording(Date.now());
   };
   const [, tick] = useState(0);
@@ -128,7 +129,7 @@ export function SongsScreen() {
 
   // ---- separation
   const separate = async (s: Song) => {
-    if (!model.present) { setNotice('Download the model first.'); return; }
+    if (!model.present) { setNotice(t('Download the model first.')); return; }
     Engine.stemsUnload();
     setWork({ id: s.id, p: { phase: 'decode', progress: 0 } });
     try {
@@ -137,10 +138,10 @@ export function SongsScreen() {
       const check = { mixDb: r.mixDb, drumsDb: r.drumsDb, restDb: r.restDb, drumsShare: r.drumsShare, invalid: r.invalid };
       // a new separation means a new drum track: find the beat again
       update(s.id, { separated: true, duration: r.duration, error: undefined, check, beatMap: undefined });
-      setNotice(r.invalid > 0 ? `Done, but the model gave ${r.invalid} invalid samples (silenced). Tell Claude.` : 'Done. Play it without drums, or with drums only.');
+      setNotice(r.invalid > 0 ? t('Done, but the model gave {{n}} invalid samples (silenced). Tell Claude.', { n: r.invalid }) : t('Done. Play it without drums, or with drums only.'));
     } catch (e) {
       update(s.id, { error: (e as Error).message });
-      setNotice(`Separation stopped: ${(e as Error).message}`);
+      setNotice(t('Separation stopped: {{msg}}', { msg: (e as Error).message }));
     }
     setWork(null);
   };
@@ -159,21 +160,19 @@ export function SongsScreen() {
 
       {!model.present && (
         <Card title="Separation model">
-          <Note>
-            Ghostgrid separates the drums on your phone, so your songs never leave it. That needs a model of about {MODEL_MB} MB, downloaded once. Use Wi-Fi.
-          </Note>
+          <Note>{t('Ghostgrid separates the drums on your phone, so your songs never leave it. That needs a model of about {{mb}} MB, downloaded once. Use Wi-Fi.', { mb: MODEL_MB })}</Note>
           {dl ? (
             <>
               <Bar value={dl.progress} />
               <View style={s.btnRow}><Text style={s.dim}>{Math.round(dl.progress * 100)} %</Text><Btn label="Cancel" onPress={() => Engine.stemsCancelDownload()} /></View>
             </>
-          ) : <View style={s.btnRow}><Btn label={`Download model (${MODEL_MB} MB)`} primary onPress={download} style={{ flex: 1 }} /></View>}
+          ) : <View style={s.btnRow}><Btn label={t('Download model ({{mb}} MB)', { mb: MODEL_MB })} primary onPress={download} style={{ flex: 1 }} /></View>}
         </Card>
       )}
 
       <View style={s.btnRow}>
         <Btn label="Import song" onPress={importSong} style={{ flex: 1 }} />
-        <Btn label={recording !== null ? `Stop · ${fmtTime((Date.now() - recording) / 1000)}` : 'Record from room'} active={recording !== null} onPress={toggleRecord} style={{ flex: 1 }} />
+        <Btn label={recording !== null ? `${t('Stop')} · ${fmtTime((Date.now() - recording) / 1000)}` : 'Record from room'} active={recording !== null} onPress={toggleRecord} style={{ flex: 1 }} />
       </View>
       {recording !== null && <Note>Play the song on a speaker and hold the phone near it. Files sound better than room recordings.</Note>}
 
@@ -188,7 +187,7 @@ export function SongsScreen() {
           <Pressable key={x.id} onPress={() => setCur(x.id)} style={[s.songRow, i > 0 && s.line, cur === x.id && { backgroundColor: C.raised }]} accessibilityRole="button">
             <View style={{ flex: 1 }}>
               <Text style={s.songName} numberOfLines={1}>{x.name}</Text>
-              <Text style={s.dim}>{x.duration ? fmtTime(x.duration) : '–'} · {work?.id === x.id ? 'separating…' : x.separated ? 'drums separated' : x.error ? 'not separated (stopped)' : 'not separated yet'}{x.source === 'mic' ? ' · room recording' : ''}</Text>
+              <Text style={s.dim}>{x.duration ? fmtTime(x.duration) : '–'} · {t(work?.id === x.id ? 'separating…' : x.separated ? 'drums separated' : x.error ? 'not separated (stopped)' : 'not separated yet')}{x.source === 'mic' ? ` · ${t('room recording')}` : ''}</Text>
             </View>
             <Text style={[s.badge, x.separated && { color: C.good }]}>{x.separated ? '✓' : '○'}</Text>
           </Pressable>
@@ -197,10 +196,10 @@ export function SongsScreen() {
 
       {model.present && (
         <Card title="Model">
-          <Row label="HT-Demucs drums" hint={`${Math.round(model.bytes / 1e6)} MB on this phone`} first>
+          <Row label="HT-Demucs drums" hint={t('{{mb}} MB on this phone', { mb: Math.round(model.bytes / 1e6) })} first>
             <Btn label="Remove" onPress={() => { Engine.stemsDeleteModel(MODEL_NAME); setModel(Engine.stemsModelStatus(MODEL_NAME)); }} />
           </Row>
-          <Note>For your own practice. Stems stay in the app and can't be exported. Free memory now: {Math.round(Engine.stemsFreeMemoryMB())} MB.</Note>
+          <Note>{t("For your own practice. Stems stay in the app and can't be exported. Free memory now: {{mb}} MB.", { mb: Math.round(Engine.stemsFreeMemoryMB()) })}</Note>
         </Card>
       )}
     </ScrollView>
@@ -252,7 +251,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       try { music = await Engine.stemsMusicFeatures(song.separated ? stemPath(song, 'nodrums') : originalPath(song)); } catch { music = undefined; }
       update(song.id, { beatMap: { ...beatMap(env, map?.beatsPerBar ?? 4, music), source: song.separated ? 'drums' : 'mix', v: 3 } });
     } catch (e) {
-      setErr(`Couldn't find the beat: ${(e as Error).message}`);
+      setErr(t("Couldn't find the beat: {{msg}}", { msg: (e as Error).message }));
     }
     setAnalysing(false);
   }, [song, map?.beatsPerBar, update]);
@@ -316,11 +315,11 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
         Engine.stemsPlay();
       }
       setPlaying(true); setErr('');
-    } catch (e) { setErr(`Couldn't play: ${(e as Error).message}`); }
+    } catch (e) { setErr(t("Couldn't play: {{msg}}", { msg: (e as Error).message })); }
   };
-  const seek = (t: number) => {
-    const v = Math.max(0, Math.min(dur, t));
-    try { Engine.stemsSeek(v); } catch (e) { setErr(`Couldn't jump there: ${(e as Error).message}`); }
+  const seek = (at: number) => {
+    const v = Math.max(0, Math.min(dur, at));
+    try { Engine.stemsSeek(v); } catch (e) { setErr(t("Couldn't jump there: {{msg}}", { msg: (e as Error).message })); }
     setPos(v);
   };
 
@@ -358,12 +357,12 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       if (!r.notes) throw new Error('no drum hits found there');
       const raw = r.idea.raw ?? [];
       const n = (id: string, v?: number) => raw.filter((x) => x.id === id && (v === undefined || x.v === v)).length;
-      addIdeaFromOutside(r.idea, `From the song: ${n('bd')} kicks, ${n('sn')} snares (${n('sn', 3)} ghost), ${n('hh')} hi-hats, ${n('cr')} crashes in ${r.bars} bars${r.truncated ? ' (first 64)' : ''}. Not right? Share the analysis from Songs.`);
+      addIdeaFromOutside(r.idea, t('From the song: {{bd}} kicks, {{sn}} snares ({{g}} ghost), {{hh}} hi-hats, {{cr}} crashes in {{bars}} bars{{cut}}. Not right? Share the analysis from Songs.', { bd: n('bd'), sn: n('sn'), g: n('sn', 3), hh: n('hh'), cr: n('cr'), bars: r.bars, cut: r.truncated ? t(' (first 64)') : '' }));
       setScoring(false);
       goTab('sketch');
       return;
     } catch (e) {
-      setErr(`Couldn't make a score: ${(e as Error).message}`);
+      setErr(t("Couldn't make a score: {{msg}}", { msg: (e as Error).message }));
     }
     setScoring(false);
   };
@@ -381,7 +380,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       const f = new File(Paths.cache, `ghostgrid-drum-scan.json`);
       f.write(JSON.stringify(data));
       await Sharing.shareAsync(f.uri, { mimeType: 'application/json', UTI: 'public.json', dialogTitle: 'Ghostgrid drum analysis' });
-    } catch (e) { setErr(`Couldn't share: ${(e as Error).message}`); }
+    } catch (e) { setErr(t("Couldn't share: {{msg}}", { msg: (e as Error).message })); }
   };
   const [, bump] = useState(0);
   const logRef = useRef(new HitLog());
@@ -443,14 +442,14 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       {!song.separated && (
         separating ? (
           <>
-            <Text style={s.phase}>{PHASE[progress?.phase ?? 'decode']}{progress?.phase === 'separate' ? ` · ${Math.round(progress.progress * 100)} %` : '…'}</Text>
+            <Text style={s.phase}>{t(PHASE[progress?.phase ?? 'decode'] ?? '')}{progress?.phase === 'separate' ? ` · ${Math.round(progress.progress * 100)} %` : '…'}</Text>
             <Bar value={progress?.phase === 'separate' ? progress.progress : progress?.phase === 'write' ? 1 : 0.02} />
             <Note>This takes a while: roughly the length of the song or a bit longer. Keep the app open.</Note>
             <View style={s.btnRow}><Btn label="Cancel" onPress={onCancel} /></View>
           </>
         ) : (
           <>
-            <Note>{song.error ? `Last try stopped: ${song.error}` : 'Separate the drums to practise without them, or with drums only.'}</Note>
+            <Note>{song.error ? t('Last try stopped: {{msg}}', { msg: song.error }) : t('Separate the drums to practise without them, or with drums only.')}</Note>
             <View style={s.btnRow}><Btn label="Separate drums" primary disabled={!canSeparate} onPress={onSeparate} style={{ flex: 1 }} /></View>
           </>
         )
@@ -459,14 +458,14 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       {!!err && <Text style={s.err}>{err}</Text>}
       {song.separated && chk && (
         <Text style={[s.dim, suspicious && { color: C.late }]}>
-          Separation check: drums {Math.round(chk.drumsDb)} dB · rest {Math.round(chk.restDb)} dB · song {Math.round(chk.mixDb)} dB · drums are {Math.round(chk.drumsShare * 100)} % of the sound
-          {chk.invalid > 0 ? ` · ${chk.invalid} invalid samples` : ''}{suspicious ? ' · this looks wrong, please tell Claude these numbers' : ''}
+          {t('Separation check: drums {{d}} dB · rest {{r}} dB · song {{m}} dB · drums are {{pct}} % of the sound', { d: Math.round(chk.drumsDb), r: Math.round(chk.restDb), m: Math.round(chk.mixDb), pct: Math.round(chk.drumsShare * 100) })}
+          {chk.invalid > 0 ? ` · ${t('{{n}} invalid samples', { n: chk.invalid })}` : ''}{suspicious ? ` · ${t('this looks wrong, please tell Claude these numbers')}` : ''}
         </Text>
       )}
       <Timeline pos={pos} dur={dur} a={song.loop ? A : null} b={song.loop ? B : null} bars={bars} onSeek={seek} />
       <View style={s.timeRow}>
-        <Text style={s.time}>{fmtTime(pos)}{barNow >= 0 ? `  ·  bar ${barNow + 1}` : ''}</Text>
-        <Text style={s.time}>{fmtTime(dur)}{bars.length ? `  ·  ${bars.length} bars` : ''}</Text>
+        <Text style={s.time}>{fmtTime(pos)}{barNow >= 0 ? `  ·  ${t('bar {{n}}', { n: barNow + 1 })}` : ''}</Text>
+        <Text style={s.time}>{fmtTime(dur)}{bars.length ? `  ·  ${t('{{count}} bars', { count: bars.length })}` : ''}</Text>
       </View>
 
       <View style={s.transport}>
@@ -506,7 +505,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
           onChange={(v) => update(song.id, { countIn: v as number })} />
       </Row>
 
-      <Row label="Loop" hint={song.loop ? `${fmtTime(A)} – ${fmtTime(B)}${map ? ` · bars ${barAt(map, A + 0.01) + 1}–${barAt(map, B - 0.01) + 1}` : ''}` : map ? 'A and B snap to bar lines' : 'set A and B while it plays'}>
+      <Row label="Loop" hint={song.loop ? `${fmtTime(A)} – ${fmtTime(B)}${map ? ` · ${t('bars {{a}}–{{b}}', { a: barAt(map, A + 0.01) + 1, b: barAt(map, B - 0.01) + 1 })}` : ''}` : map ? 'A and B snap to bar lines' : 'set A and B while it plays'}>
         <View style={s.inline}>
           <Btn label="A" onPress={setA} />
           <Btn label="B" onPress={setB} />
@@ -515,8 +514,8 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       </Row>
       {map && (
         <View style={s.chipsRow}>
-          <Text style={s.dim}>Loop length:</Text>
-          {[1, 2, 4, 8].map((n) => <Btn key={n} label={`${n} bar${n > 1 ? 's' : ''}`} onPress={() => loopBars(n)} />)}
+          <Text style={s.dim}>{t('Loop length:')}</Text>
+          {[1, 2, 4, 8].map((n) => <Btn key={n} label={t('{{count}} bars', { count: n })} onPress={() => loopBars(n)} />)}
         </View>
       )}
 
@@ -525,7 +524,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       </Row>
       {!!lastScan.current && (
         <View style={s.chipsRow}>
-          <Text style={s.dim}>Score not right?</Text>
+          <Text style={s.dim}>{t('Score not right?')}</Text>
           <Btn label="Share analysis" onPress={shareScan} />
         </View>
       )}
@@ -559,8 +558,8 @@ function BeatMapCard({ map, analysing, pos, onChange, onAgain }: {
   if (!map) return <View style={s.btnRow}><Btn label="Find the beat" onPress={onAgain} /></View>;
   return (
     <View style={s.beatBox}>
-      <Text style={s.beatTitle}>Beat map · about {Math.round(map.bpm)} BPM · {map.beatsPerBar}/4{map.edited ? ' · fixed by hand' : ''}</Text>
-      <Note>Click sounds wrong? Fix it here: put the "1" where the bar starts, or halve or double the tempo.</Note>
+      <Text style={s.beatTitle}>{t('Beat map · about {{bpm}} BPM', { bpm: Math.round(map.bpm) })} · {map.beatsPerBar}/4{map.edited ? ` · ${t('fixed by hand')}` : ''}</Text>
+      <Note>{t('Click sounds wrong? Fix it here: put the "1" where the bar starts, or halve or double the tempo.')}</Note>
       <View style={s.btnRow}>
         <Btn label="The 1 is here" onPress={() => onChange(setDownbeatAt(map, pos))} />
         <Btn label="1 beat later" onPress={() => onChange(shiftDownbeat(map, 1))} />

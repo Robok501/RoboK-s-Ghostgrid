@@ -20,19 +20,24 @@ const song2 = { id: 's2', name: 'the hardest transcription - Oliver', created: 2
 const SEED = { 'doc/songs.json': JSON.stringify([song, song2]) };
 
 const W = 428, H = 926, TOP = 47, BOTTOM = 34;
+// GG_LANG=nl-BE: run in another language; the script finds buttons by their translated names
+const LANG = (process.env.GG_LANG || 'en').slice(0, 2);
+const DICT = LANG === 'en' ? {} : JSON.parse(fs.readFileSync(path.join(__dirname, '../src/i18n', `${LANG}.json`), 'utf8'));
+const L = (s) => DICT[s] || s;
 (async () => {
   const b = await chromium.launch();
   async function page(w, h) {
-    const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 2 });
+    const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 2, locale: process.env.GG_LANG || 'en-US' });
+    p.setDefaultTimeout(8000);
     await p.addInitScript((seed) => { window.__GG_SEED = seed; }, SEED);
     await p.goto('http://localhost:8765/');
     await p.addStyleTag({ content: `html,body{background:#000} #root{position:fixed!important;top:${TOP}px;bottom:${BOTTOM}px;left:0;right:0;height:auto!important}` });
     await p.waitForTimeout(1500);
     return p;
   }
-  const tab = async (p, name) => { await p.getByRole('tab', { name }).click(); await p.waitForTimeout(500); };
-  const text = async (p, t) => { await p.getByText(t, { exact: true }).first().click(); await p.waitForTimeout(500); };
-  const btn = async (p, t) => { await p.getByRole('button', { name: t, exact: true }).first().click(); await p.waitForTimeout(500); };
+  const tab = async (p, name) => { await p.getByRole('tab', { name: L(name) }).click(); await p.waitForTimeout(500); };
+  const text = async (p, t) => { await p.getByText(L(t), { exact: true }).first().click(); await p.waitForTimeout(500); };
+  const btn = async (p, t) => { await p.getByRole('button', { name: L(t), exact: true }).first().click(); await p.waitForTimeout(500); };
 
   async function shoot(p, name, w, h) {
     // the tallest scrolling area in view is "the page"; grow the window until all of it shows, and mark the fold
@@ -86,11 +91,11 @@ const W = 428, H = 926, TOP = 47, BOTTOM = 34;
     await p.evaluate(() => document.querySelectorAll('div[style*="z-index: 9999"]').forEach((d) => d.remove()));
   }
 
-  const btnStart = async (p, t) => { await p.getByRole('button', { name: new RegExp('^' + t) }).first().click(); await p.waitForTimeout(600); };
+  const btnStart = async (p, t) => { await p.getByRole('button', { name: new RegExp('^' + L(t)) }).first().click(); await p.waitForTimeout(600); };
   const states = [
     ['1-click', async (p) => {}],
     ['2-click-mode-sheet', async (p) => { await btnStart(p, 'Mode'); }],
-    ['3-click-meter-sheet', async (p) => { await btnStart(p, 'Meter and sound'); }],
+    ['3-click-meter-sheet', async (p) => { await btnStart(p, 'Meter & sound'); }],
     ['2b-click-coach-playing', async (p) => {
       await btnStart(p, 'Mode'); await btn(p, 'Coach'); await text(p, 'E-drum'); await btn(p, 'Done');
       await btn(p, 'Play');
@@ -110,7 +115,7 @@ const W = 428, H = 926, TOP = 47, BOTTOM = 34;
     }],
     ['4-trainer', async (p) => { await tab(p, 'Trainer'); }],
     ['5-sketch', async (p) => { await tab(p, 'Sketch'); }],
-    ['5b-sketch-32nds', async (p) => { await tab(p, 'Sketch'); await p.getByRole('button', { name: /^Grid 16ths/ }).first().click(); await p.waitForTimeout(500); }],
+    ['5b-sketch-32nds', async (p) => { await tab(p, 'Sketch'); await p.getByRole('button', { name: new RegExp('^' + L('Grid {{grid}}, tap to change').split('{{')[0] + L('16ths')) }).first().click(); await p.waitForTimeout(500); }],
     ['6-sketch-menu', async (p) => { await tab(p, 'Sketch'); await btn(p, '•••'); }],
     ['7-sketch-rec-choice', async (p) => { await tab(p, 'Sketch'); await btn(p, 'Record'); }],
     ['8-songs', async (p) => { await tab(p, 'Songs'); }],

@@ -18,6 +18,7 @@ import { TempoBlock } from '../click/TempoBlock';
 import { useClick } from '../click/useClick';
 import { C } from '../theme';
 import { Btn, Chip, Note, Pill, Row, Seg, SectionTitle, Sheet, Stepper, Toggle, TopBar } from '../ui';
+import { t } from '../i18n';
 import type { ClickSettings, ClickSound, CoachInput, Preset } from '../store';
 
 export const LEVELS = [
@@ -40,12 +41,12 @@ const INPUT_NAME: Record<CoachInput, string> = { tap: 'tap pad', mic: 'mic', pad
 
 function modeSummary(c: ClickSettings): string {
   switch (c.mode) {
-    case 'coach': return `scoring by ${INPUT_NAME[c.input]}`;
-    case 'gap': return `${c.gapOn} bar${c.gapOn > 1 ? 's' : ''} on, ${c.gapOff} off`;
-    case 'drop': return `${c.dropChance}% of ${c.dropUnit} drop out`;
-    case 'ramp': return `${c.bpm} → ${c.rampTarget}, ${c.rampStep > 0 ? '+' : ''}${c.rampStep} every ${c.rampEvery} bars`;
-    case 'program': return `${c.program.length} sections${c.loop ? ', looping' : ''}`;
-    default: return 'a plain click';
+    case 'coach': return t('scoring by {{input}}', { input: t(INPUT_NAME[c.input]) });
+    case 'gap': return t('{{on}} on, {{off}} off', { on: t('{{count}} bars', { count: c.gapOn }), off: c.gapOff });
+    case 'drop': return t(c.dropUnit === 'beats' ? '{{pct}}% of beats drop out' : '{{pct}}% of bars drop out', { pct: c.dropChance });
+    case 'ramp': return t('{{from}} → {{to}}, {{step}} every {{n}} bars', { from: c.bpm, to: c.rampTarget, step: `${c.rampStep > 0 ? '+' : ''}${c.rampStep}`, n: c.rampEvery });
+    case 'program': return t(c.loop ? '{{count}} sections, looping' : '{{count}} sections', { count: c.program.length });
+    default: return t('a plain click');
   }
 }
 
@@ -65,7 +66,7 @@ export function ClickScreen({ active = true }: { active?: boolean }) {
   }), [on]);
   const modes = MODE_ORDER.filter((m) => modesForLevel(c.level).includes(m));
   const meterBeats = program ? (k.running && k.cur ? k.cur.beats : c.program[0]?.beats ?? 4) : c.beats;
-  const meterLine = `${meterBeats}/${c.unit}${c.sub > 1 ? ` · ${SUB_NAMES[c.sub] ?? `${c.sub} per beat`}` : ''} · ${c.sound === 'cowbell' ? 'bell' : c.sound}`;
+  const meterLine = `${meterBeats}/${c.unit}${c.sub > 1 ? ` · ${SUB_NAMES[c.sub] ? t(SUB_NAMES[c.sub]) : t('{{n}} per beat', { n: c.sub })}` : ''} · ${t({ click: 'click', wood: 'wood', cowbell: 'bell', hat: 'hat' }[c.sound] ?? c.sound)}`;
 
   const setInput = async (input: CoachInput) => {
     setClick({ input });
@@ -93,13 +94,13 @@ export function ClickScreen({ active = true }: { active?: boolean }) {
           locked={program} onCycle={(i) => setClick((cc) => { const l = levelsFor(cc.levels, cc.beats); l[i] = cycleLevel(l[i]); return { levels: l }; })} />
 
         <View style={s.pickers}>
-          <Pressable onPress={() => setSheet('mode')} style={({ pressed }) => [s.picker, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel={`Mode ${MODE_NAME[c.mode]}, ${modeSummary(c)}`}>
-            <Text style={s.pickLabel}>MODE</Text>
-            <Text style={s.pickValue} numberOfLines={1}>{MODE_NAME[c.mode]} ›</Text>
+          <Pressable onPress={() => setSheet('mode')} style={({ pressed }) => [s.picker, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel={`${t('Mode')} ${t(MODE_NAME[c.mode])}, ${modeSummary(c)}`}>
+            <Text style={s.pickLabel}>{t('Mode').toUpperCase()}</Text>
+            <Text style={s.pickValue} numberOfLines={1}>{t(MODE_NAME[c.mode])} ›</Text>
             <Text style={s.pickSub} numberOfLines={1}>{modeSummary(c)}</Text>
           </Pressable>
-          <Pressable onPress={() => setSheet('meter')} style={({ pressed }) => [s.picker, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel={`Meter and sound, ${meterLine}`}>
-            <Text style={s.pickLabel}>METER & SOUND</Text>
+          <Pressable onPress={() => setSheet('meter')} style={({ pressed }) => [s.picker, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel={`${t('Meter & sound')}, ${meterLine}`}>
+            <Text style={s.pickLabel}>{t('Meter & sound').toUpperCase()}</Text>
             <Text style={s.pickValue} numberOfLines={1}>{meterBeats}/{c.unit} ›</Text>
             <Text style={s.pickSub} numberOfLines={1}>{meterLine.split(' · ').slice(1).join(' · ')}</Text>
           </Pressable>
@@ -127,11 +128,11 @@ export function ClickScreen({ active = true }: { active?: boolean }) {
           {modes.map((m) => (
             <Pressable key={m} onPress={() => setClick({ mode: m })} style={[s.modeBtn, c.mode === m && s.modeOn]}
               accessibilityRole="button" accessibilityState={{ selected: c.mode === m }}>
-              <Text style={[s.modeTxt, c.mode === m && { color: C.bg }]}>{MODE_NAME[m]}</Text>
+              <Text style={[s.modeTxt, c.mode === m && { color: C.bg }]}>{t(MODE_NAME[m])}</Text>
             </Pressable>
           ))}
         </View>
-        <Note>{MODE_DESC[c.mode]}</Note>
+        <Note>{t(MODE_DESC[c.mode])}</Note>
         {modes.length < MODE_ORDER.length && <Note>More modes at a higher player level (Settings).</Note>}
         <View><ModeSettings c={c} setClick={setClick} setInput={setInput} k={k} /></View>
       </Sheet>
@@ -196,32 +197,32 @@ export function ClickScreen({ active = true }: { active?: boolean }) {
 function Status({ c, cur, running }: { c: ClickSettings; cur: ClickStep | null; running: boolean }) {
   if (!running || !cur) {
     const idle: Record<Mode, string> = {
-      basic: 'Tap a beat to change its accent',
+      basic: t('Tap a beat to change its accent'),
       coach: '',
-      gap: `${c.gapOn} bar${c.gapOn > 1 ? 's' : ''} click, ${c.gapOff} bar${c.gapOff > 1 ? 's' : ''} silent. Keep the time yourself.`,
-      drop: `Random ${c.dropUnit} go silent after ${c.dropWarm} warm-up bars.`,
-      ramp: `${c.bpm} → ${c.rampTarget} BPM, ${c.rampStep > 0 ? '+' : ''}${c.rampStep} every ${c.rampEvery} bars.`,
-      program: `${c.program.length} sections${c.loop ? ', looping' : ''}. Tap a section in the song map to start there.`,
+      gap: t('{{on}} click, {{off}} silent. Keep the time yourself.', { on: t('{{count}} bars', { count: c.gapOn }), off: t('{{count}} bars', { count: c.gapOff }) }),
+      drop: t(c.dropUnit === 'beats' ? 'Random beats go silent after {{n}} warm-up bars.' : 'Random bars go silent after {{n}} warm-up bars.', { n: c.dropWarm }),
+      ramp: `${t('{{from}} → {{to}}, {{step}} every {{n}} bars', { from: c.bpm, to: `${c.rampTarget} BPM`, step: `${c.rampStep > 0 ? '+' : ''}${c.rampStep}`, n: c.rampEvery })}.`,
+      program: `${t(c.loop ? '{{count}} sections, looping' : '{{count}} sections', { count: c.program.length })}. ${t('Tap a section in the song map to start there.')}`,
     };
     return idle[c.mode] ? <Text style={s.status}>{idle[c.mode]}</Text> : null;
   }
-  const bar = `Bar ${cur.bar + 1}`;
+  const bar = t('Bar {{n}}', { n: cur.bar + 1 });
   let extra: React.ReactNode = null;
   if (c.mode === 'gap') {
     const cyc = c.gapOn + c.gapOff, p = cur.bar % cyc, on = p < c.gapOn;
-    extra = <><Pill label={on ? 'Click' : 'Silent'} strong={!on} /><Text style={s.statusMuted}>{on ? `${c.gapOn - p} until silence` : `${cyc - p} until click returns`}</Text></>;
+    extra = <><Pill label={on ? 'Click' : 'Silent'} strong={!on} /><Text style={s.statusMuted}>{on ? t('{{n}} until silence', { n: c.gapOn - p }) : t('{{n}} until click returns', { n: cyc - p })}</Text></>;
   } else if (c.mode === 'drop') {
     extra = !cur.audible ? <Pill label="Dropped" strong /> : null;
   } else if (c.mode === 'ramp') {
     const left = c.rampEvery - (cur.bar % c.rampEvery);
-    extra = <Text style={s.statusMuted}>{cur.bpm === c.rampTarget ? 'Target reached' : `next step in ${left} bar${left > 1 ? 's' : ''}`}</Text>;
+    extra = <Text style={s.statusMuted}>{cur.bpm === c.rampTarget ? t('Target reached') : t('next step in {{bars}}', { bars: t('{{count}} bars', { count: left }) })}</Text>;
   } else if (c.mode === 'program') {
     const sec = c.program[cur.section];
     return (
       <View style={s.statusRow}>
-        <Pill label={`Section ${sectionLetter(cur.section)}`} />
-        <Text style={s.statusStrong}>Bar {cur.sectionBar + 1} of {sec?.bars}</Text>
-        <Text style={s.statusMuted}>{sec?.beats}/4 at {sec?.bpm}</Text>
+        <Pill label={t('Section {{s}}', { s: sectionLetter(cur.section) })} />
+        <Text style={s.statusStrong}>{t('Bar {{n}} of {{of}}', { n: cur.sectionBar + 1, of: sec?.bars })}</Text>
+        <Text style={s.statusMuted}>{t('{{beats}}/4 at {{bpm}}', { beats: sec?.beats, bpm: sec?.bpm })}</Text>
       </View>
     );
   }
@@ -241,7 +242,7 @@ function ModeSettings({ c, setClick, setInput, k }: {
     case 'drop':
       return <>
         <Row label="Drop"><Seg options={[{ value: 'beats', label: 'Beats' }, { value: 'bars', label: 'Bars' }]} value={c.dropUnit} onChange={(v) => setClick({ dropUnit: v as 'beats' | 'bars' })} /></Row>
-        <Row label="Chance" hint={`per ${c.dropUnit === 'beats' ? 'beat' : 'bar'}`}><Stepper value={c.dropChance} min={5} max={90} step={5} format={(v) => `${v}%`} onChange={(dropChance) => setClick({ dropChance })} /></Row>
+        <Row label="Chance" hint={c.dropUnit === 'beats' ? 'per beat' : 'per bar'}><Stepper value={c.dropChance} min={5} max={90} step={5} format={(v) => `${v}%`} onChange={(dropChance) => setClick({ dropChance })} /></Row>
         {c.dropUnit === 'bars' && <Row label="Length" hint="bars per drop-out"><Stepper value={c.dropLen} min={1} max={8} onChange={(dropLen) => setClick({ dropLen })} /></Row>}
         <Row label="Warm-up" hint="bars before drops start"><Stepper value={c.dropWarm} min={0} max={16} onChange={(dropWarm) => setClick({ dropWarm })} /></Row>
       </>;
@@ -266,7 +267,7 @@ function ModeSettings({ c, setClick, setInput, k }: {
         <Note>±15 ms is tight (studio work), ±25 ms a good everyday goal, ±40 ms for starting out or fast, busy playing.</Note>
         {c.level >= 4 && <Row label="Latency fix" hint="shifts every reading"><Stepper value={c.calib[fixKey]} min={-250} max={250} step={2} format={(v) => `${v > 0 ? '+' : ''}${v} ms`} onChange={(v) => setClick((cc) => ({ calib: { ...cc.calib, [fixKey]: v } }))} /></Row>}
         <View style={s.btnRow}>
-          <Btn label={k.calibrating ? `Calibrating ${k.calibCount}/8` : 'Calibrate'} onPress={() => k.startCalibration(c.input)} />
+          <Btn label={k.calibrating ? t('Calibrating {{n}}/{{of}}', { n: k.calibCount, of: 8 }) : 'Calibrate'} onPress={() => k.startCalibration(c.input)} />
           <Btn label="Reset hits" onPress={k.resetHits} />
         </View>
       </>;
@@ -276,7 +277,7 @@ function ModeSettings({ c, setClick, setInput, k }: {
         {c.program.map((sec, i) => (
           <View key={i} style={s.secCard}>
             <View style={s.secHead}>
-              <Text style={s.secTitle}>Section {sectionLetter(i)}</Text>
+              <Text style={s.secTitle}>{t('Section {{s}}', { s: sectionLetter(i) })}</Text>
               {c.program.length > 1 && <Btn label="Remove" onPress={() => setClick((cc) => ({ program: cc.program.filter((_, j) => j !== i) }))} />}
             </View>
             {(['bars', 'bpm', 'beats'] as const).map((f) => (

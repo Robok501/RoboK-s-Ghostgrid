@@ -14,7 +14,8 @@
         "UIBackgroundModes": [
           "audio"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleAllowMixedLocalizations": true
       },
       "icon": "./assets/icon.png"
     },
@@ -25,6 +26,12 @@
         "backgroundColor": "#0f1214"
       }
     },
-    "icon": "./assets/icon.png"
+    "icon": "./assets/icon.png",
+    "locales": {
+      "en": "./locales/en.json",
+      "nl": "./locales/nl.json",
+      "fr": "./locales/fr.json",
+      "de": "./locales/de.json"
+    }
   }
 }
