@@ -3,11 +3,17 @@
  * the song without drums (you are the drummer), the drums alone (learn the part), slower without changing pitch,
  * and an A–B loop. Stems stay in the app.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
+import {
+  HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, halfTime, offsetToBeat, setBeatsPerBar,
+  setDownbeatAt, shiftDownbeat, snapToBar, type BeatMap,
+} from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
+import { CoachPanel } from '../click/CoachPanel';
+import type { CoachInput } from '../store';
 import { useApp } from '../AppContext';
 import { readVoiceFile, saveWav } from '../sketch/usePlayer';
 import {
@@ -199,20 +205,26 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   song: Song; update: (id: string, p: Partial<Song>) => void; separating: boolean; progress: Progress;
   onSeparate: () => void; onCancel: () => void; onDelete: () => void; canSeparate: boolean;
 }) {
+  const { info, on, mic, setMic, settings, micLevel } = useApp();
   const [dur, setDur] = useState(song.duration ?? 0);
   const [pos, setPos] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState('');
-  const mix: Mix = song.separated ? song.mix ?? 'nodrums' : 'full';
-  const rate = song.rate ?? 1, drumVol = song.drumVol ?? 1;
+  const [analysing, setAnalysing] = useState(false);
+  const [clickReady, setClickReady] = useState(false);
+  const mix: Mix = song.separated ? song.mix ?? 'nodrums' : song.mix === 'silent' ? 'silent' : 'full';
+  const rate = song.rate ?? 1, drumVol = song.drumVol ?? 1, clickVol = song.clickVol ?? 0.8;
+  const map = song.beatMap ?? null;
   const A = song.loopA ?? 0, B = song.loopB ?? dur, loopOn = !!song.loop && B - A > 0.3;
+  const bars = useMemo(() => (map ? barStarts(map) : []), [map]);
 
   // load the files into the player
   useEffect(() => {
     if (separating) return;
     let alive = true;
     setReady(false);
+    setClickReady(false);
     const load = song.separated ? Engine.stemsLoad(stemPath(song, 'drums'), stemPath(song, 'nodrums')) : Engine.stemsLoad(null, originalPath(song));
     load.then((d) => {
       if (!alive) return;
@@ -222,12 +234,46 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     return () => { alive = false; Engine.stemsPause(); setPlaying(false); };
   }, [song.id, song.separated, separating]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // find beats and bars once (in the drum track when there is one); again after "Find again"
+  const analyse = useCallback(async () => {
+    setAnalysing(true);
+    try {
+      const env = await Engine.stemsEnvelope(song.separated ? stemPath(song, 'drums') : originalPath(song));
+      update(song.id, { beatMap: { ...beatMap(env, map?.beatsPerBar ?? 4), source: song.separated ? 'drums' : 'mix' } });
+    } catch (e) {
+      setErr(`Couldn't find the beat: ${(e as Error).message}`);
+    }
+    setAnalysing(false);
+  }, [song, map?.beatsPerBar, update]);
+  useEffect(() => {
+    if (ready && !map && !analysing && !separating) analyse();
+  }, [ready, map, separating]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a separated drum track beats the full mix for finding the beat: redo an old map once
+  useEffect(() => {
+    if (ready && song.separated && map && !map.edited && map.source === 'mix') analyse();
+  }, [ready, song.separated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the click track follows the beat map
+  useEffect(() => {
+    if (!ready || !map || !dur) return;
+    let alive = true;
+    const clicks = clickTimes(map);
+    Engine.stemsWriteClick(stemPath(song, 'click'), dur, clicks.map((c) => c.t), clicks.map((c) => c.accent))
+      .then(() => { if (alive) setClickReady(true); })
+      .catch(() => setClickReady(false));
+    return () => { alive = false; };
+  }, [ready, map, dur]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!ready) return;
+    try { Engine.stemsSetClick(song.click && clickReady ? stemPath(song, 'click') : null); } catch { /* applied on next load */ }
+  }, [ready, song.click, clickReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // mix, speed and loop follow the settings
   useEffect(() => {
     if (!ready) return;
-    const d = mix === 'nodrums' ? 0 : mix === 'drums' ? 1 : drumVol, r = mix === 'drums' ? 0 : 1;
-    Engine.stemsSetVolumes(d, r);
-  }, [ready, mix, drumVol]);
+    const d = mix === 'nodrums' || mix === 'silent' ? 0 : mix === 'drums' ? 1 : drumVol, r = mix === 'drums' || mix === 'silent' ? 0 : 1;
+    Engine.stemsSetVolumes(d, r, song.click ? clickVol : 0);
+  }, [ready, mix, drumVol, clickVol, song.click]);
   useEffect(() => { if (ready) Engine.stemsSetRate(rate); }, [ready, rate]);
   useEffect(() => { if (ready) { try { Engine.stemsSetLoop(A, B, loopOn); } catch { /* applied on next play */ } } }, [ready, A, B, loopOn]);
 
@@ -243,17 +289,87 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
 
   const toggle = () => {
     if (!ready) return;
-    if (playing) { Engine.stemsPause(); setPlaying(false); setPos(Engine.stemsPosition()); }
-    else {
-      try { Engine.stemsPlay(); setPlaying(true); setErr(''); }
-      catch (e) { setErr(`Couldn't play: ${(e as Error).message}`); }
-    }
+    if (playing) { Engine.stemsPause(); setPlaying(false); setPos(Engine.stemsPosition()); return; }
+    try {
+      const ci = song.countIn ?? 0;
+      if (ci > 0 && map) {
+        // start on a bar line, so the count-in lands on the "1"
+        let from = loopOn && (pos < A || pos >= B) ? A : pos;
+        const prev = bars.filter((b) => b <= from + 0.05);
+        if (prev.length) from = prev[prev.length - 1];
+        Engine.stemsSeek(from);
+        setPos(from);
+        Engine.stemsPlayCountIn(ci * map.beatsPerBar, beatLengthAt(map, from + 0.01) / rate);
+      } else {
+        Engine.stemsPlay();
+      }
+      setPlaying(true); setErr('');
+    } catch (e) { setErr(`Couldn't play: ${(e as Error).message}`); }
   };
   const seek = (t: number) => {
     const v = Math.max(0, Math.min(dur, t));
     try { Engine.stemsSeek(v); } catch (e) { setErr(`Couldn't jump there: ${(e as Error).message}`); }
     setPos(v);
   };
+
+  // ---- A–B loop on bar lines
+  const snap = (t: number) => (map ? snapToBar(map, t) : t);
+  const setA = () => {
+    const a = snap(pos);
+    const b = song.loopB !== undefined && song.loopB > a + 0.5 ? song.loopB : map ? barsFrom(map, a, 4, dur) : Math.min(dur, a + 8);
+    update(song.id, { loopA: a, loopB: b, loop: true });
+  };
+  const setB = () => {
+    const b = snap(pos);
+    const a = Math.min(song.loopA ?? 0, b - 0.5);
+    update(song.id, { loopA: Math.max(0, a), loopB: b, loop: true });
+  };
+  const loopBars = (n: number) => {
+    if (!map) return;
+    const a = snap(song.loop ? A : pos);
+    update(song.id, { loopA: a, loopB: barsFrom(map, a, n, dur), loop: true });
+  };
+
+  // ---- timing coach against the song's beat
+  const [, bump] = useState(0);
+  const logRef = useRef(new HitLog(32));
+  const [last, setLast] = useState<number | null>(null);
+  const coachInput: CoachInput = song.coachInput ?? 'pads';
+  const R = useRef({ map, rate, outLat: 0, calib: settings.click.calib, grade: song.grade ?? 1, coach: !!song.coach, playing });
+  R.current = { map, rate, outLat: info?.outputLatency ?? 0, calib: settings.click.calib, grade: song.grade ?? 1, coach: !!song.coach, playing };
+  const scoreHit = useCallback((t: number, input: CoachInput, pad: string) => {
+    const r = R.current;
+    if (!r.coach || !r.map || !r.playing) return;
+    const songT = Engine.stemsSongTimeAt(t - r.outLat);
+    if (songT < 0) return;
+    const off = offsetToBeat(r.map, songT, r.grade);
+    if (off === null) return;
+    const ms = off / r.rate + r.calib[input];
+    logRef.current.add(ms, pad);
+    setLast(ms);
+    bump((x) => x + 1);
+  }, []);
+  useEffect(() => {
+    const offs = [
+      on('pad', (e) => { if (coachInput === 'pads') scoreHit(e.time, 'pads', e.key); }),
+      on('mic', (e) => { if (coachInput === 'mic') scoreHit(e.time, 'mic', 'mic'); }),
+    ];
+    return () => offs.forEach((f) => f());
+  }, [on, scoreHit, coachInput]);
+  const tap = (ms: number) => {
+    const now = Engine.now();
+    let t = Engine.uptimeToEngine(ms / 1000);
+    if (!isFinite(t) || Math.abs(t - now) > 1.5) t = now;
+    scoreHit(t, 'tap', 'tap');
+  };
+  const setCoachInput = async (v: CoachInput) => {
+    update(song.id, { coachInput: v });
+    // switching the mic on restarts the audio, which stops the song: do it before pressing Play
+    if (v === 'mic' && !mic) { if (playing) { Engine.stemsPause(); setPlaying(false); } await setMic(true); }
+    if (v !== 'mic' && mic) await setMic(false);
+  };
+
+  const barNow = map ? barAt(map, pos) : -1;
 
   return (
     <Card title={song.name}>
@@ -274,10 +390,10 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       )}
 
       {!!err && <Text style={s.err}>{err}</Text>}
-      <Timeline pos={pos} dur={dur} a={song.loop ? A : null} b={song.loop ? B : null} onSeek={seek} />
+      <Timeline pos={pos} dur={dur} a={song.loop ? A : null} b={song.loop ? B : null} bars={bars} onSeek={seek} />
       <View style={s.timeRow}>
-        <Text style={s.time}>{fmtTime(pos)}</Text>
-        <Text style={s.time}>{fmtTime(dur)}</Text>
+        <Text style={s.time}>{fmtTime(pos)}{barNow >= 0 ? `  ·  bar ${barNow + 1}` : ''}</Text>
+        <Text style={s.time}>{fmtTime(dur)}{bars.length ? `  ·  ${bars.length} bars` : ''}</Text>
       </View>
 
       <View style={s.transport}>
@@ -286,24 +402,63 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
         <Btn label="+5 s" onPress={() => seek(pos + 5)} />
       </View>
 
-      {song.separated && (
-        <Row label="Listen to" first>
-          <Seg options={[{ value: 'nodrums', label: 'No drums' }, { value: 'full', label: 'Full' }, { value: 'drums', label: 'Drums' }]} value={mix} onChange={(m) => update(song.id, { mix: m as Mix })} />
-        </Row>
+      {song.coach && (
+        <CoachPanel input={coachInput} running={playing} last={last} log={logRef.current} tol={settings.click.tol}
+          calibrating={null} calibCount={0} micLevel={micLevel} onTap={tap} />
       )}
+
+      <Row label="Listen to" first>
+        <Seg small options={song.separated
+          ? [{ value: 'nodrums', label: 'No drums' }, { value: 'full', label: 'Full' }, { value: 'drums', label: 'Drums' }, { value: 'silent', label: 'Click' }]
+          : [{ value: 'full', label: 'Song' }, { value: 'silent', label: 'Click only' }]}
+          value={mix} onChange={(m) => update(song.id, { mix: m as Mix, ...(m === 'silent' ? { click: true } : {}) })} />
+      </Row>
       {song.separated && mix === 'full' && (
         <Row label="Drums volume"><Stepper value={Math.round(drumVol * 100)} min={0} max={100} step={10} format={(v) => `${v}%`} onChange={(v) => update(song.id, { drumVol: v / 100 })} /></Row>
       )}
       <Row label="Speed" hint="slower without changing pitch">
         <Stepper value={Math.round(rate * 100)} min={50} max={125} step={5} format={(v) => `${v}%`} onChange={(v) => update(song.id, { rate: v / 100 })} />
       </Row>
-      <Row label="Loop" hint={song.loop ? `${fmtTime(A)} – ${fmtTime(B)}` : 'set A and B while it plays'}>
+
+      <Row label="Click" hint={map ? 'follows the song, accent on the 1' : analysing ? 'finding the beat…' : 'needs the beat map'}>
         <View style={s.inline}>
-          <Btn label="A" onPress={() => update(song.id, { loopA: pos, loopB: Math.max(pos + 1, song.loopB ?? dur), loop: true })} />
-          <Btn label="B" onPress={() => update(song.id, { loopB: pos, loopA: Math.max(0, Math.min(song.loopA ?? 0, pos - 1)), loop: true })} />
+          {song.click && <Stepper value={Math.round(clickVol * 100)} min={10} max={100} step={10} format={(v) => `${v}%`} onChange={(v) => update(song.id, { clickVol: v / 100 })} />}
+          <Btn label={song.click ? 'On' : 'Off'} active={!!song.click} disabled={!map} onPress={() => update(song.id, { click: !song.click })} />
+        </View>
+      </Row>
+      <Row label="Count-in" hint="before Play, from the bar you're in">
+        <Seg small options={[{ value: 0, label: 'Off' }, { value: 1, label: '1 bar' }, { value: 2, label: '2 bars' }]} value={song.countIn ?? 0}
+          onChange={(v) => update(song.id, { countIn: v as number })} />
+      </Row>
+
+      <Row label="Loop" hint={song.loop ? `${fmtTime(A)} – ${fmtTime(B)}${map ? ` · bars ${barAt(map, A + 0.01) + 1}–${barAt(map, B - 0.01) + 1}` : ''}` : map ? 'A and B snap to bar lines' : 'set A and B while it plays'}>
+        <View style={s.inline}>
+          <Btn label="A" onPress={setA} />
+          <Btn label="B" onPress={setB} />
           <Btn label={song.loop ? 'Off' : 'On'} active={!!song.loop} onPress={() => update(song.id, { loop: !song.loop })} />
         </View>
       </Row>
+      {map && (
+        <View style={s.chipsRow}>
+          <Text style={s.dim}>Loop length:</Text>
+          {[1, 2, 4, 8].map((n) => <Btn key={n} label={`${n} bar${n > 1 ? 's' : ''}`} onPress={() => loopBars(n)} />)}
+        </View>
+      )}
+
+      <Row label="Score my timing" hint="against the song's beat">
+        <Btn label={song.coach ? 'On' : 'Off'} active={!!song.coach} disabled={!map} onPress={() => update(song.id, { coach: !song.coach })} />
+      </Row>
+      {song.coach && (
+        <>
+          <Row label="Input"><Seg small options={[{ value: 'pads', label: 'E-drum' }, { value: 'mic', label: 'Mic' }, { value: 'tap', label: 'Tap' }]} value={coachInput} onChange={(v) => setCoachInput(v as CoachInput)} /></Row>
+          <Row label="Grade against"><Seg small options={[{ value: 1, label: 'Beats' }, { value: 2, label: '8ths' }, { value: 4, label: '16ths' }]} value={song.grade ?? 1} onChange={(v) => update(song.id, { grade: v as 1 | 2 | 4 })} /></Row>
+          {coachInput === 'mic' && <Note>Use headphones or Bluetooth so the mic hears your drums, not the song.</Note>}
+          <View style={s.btnRow}><Btn label="Reset hits" onPress={() => { logRef.current.reset(); setLast(null); bump((x) => x + 1); }} /></View>
+        </>
+      )}
+
+      <BeatMapCard map={map} analysing={analysing} pos={pos} onChange={(m) => update(song.id, { beatMap: m })} onAgain={analyse} />
+
       <View style={s.btnRow}>
         {song.separated && <Btn label="Separate again" disabled={!canSeparate} onPress={onSeparate} />}
         <Btn label="Delete song" onPress={onDelete} />
@@ -312,8 +467,32 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   );
 }
 
-/** Song position bar: tap or drag to move; shows the A–B loop. */
-function Timeline({ pos, dur, a, b, onSeek }: { pos: number; dur: number; a: number | null; b: number | null; onSeek: (t: number) => void }) {
+/** What the app found, and how to fix it: the "1", beats per bar, half or double tempo. */
+function BeatMapCard({ map, analysing, pos, onChange, onAgain }: {
+  map: BeatMap | null; analysing: boolean; pos: number; onChange: (m: BeatMap) => void; onAgain: () => void;
+}) {
+  if (analysing) return <Note>Finding the beat and the bars…</Note>;
+  if (!map) return <View style={s.btnRow}><Btn label="Find the beat" onPress={onAgain} /></View>;
+  return (
+    <View style={s.beatBox}>
+      <Text style={s.beatTitle}>Beat map · about {Math.round(map.bpm)} BPM · {map.beatsPerBar}/4{map.edited ? ' · fixed by hand' : ''}</Text>
+      <Note>Click sounds wrong? Fix it here: put the "1" where the bar starts, or halve or double the tempo.</Note>
+      <View style={s.btnRow}>
+        <Btn label="The 1 is here" onPress={() => onChange(setDownbeatAt(map, pos))} />
+        <Btn label="1 beat later" onPress={() => onChange(shiftDownbeat(map, 1))} />
+        <Btn label="½ tempo" onPress={() => onChange(halfTime(map))} />
+        <Btn label="2× tempo" onPress={() => onChange(doubleTime(map))} />
+      </View>
+      <View style={s.btnRow}>
+        <Seg small options={[3, 4, 5, 6, 7].map((n) => ({ value: n, label: `${n}/4` }))} value={map.beatsPerBar} onChange={(n) => onChange(setBeatsPerBar(map, n as number))} />
+        <Btn label="Find again" onPress={onAgain} />
+      </View>
+    </View>
+  );
+}
+
+/** Song position bar: tap or drag to move; shows bar lines and the A–B loop. */
+function Timeline({ pos, dur, a, b, bars, onSeek }: { pos: number; dur: number; a: number | null; b: number | null; bars: number[]; onSeek: (t: number) => void }) {
   const w = useRef(1);
   const d = useRef(dur);
   d.current = dur;
@@ -327,11 +506,15 @@ function Timeline({ pos, dur, a, b, onSeek }: { pos: number; dur: number; a: num
     onPanResponderTerminationRequest: () => false,
   })).current;
   const pct = (t: number) => `${dur > 0 ? Math.max(0, Math.min(100, (t / dur) * 100)) : 0}%` as const;
+  const every = bars.length > 160 ? 8 : bars.length > 80 ? 4 : bars.length > 40 ? 2 : 1;
   return (
     <View {...pan.panHandlers} onLayout={(e) => { w.current = e.nativeEvent.layout.width || 1; }} style={s.timeline}
       accessible accessibilityRole="adjustable" accessibilityLabel={`Position ${fmtTime(pos)} of ${fmtTime(dur)}`}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={(e) => onSeek(pos + (e.nativeEvent.actionName === 'increment' ? 5 : -5))}>
+      <View style={s.ticks} pointerEvents="none">
+        {bars.map((t, i) => (i % every === 0 ? <View key={i} style={[s.tick, (i / every) % 4 === 0 && s.tickBig, { left: pct(t) }]} /> : null))}
+      </View>
       <View style={s.track} pointerEvents="none">
         {a !== null && b !== null && <View style={[s.loop, { left: pct(a), width: `${dur > 0 ? ((b - a) / dur) * 100 : 0}%` }]} />}
         <View style={[s.fill, { width: pct(pos) }]} />
@@ -356,7 +539,13 @@ const s = StyleSheet.create({
   songName: { color: C.fg, fontSize: 15, fontWeight: '600' },
   badge: { color: C.muted, fontSize: 18, width: 24, textAlign: 'center' },
   phase: { color: C.fg, fontSize: 15, fontWeight: '600', paddingTop: 4 },
-  timeline: { height: 44, justifyContent: 'center' },
+  timeline: { height: 52, justifyContent: 'center' },
+  ticks: { position: 'absolute', left: 0, right: 0, top: 4, height: 10 },
+  tick: { position: 'absolute', width: 1, height: 6, backgroundColor: C.muted, opacity: 0.6 },
+  tickBig: { height: 10, opacity: 1 },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center', paddingVertical: 4 },
+  beatBox: { borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10, marginTop: 8, gap: 2 },
+  beatTitle: { color: C.fg, fontSize: 14, fontWeight: '700' },
   track: { height: 8, borderRadius: 4, backgroundColor: C.raised2 },
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 4, backgroundColor: C.accent },
   loop: { position: 'absolute', top: -6, bottom: -6, borderRadius: 4, backgroundColor: C.accentSoft, borderWidth: 1, borderColor: C.accent },

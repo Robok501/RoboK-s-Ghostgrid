@@ -8,6 +8,9 @@ final class GGStemPlayer {
   private let engine = AVAudioEngine()
   private let drums = AVAudioPlayerNode()
   private let rest = AVAudioPlayerNode()
+  /// click track rendered on the song's beats: plays through the same time-stretch, so it stays with the music
+  private let click = AVAudioPlayerNode()
+  private var clickFile: AVAudioFile?
   private let pitch = AVAudioUnitTimePitch()
   /// both stems meet here first: the time-pitch unit has only one input, so connecting two players to it
   /// silently dropped the first one (and starting a disconnected player crashed the app)
@@ -29,6 +32,7 @@ final class GGStemPlayer {
   init() {
     engine.attach(drums)
     engine.attach(rest)
+    engine.attach(click)
     engine.attach(pitch)
     engine.attach(submix)
   }
@@ -41,6 +45,8 @@ final class GGStemPlayer {
     let fmt = rf.processingFormat
     engine.disconnectNodeOutput(drums)
     engine.disconnectNodeOutput(rest)
+    engine.disconnectNodeOutput(click)
+    clickFile = nil
     engine.disconnectNodeOutput(pitch)
     engine.disconnectNodeOutput(submix)
     engine.connect(rest, to: submix, fromBus: 0, toBus: 0, format: fmt)
@@ -57,6 +63,22 @@ final class GGStemPlayer {
     looping = false
     engine.prepare()
     return Double(length) / rate
+  }
+
+  /// Attach (or remove, with nil) the click track. Keeps playing from the same place.
+  func setClick(path: String?) throws {
+    let was = playing
+    let p = position()
+    stop()
+    engine.disconnectNodeOutput(click)
+    clickFile = nil
+    if let path = path {
+      let cf = try AVAudioFile(forReading: URL(fileURLWithPath: path))
+      engine.connect(click, to: submix, fromBus: 0, toBus: 2, format: cf.processingFormat)
+      clickFile = cf
+    }
+    startFrame = AVAudioFramePosition(p * rate)
+    if was { try play() }
   }
 
   func unload() {
@@ -81,15 +103,17 @@ final class GGStemPlayer {
     return Double(min(max(0, f), length)) / rate
   }
 
-  func play() throws {
+  func play(atHost host: UInt64? = nil) throws {
     guard restFile != nil else { return }
     if !engine.isRunning { try engine.start() }
     // never start a player that isn't wired up: AVFoundation raises an exception that closes the app
     let wired = { (n: AVAudioNode) in !self.engine.outputConnectionPoints(for: n, outputBus: 0).isEmpty }
     guard wired(rest) else { throw NSError(domain: "Ghostgrid", code: 40, userInfo: [NSLocalizedDescriptionKey: "Player not ready"]) }
     schedule(from: startFrame)
-    if drumsFile != nil && wired(drums) { drums.play() }
-    rest.play()
+    let when = host.map { AVAudioTime(hostTime: $0) }
+    if drumsFile != nil && wired(drums) { drums.play(at: when) }
+    if clickFile != nil && wired(click) { click.play(at: when) }
+    rest.play(at: when)
     playing = true
   }
 
@@ -105,7 +129,20 @@ final class GGStemPlayer {
     generation += 1
     drums.stop()
     rest.stop()
+    click.stop()
     playing = false
+  }
+
+  /// Song position (seconds) that is playing at host time `host`; nil when not playing.
+  func songTime(atHost host: UInt64, hostToSeconds: Double) -> Double? {
+    guard playing, let t = rest.lastRenderTime, t.isHostTimeValid, let pt = rest.playerTime(forNodeTime: t) else { return nil }
+    let dt = (Double(host) - Double(t.hostTime)) * hostToSeconds
+    var f = Double(startFrame + pt.sampleTime) + dt * rate * Double(pitch.rate)
+    if looping && loopB > loopA && f >= Double(loopB) {
+      let span = Double(loopB - loopA)
+      f = Double(loopA) + (f - Double(loopB)).truncatingRemainder(dividingBy: span)
+    }
+    return f / rate
   }
 
   func seek(_ seconds: Double) throws {
@@ -115,10 +152,13 @@ final class GGStemPlayer {
     if was { try play() }
   }
 
-  func setVolumes(drums d: Double, rest r: Double) {
+  func setVolumes(drums d: Double, rest r: Double, click c: Double) {
     drums.volume = Float(d)
     rest.volume = Float(r)
+    click.volume = Float(c)
   }
+
+  var playbackRate: Double { Double(pitch.rate) }
 
   /// 0.5 … 1.25; pitch stays the same.
   func setRate(_ r: Double) {
@@ -161,6 +201,9 @@ final class GGStemPlayer {
     queued += 1
     if let df = drumsFile, !engine.outputConnectionPoints(for: drums, outputBus: 0).isEmpty {
       drums.scheduleSegment(df, startingFrame: a, frameCount: count, at: nil)
+    }
+    if let cf = clickFile, !engine.outputConnectionPoints(for: click, outputBus: 0).isEmpty, a < cf.length {
+      click.scheduleSegment(cf, startingFrame: a, frameCount: AVAudioFrameCount(min(b, cf.length) - a), at: nil)
     }
     rest.scheduleSegment(rf, startingFrame: a, frameCount: count, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
       guard let self = self else { return }

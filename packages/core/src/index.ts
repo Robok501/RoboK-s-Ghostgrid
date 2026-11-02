@@ -13,3 +13,4 @@ export * from './export/texttab';
 export * from './tempoear';
 export * from './notation';
 export * from './midiimport';
+export * from './beatmap';

@@ -184,6 +184,18 @@ final class GGEngine {
     os_unfair_lock_unlock(lock)
   }
 
+  /// Convert engine seconds back to host time (mach_absolute_time units).
+  func engineToHost(_ t: Double) -> UInt64 {
+    os_unfair_lock_lock(lock)
+    let f = mapFrame
+    let h = mapHost
+    os_unfair_lock_unlock(lock)
+    let delta = t - Double(f) / sampleRate
+    return UInt64(max(0, Double(h) + delta / hostToSeconds))
+  }
+
+  var hostSeconds: Double { hostToSeconds }
+
   /// Convert a host time (mach_absolute_time units) to engine seconds.
   func hostToEngine(_ host: UInt64) -> Double {
     os_unfair_lock_lock(lock)

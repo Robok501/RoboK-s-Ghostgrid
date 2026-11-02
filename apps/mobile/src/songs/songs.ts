@@ -3,6 +3,8 @@
  * Stems never leave the phone (no export): they are for practising with music you have.
  */
 import { Directory, File, Paths } from 'expo-file-system';
+import type { BeatMap } from '@ghostgrid/core';
+import type { CoachInput } from '../store';
 
 export const MODEL_NAME = 'htdemucs_ft_drums.onnx';
 export const MODEL_URL = 'https://huggingface.co/StemSplitio/htdemucs-ft-drums-onnx/resolve/main/htdemucs_ft_drums.onnx';
@@ -25,15 +27,26 @@ export interface Song {
   loop?: boolean;
   mix?: Mix;
   drumVol?: number;
+  /** beats and bars, found in the drum track (or the whole song before separation) */
+  beatMap?: BeatMap;
+  click?: boolean;
+  clickVol?: number;
+  /** bars of count-in before playing (0 = none) */
+  countIn?: number;
+  /** score my timing against the song's beat */
+  coach?: boolean;
+  coachInput?: CoachInput;
+  /** 1 = beats, 2 = 8ths, 4 = 16ths */
+  grade?: 1 | 2 | 4;
 }
-export type Mix = 'full' | 'nodrums' | 'drums';
+export type Mix = 'full' | 'nodrums' | 'drums' | 'silent';
 
 const indexFile = () => new File(Paths.document, 'songs.json');
 export const songDir = (id: string) => new Directory(Paths.document, 'songs', id);
 /** Native code wants plain file paths, not file:// URLs. */
 export const toPath = (uri: string) => decodeURIComponent(uri.replace(/^file:\/\//, ''));
 export const originalPath = (s: Song) => toPath(new File(songDir(s.id), s.original).uri);
-export const stemPath = (s: Song, which: 'drums' | 'nodrums') => toPath(new File(songDir(s.id), `${which}.caf`).uri);
+export const stemPath = (s: Song, which: 'drums' | 'nodrums' | 'click') => toPath(new File(songDir(s.id), `${which}.caf`).uri);
 
 export function loadSongs(): Song[] {
   try {

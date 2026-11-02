@@ -137,7 +137,38 @@ public class GhostgridEngineModule: Module {
     Function("stemsSeek") { (t: Double) in try self.stemPlayer.seek(t) }
     Function("stemsPosition") { () -> Double in self.stemPlayer.position() }
     Function("stemsIsPlaying") { () -> Bool in self.stemPlayer.isPlaying() }
-    Function("stemsSetVolumes") { (drums: Double, rest: Double) in self.stemPlayer.setVolumes(drums: drums, rest: rest) }
+    Function("stemsSetVolumes") { (drums: Double, rest: Double, click: Double) in self.stemPlayer.setVolumes(drums: drums, rest: rest, click: click) }
+
+    /// Loudness envelopes of a drum track (100 frames/s) for the beat map.
+    AsyncFunction("stemsEnvelope") { (path: String) -> [String: Any] in
+      return try GGStems.envelope(URL(fileURLWithPath: path))
+    }
+
+    /// Render a click track for the song (one click per beat time; accents on the "1").
+    AsyncFunction("stemsWriteClick") { (path: String, seconds: Double, times: [Double], accents: [Bool]) in
+      try GGStems.writeClick(URL(fileURLWithPath: path), seconds: seconds, times: times, accents: accents)
+    }
+
+    Function("stemsSetClick") { (path: String?) in try self.stemPlayer.setClick(path: path) }
+
+    /// Count in `beats` clicks on the metronome engine, then start the song exactly on the next beat.
+    Function("stemsPlayCountIn") { (beats: Int, beatSeconds: Double) in
+      let lead = Double(max(0, beats)) * beatSeconds + 0.15
+      let startHost = mach_absolute_time() + UInt64(lead / self.engine.hostSeconds)
+      let startEngine = self.engine.hostToEngine(startHost)
+      for k in 1...max(1, beats) where beats > 0 {
+        // the first count-in click (furthest from the start) is the accented "1"
+        self.engine.scheduleDrum(time: startEngine - Double(k) * beatSeconds, sound: k == beats ? 7 : 6, gain: 0.9)
+      }
+      try self.stemPlayer.play(atHost: startHost)
+    }
+
+    /// Song time (seconds) heard at engine time `t`, or -1 when the song isn't playing. For scoring hits against the song.
+    Function("stemsSongTimeAt") { (t: Double) -> Double in
+      return self.stemPlayer.songTime(atHost: self.engine.engineToHost(t), hostToSeconds: self.engine.hostSeconds) ?? -1
+    }
+
+    Function("stemsRate") { () -> Double in self.stemPlayer.playbackRate }
     Function("stemsSetRate") { (r: Double) in self.stemPlayer.setRate(r) }
     Function("stemsSetLoop") { (a: Double, b: Double, on: Bool) in try self.stemPlayer.setLoop(a: a, b: b, on: on) }
 

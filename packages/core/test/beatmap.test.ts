@@ -1,0 +1,98 @@
+import { describe, expect, it } from 'vitest';
+import {
+  barAt, barStarts, barsFrom, beatMap, clickTimes, doubleTime, halfTime, offsetToBeat, setDownbeatAt, shiftDownbeat, snapToBar,
+  type Envelope,
+} from '../src/beatmap';
+
+const RATE = 100;
+/** A drum track as envelopes: kick on 1 and 3, snare on 2 and 4, hi-hat 8ths. `drift` = BPM change per bar. */
+function drums(bpm: number, bars: number, opts: { drift?: number; start?: number; jitter?: number; beatsPerBar?: number } = {}) {
+  const bpb = opts.beatsPerBar ?? 4;
+  const events: { t: number; k: 'bd' | 'sn' | 'hh' }[] = [];
+  const beats: number[] = [];
+  let t = opts.start ?? 1.0, tempo = bpm, seed = 9;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 - 0.5; };
+  for (let bar = 0; bar < bars; bar++) {
+    for (let q = 0; q < bpb; q++) {
+      const len = 60 / tempo, j = (opts.jitter ?? 0) * rnd();
+      beats.push(t);
+      events.push({ t: t + j, k: q === 0 || (bpb === 4 && q === 2) ? 'bd' : 'sn' });
+      events.push({ t: t + j, k: 'hh' }, { t: t + len / 2 + j, k: 'hh' });
+      t += len;
+    }
+    tempo += opts.drift ?? 0;
+  }
+  const n = Math.ceil((t + 2) * RATE), full = new Float32Array(n), low = new Float32Array(n);
+  for (const e of events) {
+    const f0 = Math.round(e.t * RATE);
+    const amp = e.k === 'bd' ? 0.8 : e.k === 'sn' ? 0.6 : 0.15, dec = e.k === 'hh' ? 4 : 12;
+    for (let d = 0; d < 40 && f0 + d < n; d++) {
+      const v = amp * Math.exp(-d / dec);
+      full[f0 + d] += v;
+      if (e.k === 'bd') low[f0 + d] += v * 0.9;
+      if (e.k === 'sn') low[f0 + d] += v * 0.08;
+    }
+  }
+  for (let i = 0; i < n; i++) { full[i] += 0.002; low[i] += 0.001; }
+  return { env: { rate: RATE, full, low } as Envelope, beats };
+}
+
+const near = (found: number[], truth: number[], tol = 0.03) => truth.filter((t) => found.some((f) => Math.abs(f - t) <= tol)).length / truth.length;
+
+describe('beat map', () => {
+  it('finds the tempo and every beat of a steady groove', () => {
+    const { env, beats } = drums(100, 16);
+    const m = beatMap(env);
+    expect(m.bpm).toBeGreaterThan(98); expect(m.bpm).toBeLessThan(102);
+    expect(near(m.beats, beats)).toBeGreaterThan(0.95);
+  });
+  it('finds the "1" from the kick', () => {
+    const { env, beats } = drums(120, 12, { start: 1.0 });
+    const m = beatMap(env);
+    const first = barStarts(m)[0];
+    expect(Math.abs(((first - beats[0]) / (60 / 120)) % 4)).toBeLessThan(0.1);
+  });
+  it('follows a band that speeds up', () => {
+    const { env, beats } = drums(96, 20, { drift: 1 });
+    expect(near(beatMap(env).beats, beats)).toBeGreaterThan(0.9);
+  });
+  it('copes with a loose human feel', () => {
+    const { env, beats } = drums(110, 16, { jitter: 0.02 });
+    expect(near(beatMap(env).beats, beats, 0.04)).toBeGreaterThan(0.9);
+  });
+  it('handles fast and slow songs', () => {
+    for (const bpm of [70, 150, 175]) {
+      const { env } = drums(bpm, 16);
+      const m = beatMap(env);
+      const ok = [bpm, bpm / 2, bpm * 2].some((b) => Math.abs(m.bpm - b) / b < 0.03);
+      expect(ok, `${bpm} → ${m.bpm}`).toBe(true);
+    }
+  });
+});
+
+describe('using the map', () => {
+  const m = { beats: [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5], beatsPerBar: 4, downbeat: 0, bpm: 120 };
+  it('bars, snapping and loops by bar count', () => {
+    expect(barStarts(m)).toEqual([1, 3, 5]);
+    expect(barAt(m, 3.2)).toBe(1);
+    expect(barAt(m, 0.5)).toBe(-1);
+    expect(snapToBar(m, 2.2)).toBe(3);
+    expect(barsFrom(m, 1, 1, 10)).toBe(3);
+    expect(barsFrom(m, 3, 2, 10)).toBeCloseTo(5.5);
+  });
+  it('clicks with an accent on the 1', () => {
+    expect(clickTimes(m).filter((c) => c.accent).map((c) => c.t)).toEqual([1, 3, 5]);
+  });
+  it('scores hits against the beats and their subdivisions', () => {
+    expect(offsetToBeat(m, 2.02)).toBeCloseTo(20);
+    expect(offsetToBeat(m, 1.49)).toBeCloseTo(-10);
+    expect(offsetToBeat(m, 1.26, 2)).toBeCloseTo(10);
+    expect(offsetToBeat(m, 0.0)).toBeNull();
+  });
+  it('can be corrected by hand', () => {
+    expect(barStarts(shiftDownbeat(m))).toEqual([1.5, 3.5]);
+    expect(barStarts(setDownbeatAt(m, 2.05))).toEqual([2, 4]);
+    expect(halfTime(m).beats).toEqual([1, 2, 3, 4, 5]);
+    expect(doubleTime(m).beats.length).toBe(17);
+  });
+});

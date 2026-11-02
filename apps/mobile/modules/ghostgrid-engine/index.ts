@@ -58,7 +58,14 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   stemsSeek(t: number): void;
   stemsPosition(): number;
   stemsIsPlaying(): boolean;
-  stemsSetVolumes(drums: number, rest: number): void;
+  stemsSetVolumes(drums: number, rest: number, click: number): void;
+  stemsEnvelope(path: string): Promise<{ rate: number; full: number[]; low: number[] }>;
+  stemsWriteClick(path: string, seconds: number, times: number[], accents: boolean[]): Promise<void>;
+  stemsSetClick(path: string | null): void;
+  stemsPlayCountIn(beats: number, beatSeconds: number): void;
+  /** song time heard at engine time t (seconds), or -1 when not playing */
+  stemsSongTimeAt(t: number): number;
+  stemsRate(): number;
   stemsSetRate(rate: number): void;
   stemsSetLoop(a: number, b: number, on: boolean): void;
   /** Keep the raw mic signal (voice to notes). Returns false when the mic is off. */

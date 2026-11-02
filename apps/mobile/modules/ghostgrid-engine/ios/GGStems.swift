@@ -149,6 +149,75 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
     }
   }
 
+  // MARK: - Analysis helpers for the beat map and click
+
+  /// Loudness envelopes of a (drum) track at 100 frames per second: the whole signal and its low end (< ~150 Hz, the kick).
+  static func envelope(_ url: URL) throws -> [String: Any] {
+    let file = try AVAudioFile(forReading: url)
+    let fmt = file.processingFormat
+    let sr = fmt.sampleRate, hop = Int((sr / 100).rounded()), chans = Int(fmt.channelCount)
+    guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(hop * 200)) else { return [:] }
+    let a = Float(1 - exp(-2 * Double.pi * 150 / sr))
+    var lp: Float = 0, accF: Float = 0, accL: Float = 0, k = 0
+    var full: [Double] = [], low: [Double] = []
+    while file.framePosition < file.length {
+      try file.read(into: buf, frameCount: buf.frameCapacity)
+      let n = Int(buf.frameLength)
+      if n == 0 { break }
+      guard let ch = buf.floatChannelData else { break }
+      for i in 0..<n {
+        var x: Float = 0
+        for c in 0..<chans { x += ch[c][i] }
+        x /= Float(chans)
+        lp += a * (x - lp)
+        accF += x * x; accL += lp * lp; k += 1
+        if k == hop {
+          full.append(Double(sqrt(accF / Float(hop)))); low.append(Double(sqrt(accL / Float(hop))))
+          accF = 0; accL = 0; k = 0
+        }
+      }
+    }
+    return ["rate": 100.0, "full": full, "low": low]
+  }
+
+  /// Write a click track (44.1 kHz stereo) as long as the song, with a click at each time; accents are higher and louder.
+  static func writeClick(_ url: URL, seconds: Double, times: [Double], accents: [Bool]) throws {
+    guard let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 2, interleaved: false) else { return }
+    let clickLen = Int(sampleRate * 0.045)
+    func render(_ f: Double, _ gain: Double) -> [Float] {
+      (0..<clickLen).map { i in
+        let t = Double(i) / sampleRate
+        return Float(sin(2 * .pi * f * t) * min(1, t / 0.0015) * exp(-t / 0.009) * gain)
+      }
+    }
+    let normal = render(1320, 0.6), accent = render(1760, 0.95)
+    try? FileManager.default.removeItem(at: url)
+    let file = try AVAudioFile(forWriting: url, settings: fmt.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+    let total = Int(seconds * sampleRate), chunk = 65_536
+    let starts = times.map { Int(($0 * sampleRate).rounded()) }
+    var next = 0
+    var pos = 0
+    while pos < total {
+      let n = min(chunk, total - pos)
+      guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(n)), let ch = buf.floatChannelData else { break }
+      buf.frameLength = AVAudioFrameCount(n)
+      for c in 0..<2 { for i in 0..<n { ch[c][i] = 0 } }
+      // clicks that start before this chunk can still ring into it
+      while next < starts.count && starts[next] + clickLen < pos { next += 1 }
+      var j = next
+      while j < starts.count && starts[j] < pos + n {
+        let src = accents.count > j && accents[j] ? accent : normal
+        for i in 0..<clickLen {
+          let p = starts[j] + i - pos
+          if p >= 0 && p < n { ch[0][p] += src[i]; ch[1][p] += src[i] }
+        }
+        j += 1
+      }
+      try file.write(from: buf)
+      pos += n
+    }
+  }
+
   // MARK: - Separation
 
   func cancel() { cancelled = true }
