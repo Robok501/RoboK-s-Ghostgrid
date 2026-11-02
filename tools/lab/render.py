@@ -29,6 +29,8 @@ for r in rows:
         inst.is_drum = True
         inst.notes = [x for x in inst.notes if x.start < secs]
         for x in inst.notes:
+            # Roland notes General MIDI has no sound for: hi-hat edge -> closed/open hi-hat, tom rim -> tom
+            x.pitch = {22: 42, 26: 46, 58: 43}.get(x.pitch, x.pitch)
             notes.append({'t': round(x.start, 4), 'pitch': x.pitch, 'vel': x.velocity, 'cls': CLASS.get(x.pitch, 'other')})
     mid = os.path.join(out, name + '.mid'); pm.write(mid)
     wav = os.path.join(out, name + '.wav')
