@@ -6,8 +6,10 @@ import { tempoMarking } from '@ghostgrid/core';
 import { Btn, useHoldRepeat } from '../ui';
 import { C, F } from '../theme';
 
-export function TempoBlock({ bpm, shown, meter, disabled, onChange, onTap }: {
+export function TempoBlock({ bpm, shown, meter, disabled, onChange, onTap, compact }: {
   bpm: number; shown: number; meter: string; disabled: boolean; onChange: (v: number) => void; onTap: (ms: number) => void;
+  /** smaller, without tap tempo and ±5: makes room for the coach while playing */
+  compact?: boolean;
 }) {
   const live = useRef(bpm);
   live.current = bpm;
@@ -28,22 +30,22 @@ export function TempoBlock({ bpm, shown, meter, disabled, onChange, onTap }: {
     <View style={[s.wrap, disabled && { opacity: 0.45 }]} pointerEvents={disabled ? 'none' : 'auto'}>
       <View style={s.row}>
         <Pressable {...dn} style={s.round} accessibilityRole="button" accessibilityLabel="Slower"><Text style={s.roundTxt}>−</Text></Pressable>
-        <View {...pan.panHandlers} style={s.numberBox} accessible accessibilityRole="adjustable" accessibilityLabel={`Tempo ${shown} BPM, swipe left or right`}
+        <View {...pan.panHandlers} style={[s.numberBox, compact && { minHeight: 76, paddingTop: 0 }]} accessible accessibilityRole="adjustable" accessibilityLabel={`Tempo ${shown} BPM, swipe left or right`}
           accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
           onAccessibilityAction={(e) => set.current(live.current + (e.nativeEvent.actionName === 'increment' ? 1 : -1))}>
-          <Text style={s.number} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{shown}</Text>
+          <Text style={[s.number, compact && { fontSize: 60, lineHeight: 76, paddingTop: 2 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{shown}</Text>
         </View>
         <Pressable {...up} style={s.round} accessibilityRole="button" accessibilityLabel="Faster"><Text style={s.roundTxt}>+</Text></Pressable>
       </View>
       <Text style={s.label}>BPM · <Text style={{ color: C.accent }}>{tempoMarking(shown).toUpperCase()}</Text> · {meter}</Text>
-      <View style={s.quick}>
+      {!compact && <View style={s.quick}>
         <Pressable onPressIn={(e) => onTap(e.nativeEvent.timestamp)} accessibilityRole="button" accessibilityLabel="Tap tempo"
           style={({ pressed }) => [s.tap, pressed && { backgroundColor: C.accentSoft }]}>
           <Text style={s.tapTxt}>Tap tempo</Text>
         </Pressable>
         <Btn label="−5" onPress={() => set.current(live.current - 5)} />
         <Btn label="+5" onPress={() => set.current(live.current + 5)} />
-      </View>
+      </View>}
     </View>
   );
 }

@@ -25,9 +25,9 @@ const median = (xs: number[]) => pct(xs, 0.5);
 interface Onset { f: number; peak: number }
 
 /** Attacks in one band: a clear rise (≥ 5 dB above the last 30 ms) to a level that counts for this song. */
-function bandOnsets(b: ArrayLike<number>, rate: number): Onset[] {
+function bandOnsets(b: ArrayLike<number>, rate: number, long = false): Onset[] {
   const ref = pct(b, 0.99) || 1e-6, floor = ref * 0.012, min = ref * 0.06;
-  const gap = Math.round(rate * 0.05), out: Onset[] = [];
+  const gap = Math.round(rate * 0.05), mask = Math.round(rate * 0.12), mask2 = Math.round(rate * (long ? 0.22 : 0.12)), out: Onset[] = [];
   const db = (i: number) => {
     let lo = Infinity;
     for (let k = 1; k <= 3; k++) if (i - k >= 0) lo = Math.min(lo, b[i - k]);
@@ -40,7 +40,11 @@ function bandOnsets(b: ArrayLike<number>, rate: number): Onset[] {
     for (let k = 0; k < 4 && i + k < b.length; k++) peak = Math.max(peak, b[i + k]);
     if (peak < min) continue;
     const last = out[out.length - 1];
-    if (last && i - last.f < gap) { if (peak > last.peak * 1.3 && i - last.f > 2) out[out.length - 1] = { f: i, peak }; continue; }
+    if (last && i - last.f < gap) { if (peak > last.peak * ref * 1.3 && i - last.f > 2) out[out.length - 1] = { f: i, peak: peak / ref }; continue; }
+    // the same drum ringing on (a bump in its decay, a room reflection) isn't a new hit; a real second hit within
+    // 120 ms is about as loud as the first; in the low band (a kick's slow decay can bump) within 220 ms at least about half as loud
+    if (last && i - last.f < mask && peak < last.peak * ref * 0.7) continue;
+    if (last && i - last.f < mask2 && peak < last.peak * ref * 0.45) continue;
     out.push({ f: i, peak: peak / ref });
   }
   return out;
@@ -70,25 +74,42 @@ export function drumHits(env: Envelope): DrumHit[] {
     };
   };
   const L = lev(low), M = lev(mid), H = lev(high);
+  // rise in dB at an attack (over the quietest of the 3 frames before), for telling a kick from a bass note
+  const riseDb = (b: ArrayLike<number>) => {
+    const fl = (pct(b, 0.99) || 1e-6) * 0.01;
+    return (f: number) => {
+      let m = 0, before = Infinity;
+      for (let k = 0; k < 4 && f + k < b.length; k++) m = Math.max(m, b[f + k]);
+      for (let k = 1; k <= 3; k++) if (f - k >= 0) before = Math.min(before, b[f - k]);
+      return 20 * Math.log10((m + fl) / ((isFinite(before) ? before : m) + fl));
+    };
+  };
+  const RM = riseDb(mid), RH = riseDb(high);
   // events: attacks in the low or mid band, merged when within 30 ms
   const near = Math.round(rate * 0.03);
-  const evs: { f: number; l: number; m: number; h: number }[] = [];
-  for (const o of [...bandOnsets(low, rate), ...bandOnsets(mid, rate)].sort((a, b) => a.f - b.f)) {
+  const evs: { f: number; l: number; m: number; h: number; lowOn: boolean }[] = [];
+  const lows = bandOnsets(low, rate, true);
+  for (const o of [...lows.map((x) => ({ ...x, lo: true })), ...bandOnsets(mid, rate).map((x) => ({ ...x, lo: false }))].sort((a, b) => a.f - b.f)) {
     const last = evs[evs.length - 1];
-    if (last && o.f - last.f <= near) continue;
-    evs.push({ f: o.f, l: L(o.f), m: M(o.f), h: H(o.f) });
+    if (last && o.f - last.f <= near) { last.lowOn ||= o.lo; continue; }
+    evs.push({ f: o.f, l: L(o.f), m: M(o.f), h: H(o.f), lowOn: o.lo });
   }
   const lr = (e: { l: number; m: number }) => Math.log((e.m + 1e-3) / (e.l + 1e-3));
   // this song's reference kick and snare: the loudest low-band events, and the loudest events clearly brighter
   const byLow = evs.slice().sort((a, b) => b.l - a.l).slice(0, Math.max(3, evs.length >> 2));
   const refK = median(byLow.map(lr));
+  // this song's normal kick level; a kick much softer than that is more likely a bass note or a tail
+  const kickLevel = median(byLow.filter((e) => e.lowOn).map((e) => e.l)) || 0.5;
   const snareish = evs.filter((e) => lr(e) > refK + 0.7).sort((a, b) => b.m - a.m);
   const refS = snareish.length >= 3 ? median(snareish.slice(0, Math.max(3, snareish.length >> 1)).map(lr)) : refK + 1.5;
   const mid0 = (refK + refS) / 2;
   const hits: DrumHit[] = [];
   for (const e of evs) {
     const r = lr(e), t = e.f / rate;
-    const kick = r < mid0 ? e.l > 0.12 : e.l > 0.25 && Math.log((e.l + 1e-3) / (e.m + 1e-3)) > -refS + 1.2;
+    // a kick has a beater click: something new in the mids or highs too. A bass note that leaked into the drum
+    // track only rises in the lows.
+    const click = RM(e.f) > 3 || RH(e.f) > 3;
+    const kick = e.lowOn && click && (r < mid0 ? e.l > Math.max(0.12, kickLevel * 0.3) : e.l > Math.max(0.25, kickLevel * 0.5) && Math.log((e.l + 1e-3) / (e.m + 1e-3)) > -refS + 1.2);
     const snare = r >= mid0 ? e.m > 0.08 : e.m > 0.3 && r > refK + 1.2;
     if (kick) hits.push({ t, id: 'bd', v: 0, level: e.l });
     if (snare) hits.push({ t, id: 'sn', v: 0, level: e.m });

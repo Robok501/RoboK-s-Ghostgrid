@@ -22,7 +22,7 @@ import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 import { GridPager } from '../sketch/GridPager';
 import { Score } from '../sketch/Score';
-import { freshIdea, loadIdeas, saveIdeas, type IdeaStore } from '../sketch/ideas';
+import { freshIdea, loadIdeas, saveIdeas, takeNote, type IdeaStore } from '../sketch/ideas';
 import { applyTake, readVoiceFile, saveWav, useSketchPlayer, type VoiceTake } from '../sketch/usePlayer';
 import { C, F } from '../theme';
 import { Btn, Card, Chip, NavRow, Note, Row, Seg, Stepper, Toggle, TopBar } from '../ui';
@@ -72,7 +72,8 @@ export function SketchScreen() {
       return out;
     });
   }, []);
-  const say = (t: string) => { setNotice(t); setTimeout(() => setNotice((n) => (n === t ? '' : n)), 4500); };
+  const say = (t: string, ms = 4500) => { setNotice(t); setTimeout(() => setNotice((n) => (n === t ? '' : n)), ms); };
+  useEffect(() => { const n = takeNote(); if (n) say(n, 9000); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const releaseMic = () => { if (micWasOff.current) { micWasOff.current = false; setMic(false); } };
   const player = useSketchPlayer(idea, (next, count, source, tk) => {

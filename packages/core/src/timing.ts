@@ -48,8 +48,12 @@ export function calibrationFromHits(rawMs: number[], limit = 250): number {
 export class HitLog {
   all: number[] = [];
   byPad: Record<string, number[]> = {};
+  /** recent hits with the moment they were played (seconds, any clock), for drawing them on a moving timeline */
+  events: { t: number; off: number; pad?: string }[] = [];
   constructor(public size = 32) {}
-  add(offsetMs: number, pad?: string) {
+  add(offsetMs: number, pad?: string, t = Date.now() / 1000) {
+    this.events.push({ t, off: offsetMs, pad });
+    if (this.events.length > 4 * this.size) this.events.shift();
     this.all.push(offsetMs);
     if (this.all.length > this.size) this.all.shift();
     if (pad) {
@@ -58,5 +62,5 @@ export class HitLog {
       if (a.length > this.size) a.shift();
     }
   }
-  reset() { this.all = []; this.byPad = {}; }
+  reset() { this.all = []; this.byPad = {}; this.events = []; }
 }

@@ -6,7 +6,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import {
   HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, offsetToBeat, setBeatsPerBar,
   setDownbeatAt, shiftDownbeat, snapToBar, type BeatMap,
@@ -351,9 +352,13 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       const env = await Engine.stemsEnvelope(stemPath(song, 'drums'));
       if (!env.mid || !env.high) throw new Error('this needs the newest version of the app');
       const name = `${song.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 28)}${loopOn ? ` · bars ${barAt(map, A + 0.01) + 1}–${barAt(map, B - 0.01) + 1}` : ''}`;
-      const r = hitsToIdea(drumHits(env), map, loopOn ? A : 0, loopOn ? B : dur, name);
+      const hits = drumHits(env);
+      lastScan.current = { env, hits };
+      const r = hitsToIdea(hits, map, loopOn ? A : 0, loopOn ? B : dur, name);
       if (!r.notes) throw new Error('no drum hits found there');
-      addIdeaFromOutside(r.idea);
+      const raw = r.idea.raw ?? [];
+      const n = (id: string, v?: number) => raw.filter((x) => x.id === id && (v === undefined || x.v === v)).length;
+      addIdeaFromOutside(r.idea, `From the song: ${n('bd')} kicks, ${n('sn')} snares (${n('sn', 3)} ghost), ${n('hh')} hi-hats, ${n('cr')} crashes in ${r.bars} bars${r.truncated ? ' (first 64)' : ''}. Not right? Share the analysis from Songs.`);
       setScoring(false);
       goTab('sketch');
       return;
@@ -361,6 +366,22 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       setErr(`Couldn't make a score: ${(e as Error).message}`);
     }
     setScoring(false);
+  };
+  // what the last "to score" saw, to send for a closer look: loudness per band (100 per second), the beat map and the hits.
+  // Not the audio: the song can't be rebuilt from it.
+  const lastScan = useRef<{ env: Awaited<ReturnType<typeof Engine.stemsEnvelope>>; hits: ReturnType<typeof drumHits> } | null>(null);
+  const shareScan = async () => {
+    const sc = lastScan.current;
+    if (!sc || !map) return;
+    const r4 = (a?: number[]) => (a ?? []).map((x) => Math.round(x * 1e4) / 1e4);
+    const data = { app: 'ghostgrid', kind: 'drum-scan', v: 1, song: song.name, loop: loopOn ? [A, B] : null, map,
+      env: { rate: sc.env.rate, full: r4(sc.env.full), low: r4(sc.env.low), mid: r4(sc.env.mid), high: r4(sc.env.high) },
+      hits: sc.hits.map((h) => [Math.round(h.t * 1000) / 1000, h.id, h.v]) };
+    try {
+      const f = new File(Paths.cache, `ghostgrid-drum-scan.json`);
+      f.write(JSON.stringify(data));
+      await Sharing.shareAsync(f.uri, { mimeType: 'application/json', UTI: 'public.json', dialogTitle: 'Ghostgrid drum analysis' });
+    } catch (e) { setErr(`Couldn't share: ${(e as Error).message}`); }
   };
   const [, bump] = useState(0);
   const logRef = useRef(new HitLog(32));
@@ -500,6 +521,12 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       <Row label="Drums to score" hint={!song.separated ? 'separate the drums first' : !map ? 'waiting for the beat map' : loopOn ? 'the loop, opened in Sketch' : 'the whole song (up to 64 bars), opened in Sketch'}>
         <Btn label={scoring ? 'Writing…' : loopOn ? 'Loop to score' : 'Song to score'} disabled={!song.separated || !map || scoring} onPress={toScore} />
       </Row>
+      {!!lastScan.current && (
+        <View style={s.chipsRow}>
+          <Text style={s.dim}>Score not right?</Text>
+          <Btn label="Share analysis" onPress={shareScan} />
+        </View>
+      )}
 
       <Row label="Score my timing" hint="against the song's beat">
         <Btn label={song.coach ? 'On' : 'Off'} active={!!song.coach} disabled={!map} onPress={() => update(song.id, { coach: !song.coach })} />

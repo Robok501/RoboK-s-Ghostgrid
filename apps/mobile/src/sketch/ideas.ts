@@ -40,8 +40,13 @@ export function freshIdea(n: number): Idea {
   return newIdea(`Idea ${n}`);
 }
 
+let note = '';
+/** A message for the Sketch screen to show once (e.g. what a song's score was made of). */
+export const takeNote = () => { const n = note; note = ''; return n; };
+
 /** Add an idea from elsewhere in the app (a song turned into a score) and make it the current one. */
-export function addIdeaFromOutside(idea: Idea) {
+export function addIdeaFromOutside(idea: Idea, message = '') {
+  note = message;
   const s = loadIdeas();
   saveIdeas({ ideas: [...s.ideas, tidyRows(idea)], current: idea.id });
 }

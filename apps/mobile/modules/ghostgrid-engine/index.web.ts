@@ -3,6 +3,10 @@
  * No audio: every call returns a plausible value.
  */
 const t0 = Date.now();
+// listeners, so a screenshot script can play pad hits: window.__GG_emit('onPadHit', { time, note, velocity })
+const listeners: Record<string, ((e: any) => void)[]> = {};
+if (typeof window !== 'undefined') (window as any).__GG_now = () => (Date.now() - t0) / 1000;
+if (typeof window !== 'undefined') (window as any).__GG_emit = (name: string, e: unknown) => (listeners[name] ?? []).forEach((f) => f(e));
 const info = { running: true, sampleRate: 48000, outputLatency: 0.012, inputLatency: 0.01, ioBuffer: 0.005, route: 'bluetooth', routeName: 'TD-27', mic: false };
 const fixed: Record<string, unknown> = {
   now: () => (Date.now() - t0) / 1000,
@@ -13,7 +17,10 @@ const fixed: Record<string, unknown> = {
   uptimeToEngine: (u: number) => u,
   startRecording: () => true,
   stopRecording: () => ({ path: '', sampleRate: 48000, startTime: 0, frames: 0 }),
-  addListener: () => ({ remove() {} }),
+  addListener: (name: string, f: (e: any) => void) => {
+    (listeners[name] ||= []).push(f);
+    return { remove() { listeners[name] = (listeners[name] ?? []).filter((g) => g !== f); } };
+  },
   stemsModelStatus: () => ({ present: true, bytes: 316_000_000, path: '' }),
   stemsLoad: async () => 213,
   stemsPosition: () => 64.2,

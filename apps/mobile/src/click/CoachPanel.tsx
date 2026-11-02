@@ -1,112 +1,156 @@
-/** Timing readout: big tap pad (or "play your kit"), last offset, a scale of recent hits, stats and per-pad breakdown. */
-import React from 'react';
+/**
+ * Timing coach, in one square. With an e-drum: a tile each for kick, snare and hi-hat, plus a tile for the whole kit.
+ * Each pad tile is a moving timeline: hits slide in from the right, placed up (early) or down (late) from the
+ * middle line; the shaded band is the window that counts as on time. The big number is the share of hits inside
+ * that window, which says more than an average in ms. With the mic or tapping there is one timeline for all hits.
+ */
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { PAD_NAMES, timingStats, verdict, type HitLog, type PadKey } from '@ghostgrid/core';
+import { timingStats, verdict, type HitLog } from '@ghostgrid/core';
 import { C, F } from '../theme';
 import type { CoachInput } from '../store';
 import { CALIB_HITS } from './useClick';
 
-const fmt = (v: number) => `${v > 0 ? '+' : ''}${Math.round(v)} ms`;
-const RANGE = 50;
+/** how many seconds of hits a timeline shows */
+const SPAN = 6;
+/** the timeline's top and bottom edge, in ms early or late */
+const RANGE = 60;
+const GROUPS: { key: string; name: string; pads: string[] }[] = [
+  { key: 'bd', name: 'Kick', pads: ['bd'] },
+  { key: 'sn', name: 'Snare', pads: ['sn', 'rim'] },
+  { key: 'hh', name: 'Hi-hat', pads: ['hh', 'hh+o', 'hf'] },
+];
+const colorOf = (pct: number | null) => (pct === null ? C.muted : pct >= 85 ? C.good : pct >= 60 ? C.accent : C.late);
 
-export function CoachPanel({ input, running, last, log, tol, calibrating, calibCount, micLevel, onTap }: {
-  input: CoachInput; running: boolean; last: number | null; log: HitLog; tol: number;
+export function CoachPanel({ input, running, log, tol, calibrating, calibCount, micLevel, onTap, onPlay }: {
+  input: CoachInput; running: boolean; last?: number | null; log: HitLog; tol: number;
   calibrating: CoachInput | null; calibCount: number; micLevel: number; onTap: (ms: number) => void;
+  /** a small Play / Stop inside the square (left out where Play sits right above it) */
+  onPlay?: () => void;
 }) {
-  const all = timingStats(log.all, tol);
-  const v = last === null ? null : verdict(last, tol);
-  const big = calibrating ? `${calibCount}/${CALIB_HITS}` : last !== null ? (v === 'on' ? fmt(last) : `${Math.round(Math.abs(last))} ms ${v}`) : input === 'tap' ? 'Tap here' : input === 'mic' ? 'Listening' : 'Play your kit';
-  const hint = calibrating ? 'Calibrating: hit right on the click'
-    : !running ? 'Press Play first'
-    : v === 'on' ? 'On the grid' : v === 'early' ? 'Rushing: lay back a little' : v === 'late' ? 'Dragging: push a little'
-    : input === 'tap' ? 'Tap on every click' : input === 'mic' ? 'Play on your kit, the mic hears each hit' : 'Every pad hit is scored';
-  const pos = (x: number) => 50 + (Math.max(-RANGE, Math.min(RANGE, x)) / RANGE) * 50;
-  const pads = Object.entries(log.byPad).filter(([k]) => input === 'pads' && k !== 'tap' && k !== 'mic');
+  // the timelines move while playing
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setNow(Date.now() / 1000), 80);
+    return () => clearInterval(id);
+  }, [running]);
+  const t = running ? Math.max(now, log.events[log.events.length - 1]?.t ?? 0) : log.events[log.events.length - 1]?.t ?? now;
 
-  const body = (
-    <View style={s.padInner}>
-      <Text style={[s.big, v === 'on' && { color: C.good }, v === 'early' && { color: C.early }, v === 'late' && { color: C.late }]}>{big}</Text>
-      <Text style={s.hint}>{hint}</Text>
+  const all = timingStats(log.all, tol);
+  const lastEv = log.events[log.events.length - 1];
+  const lastV = lastEv ? verdict(lastEv.off, tol) : null;
+  const perPad = input === 'pads';
+  const hint = calibrating ? `Calibrating ${calibCount}/${CALIB_HITS}: hit right on the click`
+    : !running ? (onPlay ? (perPad ? 'Hit a pad or press Play' : input === 'tap' ? 'Tap here or press Play' : 'Press Play') : 'Press Play')
+    : !all.n ? (input === 'tap' ? 'Tap on every click' : input === 'mic' ? 'Play: the mic hears each hit' : 'Play: every pad is scored')
+    : lastV === 'on' ? 'On time' : lastV === 'early' ? 'Early: lay back a little' : 'Late: push a little';
+
+  const overall = (
+    <View style={[s.tile, perPad && s.tileHalf]}>
+      <View style={s.tileHead}>
+        <Text style={s.tileName}>{perPad ? 'Whole kit' : 'Your timing'}</Text>
+        {onPlay && (
+          <Pressable onPress={onPlay} style={[s.play, running && s.playOn]} accessibilityRole="button" accessibilityLabel={running ? 'Stop' : 'Play'} hitSlop={6}>
+            <Text style={[s.playTxt, running && { color: C.accentInk }]}>{running ? '■' : '▶'}</Text>
+          </Pressable>
+        )}
+      </View>
+      <Text style={[s.pct, { color: colorOf(all.n ? all.score : null) }]}>{all.n ? `${Math.round(all.score)}%` : '–'}</Text>
+      <Text style={s.sub}>{all.n ? `${all.n} hits in the ±${tol} ms window` : `in the ±${tol} ms window`}</Text>
+      {!!all.n && <Text style={s.sub}>{tendency(all.mean, all.sd, tol)}</Text>}
+      {!perPad && <Lane events={log.events} t={t} tol={tol} tall />}
       {input === 'mic' && <View style={s.meter}><View style={[s.meterFill, { width: `${Math.min(100, Math.sqrt(micLevel / 0.6) * 100)}%` }]} /></View>}
     </View>
   );
 
-  return (
-    <View style={s.wrap}>
-      {input === 'tap' ? (
-        <Pressable onPressIn={(e) => onTap(e.nativeEvent.timestamp)} accessibilityRole="button" accessibilityLabel="Tap pad: tap on every click"
-          style={({ pressed }) => [s.pad, pressed && s.padHit]}>{body}</Pressable>
-      ) : (
-        <View style={s.pad}>{body}</View>
-      )}
-
-      <View style={s.scale} accessibilityElementsHidden>
-        <View style={s.axis} />
-        <View style={[s.zone, { left: `${pos(-tol)}%`, width: `${pos(tol) - pos(-tol)}%` }]} />
-        <View style={s.mid} />
-        {log.all.map((x, i) => (
-          <View key={i} style={[s.dot, i === log.all.length - 1 && s.dotLast, { left: `${pos(x)}%` }]} />
-        ))}
-        {[-50, -25, 25, 50].map((x) => <Text key={x} style={[s.tick, { left: `${pos(x)}%` }]}>{x > 0 ? '+' : ''}{x}</Text>)}
-      </View>
-
-      <View style={s.stats}>
-        <Stat label="Score" value={all.n ? `${Math.round(all.score)}%` : '–'} />
-        <Stat label="Average" value={all.n ? fmt(all.mean) : '–'} />
-        <Stat label="Spread" value={all.n ? `±${Math.round(all.sd)} ms` : '–'} />
-        <Stat label="Hits" value={String(all.n)} />
-      </View>
-
-      {pads.length > 0 && (
-        <View style={s.byPad}>
-          {pads.map(([k, offs]) => {
-            const st = timingStats(offs, tol), vv = verdict(st.mean, tol);
+  const body = (
+    <View style={s.inner}>
+      <Text style={[s.hint, lastV && running && all.n ? { color: lastV === 'on' ? C.good : lastV === 'early' ? C.early : C.late } : null]}>{hint}</Text>
+      {perPad ? (
+        <View style={s.grid}>
+          {GROUPS.map((g) => {
+            const ev = log.events.filter((e) => e.pad && g.pads.includes(e.pad));
+            const offs = g.pads.flatMap((p) => log.byPad[p] ?? []);
+            const st = timingStats(offs, tol);
             return (
-              <View key={k} style={s.pp}>
-                <Text style={s.ppName}>{PAD_NAMES[k as PadKey] ?? `Note ${k.slice(1)}`}</Text>
-                <Text style={[s.ppVal, { color: vv === 'on' ? C.good : vv === 'early' ? C.early : C.late }]}>{fmt(st.mean)}</Text>
-                <Text style={s.ppSub}>±{Math.round(st.sd)} ms · {st.n}</Text>
+              <View key={g.key} style={[s.tile, s.tileHalf]}>
+                <View style={s.tileHead}>
+                  <Text style={s.tileName}>{g.name}</Text>
+                  <Text style={[s.tilePct, { color: colorOf(st.n ? st.score : null) }]}>{st.n ? `${Math.round(st.score)}%` : '–'}</Text>
+                </View>
+                <Lane events={ev} t={t} tol={tol} />
               </View>
             );
           })}
+          {overall}
         </View>
-      )}
+      ) : overall}
     </View>
+  );
+
+  return input === 'tap' ? (
+    <Pressable onPressIn={(e) => onTap(e.nativeEvent.timestamp)} accessibilityRole="button" accessibilityLabel="Tap pad: tap on every click"
+      style={({ pressed }) => [s.pad, pressed && s.padHit]}>{body}</Pressable>
+  ) : (
+    <View style={s.pad}>{body}</View>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+/** One line of advice from the average and spread. */
+function tendency(mean: number, sd: number, tol: number): string {
+  const lean = Math.abs(mean) < tol / 3 ? 'centred' : mean < 0 ? `${Math.round(-mean)} ms early on average` : `${Math.round(mean)} ms late on average`;
+  const steady = sd <= tol / 2 ? 'steady' : sd <= tol ? 'a bit uneven' : 'uneven';
+  return `${lean}, ${steady}`;
+}
+
+/** A moving timeline: newest hits on the right, early above the line, late below; the band is the window. */
+function Lane({ events, t, tol, tall }: { events: { t: number; off: number }[]; t: number; tol: number; tall?: boolean }) {
+  // early at the top, late at the bottom; way off stays just inside the edge
+  const y = (off: number) => 50 + (Math.max(-RANGE, Math.min(RANGE, off)) / RANGE) * 40;
+  const band = (Math.min(tol, RANGE) / RANGE) * 40;
+  const shown = events.filter((e) => e.t > t - SPAN);
   return (
-    <View style={s.stat}>
-      <Text style={s.statLabel}>{label.toUpperCase()}</Text>
-      <Text style={s.statVal}>{value}</Text>
+    <View style={[s.lane, tall && { height: 70 }]} accessibilityElementsHidden>
+      <View style={[s.band, { top: `${50 - band}%`, height: `${2 * band}%` }]} />
+      <View style={s.centre} />
+      <Text style={[s.edge, { top: 1 }]}>early</Text>
+      <Text style={[s.edge, { bottom: 1 }]}>late</Text>
+      {shown.map((e, i) => {
+        const v = verdict(e.off, tol), last = i === shown.length - 1;
+        return (
+          <View key={`${e.t}-${i}`} style={[s.dot, last && s.dotLast, {
+            left: `${Math.max(0, Math.min(100, 100 - ((t - e.t) / SPAN) * 100))}%`, top: `${y(e.off)}%`,
+            backgroundColor: v === 'on' ? C.good : v === 'early' ? C.early : C.late,
+          }]} />
+        );
+      })}
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  wrap: { gap: 10 },
-  pad: { minHeight: 150, borderRadius: 18, borderWidth: 2, borderStyle: 'dashed', borderColor: C.line, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', padding: 14 },
-  padHit: { borderStyle: 'solid', borderColor: C.fg },
-  padInner: { alignItems: 'center', gap: 4, alignSelf: 'stretch' },
-  big: { color: C.fg, fontSize: 34, fontWeight: '600', fontFamily: F.mono, fontVariant: ['tabular-nums'] },
-  hint: { color: C.muted, fontSize: 13, textAlign: 'center' },
-  meter: { height: 8, alignSelf: 'stretch', marginHorizontal: 30, marginTop: 8, borderRadius: 4, backgroundColor: C.raised, overflow: 'hidden' },
-  meterFill: { height: 8, backgroundColor: C.fg },
-  scale: { height: 34, marginHorizontal: 10 },
-  axis: { position: 'absolute', left: 0, right: 0, top: 14, height: 2, backgroundColor: C.line },
-  zone: { position: 'absolute', top: 8, height: 14, borderRadius: 4, backgroundColor: C.accentSoft },
-  mid: { position: 'absolute', left: '50%', top: 6, width: 2, height: 18, backgroundColor: C.fg },
-  dot: { position: 'absolute', top: 10, width: 9, height: 9, marginLeft: -4.5, borderRadius: 5, backgroundColor: C.muted, opacity: 0.4 },
-  dotLast: { top: 8, width: 13, height: 13, marginLeft: -6.5, borderRadius: 7, backgroundColor: C.fg, opacity: 1 },
-  tick: { position: 'absolute', top: 22, width: 30, marginLeft: -15, textAlign: 'center', color: C.muted, fontSize: 10, fontFamily: F.mono },
-  stats: { flexDirection: 'row', gap: 8 },
-  stat: { flex: 1, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10 },
-  statLabel: { color: C.muted, fontSize: 10, letterSpacing: 1 },
-  statVal: { color: C.fg, fontSize: 16, fontWeight: '600', fontFamily: F.mono },
-  byPad: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pp: { minWidth: 104, flexGrow: 1, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 8 },
-  ppName: { color: C.fg, fontSize: 12, fontWeight: '600' },
-  ppVal: { fontSize: 17, fontWeight: '600', fontFamily: F.mono },
-  ppSub: { color: C.muted, fontSize: 11 },
+  pad: { borderRadius: 18, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, padding: 10 },
+  padHit: { borderColor: C.fg },
+  inner: { gap: 8 },
+  hint: { color: C.muted, fontSize: 13, textAlign: 'center', fontWeight: '600' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tile: { backgroundColor: C.raised, borderRadius: 12, padding: 8, gap: 4 },
+  tileHalf: { width: '48.5%', flexGrow: 1 },
+  tileHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 28 },
+  tileName: { color: C.fg, fontSize: 13, fontWeight: '700' },
+  tilePct: { fontSize: 18, fontWeight: '700', fontFamily: F.mono, fontVariant: ['tabular-nums'] },
+  pct: { fontSize: 34, fontWeight: '700', fontFamily: F.mono, fontVariant: ['tabular-nums'], lineHeight: 40 },
+  sub: { color: C.muted, fontSize: 11 },
+  play: { width: 44, height: 32, borderRadius: 10, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  playOn: { backgroundColor: C.fg },
+  playTxt: { color: C.accentInk, fontSize: 14, fontWeight: '800' },
+  lane: { height: 58, borderRadius: 8, backgroundColor: C.surface, overflow: 'hidden' },
+  band: { position: 'absolute', left: 0, right: 0, backgroundColor: C.accentSoft },
+  centre: { position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: C.muted, opacity: 0.6 },
+  edge: { position: 'absolute', left: 4, color: C.muted, fontSize: 9, opacity: 0.7 },
+  dot: { position: 'absolute', width: 8, height: 8, marginLeft: -8, marginTop: -4, borderRadius: 4, opacity: 0.75 },
+  dotLast: { width: 12, height: 12, marginLeft: -12, marginTop: -6, borderRadius: 6, opacity: 1, borderWidth: 1.5, borderColor: C.fg },
+  meter: { height: 6, alignSelf: 'stretch', marginTop: 4, borderRadius: 3, backgroundColor: C.surface, overflow: 'hidden' },
+  meterFill: { height: 6, backgroundColor: C.fg },
 });

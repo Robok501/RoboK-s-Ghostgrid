@@ -53,7 +53,7 @@ function Shell() {
       <StatusBar style="light" />
       <View style={s.body}>
         {/* Click and Songs stay mounted, so they keep playing while you look at another tab */}
-        <View style={[s.page, tab !== 'click' && s.hidden]} pointerEvents={tab === 'click' ? 'auto' : 'none'}><ClickScreen /></View>
+        <View style={[s.page, tab !== 'click' && s.hidden]} pointerEvents={tab === 'click' ? 'auto' : 'none'}><ClickScreen active={tab === 'click'} /></View>
         {tab === 'trainer' && <View style={s.page}><TopBar title="Tempo trainer" /><TempoTrainer /></View>}
         {tab === 'sketch' && <View style={s.page}><SketchScreen /></View>}
         <View style={[s.page, tab !== 'songs' && s.hidden]} pointerEvents={tab === 'songs' ? 'auto' : 'none'}><SongsScreen /></View>

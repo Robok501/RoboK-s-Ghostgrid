@@ -2,7 +2,7 @@
  * Click: the metronome on one screen — tempo, beats, mode, Play. Mode settings and meter & sound open in sheets;
  * the player level lives in Settings. Coach, gap and drop show the timing pad while you play.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   accentGroupStarts, cycleLevel, groupOptions, groupsFor, levelsFor, modesForLevel, sectionLetter,
@@ -49,13 +49,20 @@ function modeSummary(c: ClickSettings): string {
   }
 }
 
-export function ClickScreen() {
-  const { settings, setClick, setMic, mic, micLevel } = useApp();
+export function ClickScreen({ active = true }: { active?: boolean }) {
+  const { settings, setClick, setMic, mic, micLevel, on } = useApp();
   const c = settings.click;
   const k = useClick();
   const [sheet, setSheet] = useState<null | 'mode' | 'meter'>(null);
   const program = c.mode === 'program';
   const showPad = c.mode === 'coach' || c.mode === 'gap' || c.mode === 'drop';
+  // with an e-drum, hitting a pad starts the click (that first hit isn't scored)
+  const autoStart = useRef({ active, showPad, input: c.input, running: k.running, start: k.start });
+  autoStart.current = { active, showPad, input: c.input, running: k.running, start: k.start };
+  useEffect(() => on('pad', (e) => {
+    const a = autoStart.current;
+    if (a.active && a.showPad && a.input === 'pads' && !a.running && e.mapped) a.start();
+  }), [on]);
   const modes = MODE_ORDER.filter((m) => modesForLevel(c.level).includes(m));
   const meterBeats = program ? (k.running && k.cur ? k.cur.beats : c.program[0]?.beats ?? 4) : c.beats;
   const meterLine = `${meterBeats}/${c.unit}${c.sub > 1 ? ` · ${SUB_NAMES[c.sub] ?? `${c.sub} per beat`}` : ''} · ${c.sound === 'cowbell' ? 'bell' : c.sound}`;
@@ -79,7 +86,7 @@ export function ClickScreen() {
     <View style={s.root}>
       <TopBar title="Click" sub={LEVELS.find((l) => l.level === c.level)?.name} />
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <TempoBlock bpm={c.bpm} shown={k.tempo} meter={`${meterBeats}/${c.unit}`} disabled={program}
+        <TempoBlock compact={showPad && k.running} bpm={c.bpm} shown={k.tempo} meter={`${meterBeats}/${c.unit}`} disabled={program}
           onChange={(bpm) => setClick({ bpm })} onTap={k.tapTempoAt} />
 
         <BeatRow beats={c.beats} unit={c.unit} groups={c.groups} levels={levelsFor(c.levels, c.beats)} sub={c.sub} cur={k.cur}
@@ -104,7 +111,8 @@ export function ClickScreen() {
 
         {showPad && (
           <CoachPanel input={c.input} running={k.running} last={k.last} log={k.log} tol={c.tol}
-            calibrating={k.calibrating} calibCount={k.calibCount} micLevel={micLevel} onTap={(ms) => { k.tap(ms); }} />
+            calibrating={k.calibrating} calibCount={k.calibCount} micLevel={micLevel}
+            onTap={(ms) => { if (!k.running) k.start(); else k.tap(ms); }} onPlay={() => (k.running ? k.stop() : k.start())} />
         )}
       </ScrollView>
 
@@ -187,13 +195,13 @@ function Status({ c, cur, running }: { c: ClickSettings; cur: ClickStep | null; 
   if (!running || !cur) {
     const idle: Record<Mode, string> = {
       basic: 'Tap a beat to change its accent',
-      coach: 'Press Play and hit on every click.',
+      coach: '',
       gap: `${c.gapOn} bar${c.gapOn > 1 ? 's' : ''} click, ${c.gapOff} bar${c.gapOff > 1 ? 's' : ''} silent. Keep the time yourself.`,
       drop: `Random ${c.dropUnit} go silent after ${c.dropWarm} warm-up bars.`,
       ramp: `${c.bpm} → ${c.rampTarget} BPM, ${c.rampStep > 0 ? '+' : ''}${c.rampStep} every ${c.rampEvery} bars.`,
       program: `${c.program.length} sections${c.loop ? ', looping' : ''}. Tap a section in the song map to start there.`,
     };
-    return <Text style={s.status}>{idle[c.mode]}</Text>;
+    return idle[c.mode] ? <Text style={s.status}>{idle[c.mode]}</Text> : null;
   }
   const bar = `Bar ${cur.bar + 1}`;
   let extra: React.ReactNode = null;

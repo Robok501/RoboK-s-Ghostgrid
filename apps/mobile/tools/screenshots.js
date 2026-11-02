@@ -91,6 +91,23 @@ const W = 428, H = 926, TOP = 47, BOTTOM = 34;
     ['1-click', async (p) => {}],
     ['2-click-mode-sheet', async (p) => { await btnStart(p, 'Mode'); }],
     ['3-click-meter-sheet', async (p) => { await btnStart(p, 'Meter and sound'); }],
+    ['2b-click-coach-playing', async (p) => {
+      await btnStart(p, 'Mode'); await btn(p, 'Coach'); await text(p, 'E-drum'); await btn(p, 'Done');
+      await btn(p, 'Play');
+      // a minute of kick/snare/hi-hat: 8ths at 100 BPM, a little loose; the kick drags a bit
+      await p.evaluate(async () => {
+        const E = window.__GG_emit, now = window.__GG_now;
+        let seed = 3; const r = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 - 0.5; };
+        for (let i = 0; i < 40; i++) {
+          // somewhere on the grid of the click (the offset is what the coach measures); kick a bit late
+          const pad = i % 4 === 0 ? 36 : i % 4 === 2 ? 38 : 42;
+          const jit = (pad === 36 ? 0.012 : 0) + r() * (pad === 42 ? 0.05 : 0.03);
+          window.__GG_last = jit;
+          E('onPadHit', { time: now() + jit, note: pad, velocity: 90 });
+          await new Promise((res) => setTimeout(res, 150));
+        }
+      });
+    }],
     ['4-trainer', async (p) => { await tab(p, 'Trainer'); }],
     ['5-sketch', async (p) => { await tab(p, 'Sketch'); }],
     ['6-sketch-menu', async (p) => { await tab(p, 'Sketch'); await btn(p, '•••'); }],

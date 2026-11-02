@@ -46,10 +46,13 @@ export interface BeatMap {
 export function onsetStrength(env: Envelope): Float32Array {
   const n = Math.min(env.full.length, env.low.length), o = new Float32Array(n);
   const lf = (x: number) => Math.log(1 + 1000 * x);
+  const mid = env.mid && env.mid.length >= n ? env.mid : null;
   for (let i = 1; i < n; i++) {
     const a = Math.max(0, lf(env.full[i]) - lf(env.full[i - 1]));
     const b = Math.max(0, lf(env.low[i]) - lf(env.low[i - 1]));
-    o[i] = a + 0.8 * b;
+    // with a mid band: the backbone (kick and snare) leads; busy hi-hats (16ths, dotted figures) only add a little,
+    // they used to pull the tempo to 4/3 or 3/2 of the real one
+    o[i] = mid ? 0.35 * a + b + Math.max(0, lf(mid[i]) - lf(mid[i - 1])) : a + 0.8 * b;
   }
   // remove the slow trend (a local mean) so loud passages don't dominate
   const w = Math.round(env.rate * 0.5), out = new Float32Array(n);
