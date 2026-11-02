@@ -1,6 +1,6 @@
 /** Small design system shared by all screens. Every control is at least 44 pt (Apple HIG). */
 import React, { useRef } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { PanResponder, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { C, F, HIT } from './theme';
 
 export function Card({ title, children, style }: { title?: string; children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
@@ -55,10 +55,23 @@ export function Stepper({ value, onChange, min, max, step = 1, format }: {
   const set = (d: number) => onChange(Math.max(min, Math.min(max, v.current + d)));
   const dn = useHoldRepeat(() => set(-step));
   const up = useHoldRepeat(() => set(step));
+  // swipe the number left or right too (one step per 12 points); up and down stays scrolling
+  const live = useRef({ set, step, min, max, onChange });
+  live.current = { set, step, min, max, onChange };
+  const start = useRef(value);
+  const pan = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+    onPanResponderGrant: () => { start.current = v.current; },
+    onPanResponderMove: (_, g) => {
+      const L = live.current, nv = Math.max(L.min, Math.min(L.max, start.current + Math.round(g.dx / 12) * L.step));
+      if (nv !== v.current) L.onChange(nv);
+    },
+    onPanResponderTerminationRequest: () => false,
+  })).current;
   return (
     <View style={u.stepper}>
       <Pressable {...dn} style={u.stepBtn} accessibilityRole="button" accessibilityLabel="Decrease"><Text style={u.stepTxt}>−</Text></Pressable>
-      <Text style={u.stepVal}>{format ? format(value) : value}</Text>
+      <View {...pan.panHandlers} style={u.stepValBox}><Text style={u.stepVal}>{format ? format(value) : value}</Text></View>
       <Pressable {...up} style={u.stepBtn} accessibilityRole="button" accessibilityLabel="Increase"><Text style={u.stepTxt}>+</Text></Pressable>
     </View>
   );
@@ -127,6 +140,7 @@ export const u: Record<string, any> = StyleSheet.create({
   stepper: { flexDirection: 'row', alignItems: 'center' },
   stepBtn: { width: HIT, height: HIT, borderRadius: 10, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center' },
   stepTxt: { color: C.fg, fontSize: 22 },
+  stepValBox: { minHeight: 44, minWidth: 48, alignItems: 'center', justifyContent: 'center' },
   stepVal: { minWidth: 58, textAlign: 'center', color: C.fg, fontSize: 16, fontWeight: '600', fontFamily: F.mono },
   seg: { flexDirection: 'row', backgroundColor: C.raised, borderRadius: 12, padding: 3, gap: 2, flexShrink: 1 },
   segBtn: { minHeight: 40, minWidth: HIT, paddingHorizontal: 10, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },

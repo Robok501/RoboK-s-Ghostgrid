@@ -1,4 +1,5 @@
-/** Big tempo display: − / + (hold to repeat), drag the number up or down, tap tempo and ±5. */
+/** Big tempo display: − / + (hold to repeat), swipe the number left (slower) or right (faster), tap tempo and ±5.
+ * Sideways, so swiping up and down still scrolls the screen. */
 import React, { useRef } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { tempoMarking } from '@ghostgrid/core';
@@ -14,9 +15,10 @@ export function TempoBlock({ bpm, shown, meter, disabled, onChange, onTap }: {
   set.current = (v: number) => onChange(Math.max(20, Math.min(300, Math.round(v))));
   const startBpm = useRef(bpm);
   const pan = useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
     onPanResponderGrant: () => { startBpm.current = live.current; },
-    onPanResponderMove: (_, g) => set.current(startBpm.current - g.dy / 4),
+    // about 1 BPM per 4 points: a full swipe across the number is some 50 BPM
+    onPanResponderMove: (_, g) => set.current(startBpm.current + g.dx / 4),
     onPanResponderTerminationRequest: () => false,
   })).current;
   const dn = useHoldRepeat(() => set.current(live.current - 1));
@@ -26,7 +28,7 @@ export function TempoBlock({ bpm, shown, meter, disabled, onChange, onTap }: {
     <View style={[s.wrap, disabled && { opacity: 0.45 }]} pointerEvents={disabled ? 'none' : 'auto'}>
       <View style={s.row}>
         <Pressable {...dn} style={s.round} accessibilityRole="button" accessibilityLabel="Slower"><Text style={s.roundTxt}>−</Text></Pressable>
-        <View {...pan.panHandlers} style={s.numberBox} accessible accessibilityRole="adjustable" accessibilityLabel={`Tempo ${shown} BPM, drag up or down`}
+        <View {...pan.panHandlers} style={s.numberBox} accessible accessibilityRole="adjustable" accessibilityLabel={`Tempo ${shown} BPM, swipe left or right`}
           accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
           onAccessibilityAction={(e) => set.current(live.current + (e.nativeEvent.actionName === 'increment' ? 1 : -1))}>
           <Text style={s.number} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{shown}</Text>
