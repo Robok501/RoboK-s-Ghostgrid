@@ -1,0 +1,40 @@
+name: Sound lab
+# Manual: measures drum recognition on rendered grooves with known answers. Nothing here ships in the app.
+on:
+  workflow_dispatch:
+    inputs:
+      files:
+        description: number of test grooves
+        default: '24'
+jobs:
+  drums:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: sudo apt-get update && sudo apt-get install -y fluidsynth fluid-soundfont-gm
+      - run: npm ci
+      - run: pip install -r tools/lab/requirements.txt
+      - name: Groove MIDI Dataset (CC BY 4.0)
+        run: |
+          curl -sSL -o gmd.zip https://storage.googleapis.com/magentadata/datasets/groove/groove-v1.0.0-midionly.zip
+          unzip -q gmd.zip
+      - name: Onsets and Frames Drums (Apache-2.0)
+        run: |
+          curl -sSL -o oaf.onnx https://huggingface.co/thebluescreen/oaf-drums-onnx/resolve/main/oaf_drums.onnx || true
+          curl -sSL https://huggingface.co/api/models/thebluescreen/oaf-drums-onnx | python -m json.tool | head -60
+          curl -sSL https://huggingface.co/thebluescreen/oaf-drums-onnx/resolve/main/README.md | head -150
+          ls -la oaf.onnx
+      - run: python tools/lab/render.py groove out ${{ inputs.files }} 30
+      - run: npx vite-node tools/lab/ours.ts out
+      - run: python tools/lab/oaf.py oaf.onnx out || true
+      - name: Score
+        run: python tools/lab/score.py out ours | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lab-results
+          path: |
+            out/*.json
