@@ -34,6 +34,7 @@ jobs:
       - run: python tools/lab/oaf_run.py oaf.onnx out 0.5 0.3 0.2
       - name: Score
         run: python tools/lab/score.py out ours oaf50 oaf30 oaf20 | tee -a "$GITHUB_STEP_SUMMARY"
+      - run: python tools/lab/analyse.py out oaf30 && python tools/lab/analyse.py out ours
       - uses: actions/upload-artifact@v4
         with:
           name: lab-results

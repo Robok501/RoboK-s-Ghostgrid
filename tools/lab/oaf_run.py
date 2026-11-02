@@ -36,4 +36,5 @@ for name in json.load(open(f'{d}/index.json')):
                     if hits and hits[-1]['c'] == c and i - hits[-1]['f'] < 3: continue
                     hits.append({'f': i, 'c': c, 't': round(i / 100, 3), 'cls': CLS[c], 'vel': round(float(vel[i, c]), 3)})
         json.dump(hits, open(f'{d}/{name}.oaf{int(thr*100)}.json', 'w'))
-    print(name, len(hits), 'hits')
+    print(name, len(hits), 'hits; max per column', [round(float(v), 2) for v in on.max(0)])
+print('max activation per column over all files is in the log above; column order 36,38,48,42,51,53,49,75')
