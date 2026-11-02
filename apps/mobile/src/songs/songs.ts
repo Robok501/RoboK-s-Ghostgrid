@@ -9,6 +9,9 @@ import type { CoachInput } from '../store';
 export const MODEL_NAME = 'htdemucs_ft_drums.onnx';
 export const MODEL_URL = 'https://huggingface.co/StemSplitio/htdemucs-ft-drums-onnx/resolve/main/htdemucs_ft_drums.onnx';
 export const MODEL_MB = 316;
+/** Drum transcription for "to score": Onsets and Frames Drums (Magenta, E-GMD), Apache-2.0, about 6 MB. */
+export const DRUM_MODEL_NAME = 'oaf_drums.onnx';
+export const DRUM_MODEL_URL = 'https://huggingface.co/thebluescreen/oaf-drums-onnx/resolve/main/oaf_drums.onnx';
 
 export interface Song {
   id: string;

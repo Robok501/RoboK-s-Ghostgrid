@@ -130,7 +130,7 @@
  "Forget learned pads": "Oublier les pads appris",
  "Forget taught sounds": "Oublier les sons appris",
  "From here": "D'ici",
- "From the song: {{bd}} kicks, {{sn}} snares ({{g}} ghost), {{hh}} hi-hats, {{cr}} crashes in {{bars}} bars{{cut}}. Not right? Share the analysis from Songs.": "Du morceau : {{bd}} grosses caisses, {{sn}} caisses claires ({{g}} ghost), {{hh}} hi-hats, {{cr}} crashes en {{bars}} mesures{{cut}}. Incorrect ? Partagez l'analyse depuis Morceaux.",
+ "From the song: {{bd}} kicks, {{sn}} snares ({{g}} ghost), {{hh}} hi-hats, {{tom}} toms, {{cy}} cymbals in {{bars}} bars{{cut}}. Not right? Share the analysis from Songs.": "Du morceau : {{bd}} grosses caisses, {{sn}} caisses claires ({{g}} ghost), {{hh}} hi-hats, {{tom}} toms, {{cy}} cymbales en {{bars}} mesures{{cut}}. Incorrect ? Partagez l'analyse depuis Morceaux.",
  "Full": "Complet",
  "Funk": "Funk",
  "Gap": "Trou",

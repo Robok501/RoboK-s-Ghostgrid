@@ -148,6 +148,11 @@ public class GhostgridEngineModule: Module {
       return try GGStems.envelope(URL(fileURLWithPath: path))
     }
 
+    /// Drum hits from a drum track with the transcription model (peaks per drum; see GGStems.transcribe).
+    AsyncFunction("stemsTranscribe") { (path: String, model: String) -> [String: Any] in
+      return try GGStems.transcribe(URL(fileURLWithPath: path), modelName: model)
+    }
+
     /// Chords and bass of the music (the no-drums track), to find where bars start.
     AsyncFunction("stemsMusicFeatures") { (path: String) -> [String: Any] in
       return try GGStems.musicFeatures(URL(fileURLWithPath: path))

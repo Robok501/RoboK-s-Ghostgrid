@@ -438,6 +438,67 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
     ]
   }
 
+  /// Drum transcription (Onsets and Frames Drums, E-GMD checkpoint, Apache-2.0) on a drum track.
+  /// Runs in 20 s pieces that overlap by 2 s and returns every onset peak from 0.15 up, per model column
+  /// (0 kick, 1 snare, 2 tom, 3 hi-hat, 4 ride, 5 ride bell, 6 crash, 7 clave), with the model's velocity.
+  /// The thresholds per drum are applied in TypeScript (modelDrumHits), so they can be tuned without a new build.
+  static func transcribe(_ url: URL, modelName: String) throws -> [String: Any] {
+    let modelPath = modelURL(modelName).path
+    guard FileManager.default.fileExists(atPath: modelPath) else {
+      throw NSError(domain: "Ghostgrid", code: 40, userInfo: [NSLocalizedDescriptionKey: "The drum model isn't downloaded"])
+    }
+    let (l, r) = try readStereo(url)
+    let n = l.count
+    var x = [Float](repeating: 0, count: n)
+    for i in 0..<n { x[i] = (l[i] + r[i]) * 0.5 }
+    let env = try ORTEnv(loggingLevel: .warning)
+    let opts = try ORTSessionOptions()
+    try opts.setIntraOpNumThreads(Int32(max(2, min(4, ProcessInfo.processInfo.activeProcessorCount))))
+    let session = try ORTSession(env: env, modelPath: modelPath, sessionOptions: opts)
+    let cols = 8, hop = 441, sr = Int(sampleRate)
+    let frames = n / hop + 1
+    var on = [Float](repeating: 0, count: frames * cols), vel = [Float](repeating: 0, count: frames * cols)
+    let chunk = 20 * sr, step = 18 * sr
+    var start = 0
+    while true {
+      let len = min(chunk, n - start)
+      if len < 2049 { break }
+      let data = NSMutableData(length: len * MemoryLayout<Float>.size)!
+      x.withUnsafeBufferPointer { src in
+        data.mutableBytes.copyMemory(from: src.baseAddress! + start, byteCount: len * MemoryLayout<Float>.size)
+      }
+      let input = try ORTValue(tensorData: data, elementType: .float, shape: [1, NSNumber(value: len)])
+      let outs = try session.run(withInputs: ["waveform": input], outputNames: Set(["onset_probs", "velocity"]), runOptions: nil)
+      guard let o = outs["onset_probs"], let v = outs["velocity"] else {
+        throw NSError(domain: "Ghostgrid", code: 41, userInfo: [NSLocalizedDescriptionKey: "The drum model gave no output"])
+      }
+      let od = try o.tensorData(), vd = try v.tensorData()
+      let op = od.bytes.assumingMemoryBound(to: Float.self), vp = vd.bytes.assumingMemoryBound(to: Float.self)
+      let got = od.length / MemoryLayout<Float>.size / cols
+      let f0 = start / hop, keepFrom = start == 0 ? 0 : 100
+      var f = keepFrom
+      while f < got && f0 + f < frames {
+        for c in 0..<cols { on[(f0 + f) * cols + c] = op[f * cols + c]; vel[(f0 + f) * cols + c] = vp[f * cols + c] }
+        f += 1
+      }
+      if start + chunk >= n { break }
+      start += step
+    }
+    // peaks: a local maximum from 0.15 up, at least 30 ms after the previous peak in the same column
+    var ts: [Double] = [], cs: [Int] = [], ps: [Double] = [], vs: [Double] = []
+    for c in 0..<cols {
+      var lastF = -10
+      if frames < 3 { break }
+      for i in 1..<(frames - 1) {
+        let a = on[i * cols + c]
+        if a >= 0.15 && a >= on[(i - 1) * cols + c] && a > on[(i + 1) * cols + c] && i - lastF >= 3 {
+          ts.append(Double(i) / 100); cs.append(c); ps.append(Double(a)); vs.append(Double(vel[i * cols + c])); lastF = i
+        }
+      }
+    }
+    return ["rate": 100, "t": ts, "c": cs, "p": ps, "v": vs, "duration": Double(n) / sampleRate]
+  }
+
   /// Level check of a separated song's files (for songs separated before the check existed).
   static func levels(_ url: URL) throws -> [String: Any] {
     let file = try AVAudioFile(forReading: url)

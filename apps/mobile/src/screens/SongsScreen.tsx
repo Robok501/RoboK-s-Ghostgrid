@@ -9,7 +9,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import {
-  HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, offsetToBeat, setBeatsPerBar,
+  HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, modelDrumHits, offsetToBeat, setBeatsPerBar,
   setDownbeatAt, shiftDownbeat, snapToBar, type BeatMap,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -20,7 +20,7 @@ import { readVoiceFile, saveWav } from '../sketch/usePlayer';
 import { addIdeaFromOutside } from '../sketch/ideas';
 import { t } from '../i18n';
 import {
-  MODEL_MB, MODEL_NAME, MODEL_URL, deleteSongFiles, ensureDir, fmtTime, loadSongs, newSongId, originalPath, saveSongs, stemPath, toPath,
+  DRUM_MODEL_NAME, DRUM_MODEL_URL, MODEL_MB, MODEL_NAME, MODEL_URL, deleteSongFiles, ensureDir, fmtTime, loadSongs, newSongId, originalPath, saveSongs, stemPath, toPath,
   type Mix, type Song,
 } from '../songs/songs';
 import { C, F } from '../theme';
@@ -351,13 +351,22 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       const env = await Engine.stemsEnvelope(stemPath(song, 'drums'));
       if (!env.mid || !env.high) throw new Error('this needs the newest version of the app');
       const name = `${song.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 28)}${loopOn ? ` · bars ${barAt(map, A + 0.01) + 1}–${barAt(map, B - 0.01) + 1}` : ''}`;
-      const hits = drumHits(env);
-      lastScan.current = { env, hits };
+      // the drum model (downloaded once, 6 MB) for kick, snare, toms and cymbals; the band detector alone if that fails
+      let hits: ReturnType<typeof drumHits>, model: { t: number; c: number; p: number; v: number }[] | null = null;
+      try {
+        if (!Engine.stemsModelStatus(DRUM_MODEL_NAME).present) await Engine.stemsDownloadModel(DRUM_MODEL_URL, DRUM_MODEL_NAME);
+        const m = await Engine.stemsTranscribe(stemPath(song, 'drums'), DRUM_MODEL_NAME);
+        model = m.t.map((t, i) => ({ t, c: m.c[i], p: m.p[i], v: m.v[i] }));
+        hits = modelDrumHits(model, env);
+      } catch {
+        hits = drumHits(env);
+      }
+      lastScan.current = { env, hits, model };
       const r = hitsToIdea(hits, map, loopOn ? A : 0, loopOn ? B : dur, name);
       if (!r.notes) throw new Error('no drum hits found there');
       const raw = r.idea.raw ?? [];
       const n = (id: string, v?: number) => raw.filter((x) => x.id === id && (v === undefined || x.v === v)).length;
-      addIdeaFromOutside(r.idea, t('From the song: {{bd}} kicks, {{sn}} snares ({{g}} ghost), {{hh}} hi-hats, {{cr}} crashes in {{bars}} bars{{cut}}. Not right? Share the analysis from Songs.', { bd: n('bd'), sn: n('sn'), g: n('sn', 3), hh: n('hh'), cr: n('cr'), bars: r.bars, cut: r.truncated ? t(' (first 64)') : '' }));
+      addIdeaFromOutside(r.idea, t('From the song: {{bd}} kicks, {{sn}} snares ({{g}} ghost), {{hh}} hi-hats, {{tom}} toms, {{cy}} cymbals in {{bars}} bars{{cut}}. Not right? Share the analysis from Songs.', { bd: n('bd'), sn: n('sn'), g: n('sn', 3), hh: n('hh'), tom: n('t1') + n('t2') + n('ft'), cy: n('cr') + n('rd'), bars: r.bars, cut: r.truncated ? t(' (first 64)') : '' }));
       setScoring(false);
       goTab('sketch');
       return;
@@ -368,14 +377,15 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   };
   // what the last "to score" saw, to send for a closer look: loudness per band (100 per second), the beat map and the hits.
   // Not the audio: the song can't be rebuilt from it.
-  const lastScan = useRef<{ env: Awaited<ReturnType<typeof Engine.stemsEnvelope>>; hits: ReturnType<typeof drumHits> } | null>(null);
+  const lastScan = useRef<{ env: Awaited<ReturnType<typeof Engine.stemsEnvelope>>; hits: ReturnType<typeof drumHits>; model: { t: number; c: number; p: number; v: number }[] | null } | null>(null);
   const shareScan = async () => {
     const sc = lastScan.current;
     if (!sc || !map) return;
     const r4 = (a?: number[]) => (a ?? []).map((x) => Math.round(x * 1e4) / 1e4);
-    const data = { app: 'ghostgrid', kind: 'drum-scan', v: 1, song: song.name, loop: loopOn ? [A, B] : null, map,
+    const data = { app: 'ghostgrid', kind: 'drum-scan', v: 2, song: song.name, loop: loopOn ? [A, B] : null, map,
       env: { rate: sc.env.rate, full: r4(sc.env.full), low: r4(sc.env.low), mid: r4(sc.env.mid), high: r4(sc.env.high) },
-      hits: sc.hits.map((h) => [Math.round(h.t * 1000) / 1000, h.id, h.v]) };
+      hits: sc.hits.map((h) => [Math.round(h.t * 1000) / 1000, h.id, h.v]),
+      model: sc.model?.map((h) => [h.t, h.c, Math.round(h.p * 100) / 100, Math.round(h.v * 100) / 100]) ?? null };
     try {
       const f = new File(Paths.cache, `ghostgrid-drum-scan.json`);
       f.write(JSON.stringify(data));

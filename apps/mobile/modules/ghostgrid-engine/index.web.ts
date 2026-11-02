@@ -30,6 +30,7 @@ const fixed: Record<string, unknown> = {
   stemsSongTimeAt: () => -1,
   stemsRate: () => 1,
   stemsEnvelope: async () => ({ rate: 100, full: [], low: [] }),
+  stemsTranscribe: async () => ({ rate: 100, t: [], c: [], p: [], v: [], duration: 0 }),
   stemsMusicFeatures: async () => ({ rate: 10, chroma: [], bass: [] }),
   stemsLevels: async () => ({ db: -16, peak: 0.9, invalid: 0 }),
   stemsWriteClick: async () => {},
