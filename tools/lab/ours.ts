@@ -1,6 +1,6 @@
 /** Run Ghostgrid's current drums-to-score detector on WAV files. Usage: vite-node ours.ts <dir> */
-import { readFileSync, writeFileSync } from 'fs';
-import { drumHits } from '../../packages/core/src/drumscore';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { drumHits, modelDrumHits } from '../../packages/core/src/drumscore';
 import { envelope } from '../../packages/core/test/lab/audio';
 
 function readWav(p: string): Float32Array {
@@ -29,7 +29,13 @@ function readWav(p: string): Float32Array {
 const dir = process.argv[2];
 const names: string[] = JSON.parse(readFileSync(`${dir}/index.json`, 'utf8'));
 for (const n of names) {
-  const hits = drumHits(envelope(readWav(`${dir}/${n}.wav`)));
+  const env = envelope(readWav(`${dir}/${n}.wav`));
+  const hits = drumHits(env);
   writeFileSync(`${dir}/${n}.ours.json`, JSON.stringify(hits.map((h) => ({ t: h.t, id: h.id, v: h.v }))));
+  // the app's hybrid (model + our hi-hat), when the model has run
+  if (existsSync(`${dir}/${n}.oafraw.json`)) {
+    const app = modelDrumHits(JSON.parse(readFileSync(`${dir}/${n}.oafraw.json`, 'utf8')), env);
+    writeFileSync(`${dir}/${n}.app.json`, JSON.stringify(app.map((h) => ({ t: h.t, id: h.id, v: h.v }))));
+  }
   console.log(n, hits.length, 'hits');
 }

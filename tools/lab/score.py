@@ -6,7 +6,7 @@ import numpy as np, mir_eval
 d, systems = sys.argv[1], sys.argv[2:]
 names = json.load(open(f'{d}/index.json'))
 CLASSES = ['kick', 'snare', 'hh', 'tom', 'cym']
-OURS = {'bd': 'kick', 'sn': 'snare', 'hh': 'hh', 'cr': 'cym'}
+OURS = {'bd': 'kick', 'sn': 'snare', 'hh': 'hh', 'cr': 'cym', 'rd': 'cym', 't1': 'tom', 't2': 'tom', 'ft': 'tom'}
 lines = ['| system | tol | ' + ' | '.join(CLASSES) + ' | all |', '|' + '---|' * (len(CLASSES) + 3)]
 for sysname in systems:
     for tol in (0.05, 0.02):
@@ -16,7 +16,7 @@ for sysname in systems:
             est = json.load(open(f'{d}/{n}.{sysname}.json'))
             for c in CLASSES:
                 ref = np.array(sorted({x['t'] for x in truth if (x['cls'] == c or (c == 'hh' and x['cls'] == 'hho'))}))
-                if sysname == 'ours': e = [h['t'] for h in est if OURS.get(h['id']) == c]
+                if sysname in ('ours', 'app'): e = [h['t'] for h in est if OURS.get(h['id']) == c]
                 else: e = [h['t'] for h in est if h['cls'] == c]
                 e = np.array(sorted(e))
                 tp = len(mir_eval.util.match_events(ref, e, tol)) if len(ref) and len(e) else 0

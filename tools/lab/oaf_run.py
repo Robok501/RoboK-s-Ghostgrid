@@ -36,5 +36,13 @@ for name in json.load(open(f'{d}/index.json')):
                     if hits and hits[-1]['c'] == c and i - hits[-1]['f'] < 3: continue
                     hits.append({'f': i, 'c': c, 't': round(i / 100, 3), 'cls': CLS[c], 'vel': round(float(vel[i, c]), 3)})
         json.dump(hits, open(f'{d}/{name}.oaf{int(thr*100)}.json', 'w'))
+    # every peak from 0.15 up, for the app's own code (packages/core modelDrumHits) to filter
+    raw = []
+    for c in range(8):
+        a = on[:, c]
+        for i in range(1, len(a) - 1):
+            if a[i] >= 0.15 and a[i] >= a[i - 1] and a[i] > a[i + 1] and not (raw and raw[-1]['c'] == c and i - raw[-1]['f'] < 3):
+                raw.append({'f': i, 'c': c, 't': round(i / 100, 3), 'p': round(float(a[i]), 3), 'v': round(float(vel[i, c]), 3)})
+    json.dump(raw, open(f'{d}/{name}.oafraw.json', 'w'))
     print(name, len(hits), 'hits; max per column', [round(float(v), 2) for v in on.max(0)])
 print('max activation per column over all files is in the log above; column order 36,38,48,42,51,53,49,75')

@@ -29,13 +29,13 @@ jobs:
           curl -sSL https://huggingface.co/thebluescreen/oaf-drums-onnx/resolve/main/README.md | head -150
           ls -la oaf.onnx
       - run: python tools/lab/render.py groove out ${{ inputs.files }} 30
-      - run: npx vite-node tools/lab/ours.ts out
       - run: python tools/lab/oaf.py oaf.onnx out || true
       - run: python tools/lab/oaf_run.py oaf.onnx out 0.5 0.3 0.2
-      - run: python tools/lab/hybrid.py out oaf30 && python tools/lab/probe.py oaf.onnx
+      - run: npx vite-node tools/lab/ours.ts out
+      - run: python tools/lab/hybrid.py out oaf30 || true
       - name: Score
-        run: python tools/lab/score.py out ours oaf50 oaf30 oaf20 hybrid | tee -a "$GITHUB_STEP_SUMMARY"
-      - run: python tools/lab/analyse.py out oaf30 && python tools/lab/analyse.py out ours
+        run: python tools/lab/score.py out ours oaf50 oaf30 oaf20 app | tee -a "$GITHUB_STEP_SUMMARY"
+      - run: python tools/lab/analyse.py out oaf30 && python tools/lab/analyse.py out ours && python tools/lab/analyse.py out app
       - uses: actions/upload-artifact@v4
         with:
           name: lab-results

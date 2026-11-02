@@ -14,7 +14,7 @@ import { barStarts, placeOf } from './beatmap';
 import { MAX_BARS, newId, withRaw, type Grid, type Idea, type InstrumentId, type NoteState, type RawNote } from './groove';
 import { suggestGrid } from './midiimport';
 
-export interface DrumHit { t: number; id: 'bd' | 'sn' | 'hh' | 'cr'; v: NoteState; level: number }
+export interface DrumHit { t: number; id: 'bd' | 'sn' | 'hh' | 'cr' | 'rd' | 't1' | 't2' | 'ft'; v: NoteState; level: number }
 
 const pct = (xs: ArrayLike<number>, q: number) => {
   const s = Array.from(xs).sort((a, b) => a - b);
@@ -139,6 +139,51 @@ export function drumHits(env: Envelope): DrumHit[] {
   const sl = median(snares.map((s) => s.level));
   for (const s of snares) if (s.level < sl * 0.4) s.v = 3;
   return [...hits, ...cyms].sort((a, b) => a.t - b.t);
+}
+
+/**
+ * A peak from the drum transcription model (Onsets and Frames Drums, E-GMD; Apache-2.0): time, column, onset
+ * probability and the model's velocity. Columns: 0 kick, 1 snare, 2 tom, 3 hi-hat, 4 ride, 5 ride bell, 6 crash, 7 clave.
+ */
+export interface ModelHit { t: number; c: number; p: number; v: number }
+
+/** Lowest onset probability that counts, per model column (tuned in tools/lab on Groove MIDI grooves). */
+export const MODEL_THRESHOLDS = [0.3, 0.5, 0.5, 1, 0.3, 0.3, 0.3, 1];
+
+/**
+ * Drums to score with the model: kick, snare, toms, ride and crash from the model; hi-hat from our own band detector,
+ * because the model's hi-hat column never fires (measured in tools/lab: 0 on thousands of real hi-hats).
+ * Our hi-hats right on a model ride or crash are left out (the same cymbal heard twice).
+ */
+export function modelDrumHits(model: ModelHit[], env: Envelope): DrumHit[] {
+  const out: DrumHit[] = [];
+  const keep = model.filter((h) => h.p >= (MODEL_THRESHOLDS[h.c] ?? 1));
+  const rate = env.rate, low = env.low, mid = env.mid ?? env.full;
+  // toms: high, mid or floor tom from how much low end the hit has, compared with this song's other tom hits
+  const toms = keep.filter((h) => h.c === 2);
+  const lowness = (t: number) => {
+    const f = Math.round(t * rate);
+    let l = 0, m = 0;
+    for (let k = 0; k < 4 && f + k < low.length; k++) { l = Math.max(l, low[f + k]); m = Math.max(m, mid[f + k] ?? 0); }
+    return Math.log((l + 1e-4) / (m + 1e-4));
+  };
+  const tl = toms.map((h) => lowness(h.t)), lo = Math.min(...tl), hi = Math.max(...tl);
+  const tomId = (x: number): DrumHit['id'] => (hi - lo < 0.8 ? 't1' : x < lo + (hi - lo) / 3 ? 't1' : x < lo + (2 * (hi - lo)) / 3 ? 't2' : 'ft');
+  for (const h of keep) {
+    const id: DrumHit['id'] | null = h.c === 0 ? 'bd' : h.c === 1 ? 'sn' : h.c === 2 ? tomId(lowness(h.t)) : h.c === 4 || h.c === 5 ? 'rd' : h.c === 6 ? 'cr' : null;
+    if (id) out.push({ t: h.t, id, v: 0, level: Math.max(0, h.v) });
+  }
+  // ghost snares: well under this song's usual snare velocity
+  const sn = out.filter((h) => h.id === 'sn');
+  const usual = median(sn.map((h) => h.level));
+  if (sn.length >= 4) for (const h of sn) if (h.level < usual * 0.55) h.v = 3;
+  const cym = out.filter((h) => h.id === 'rd' || h.id === 'cr');
+  for (const h of drumHits(env)) {
+    if (h.id !== 'hh') continue;
+    if (cym.some((c) => Math.abs(c.t - h.t) <= 0.03)) continue;
+    out.push(h);
+  }
+  return out.sort((a, b) => a.t - b.t);
 }
 
 export interface DrumScore { idea: Idea; notes: number; bars: number; truncated: boolean }
