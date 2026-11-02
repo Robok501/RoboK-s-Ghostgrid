@@ -9,7 +9,7 @@ import { loadSettings, saveSettings, type AppSettings, type ClickSettings, type 
 
 export interface PadEvent { time: number; note: number; vel: number; key: string; name: string; state: NoteState; mapped: boolean }
 export interface MicEvent { time: number; peak: number }
-type EventMap = { pad: PadEvent; mic: MicEvent; restart: null };
+type EventMap = { pad: PadEvent; mic: MicEvent; restart: null; goTab: 'click' | 'trainer' | 'sketch' | 'songs' | 'settings' };
 type Listener<K extends keyof EventMap> = (e: EventMap[K]) => void;
 
 interface Ctx {
@@ -33,6 +33,8 @@ interface Ctx {
   on: <K extends keyof EventMap>(type: K, cb: Listener<K>) => () => void;
   /** stop whatever is playing (click, sketch, trainer), e.g. before another screen starts its own sound */
   stopAll: () => void;
+  /** switch to another tab (e.g. Songs opens a score in Sketch) */
+  goTab: (t: EventMap['goTab']) => void;
 }
 
 const AppCtx = createContext<Ctx | null>(null);
@@ -60,7 +62,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const pedalRef = useRef<number | null>(null);
   const learnRef = useRef<PadKey | null>(null);
   learnRef.current = learning;
-  const listeners = useRef<{ [K in keyof EventMap]: Set<Listener<K>> }>({ pad: new Set(), mic: new Set(), restart: new Set() });
+  const listeners = useRef<{ [K in keyof EventMap]: Set<Listener<K>> }>({ pad: new Set(), mic: new Set(), restart: new Set(), goTab: new Set() });
 
   const emit = useCallback(<K extends keyof EventMap>(type: K, e: EventMap[K]) => {
     (listeners.current[type] as Set<Listener<K>>).forEach((cb) => cb(e));
@@ -159,8 +161,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     stopAll: () => emit('restart', null),
+    goTab: (t) => emit('goTab', t),
     settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
-  }), [settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on]);
+  }), [settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on, emit]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

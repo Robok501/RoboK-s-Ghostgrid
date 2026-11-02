@@ -78,11 +78,16 @@ function melBank(sr: number) {
   return b;
 }
 /** 12 MFCCs (1–12) of one 1024-sample window. */
-export function mfcc(seg: ArrayLike<number>, sr: number): number[] {
+export function mfcc(seg: ArrayLike<number>, sr: number, pre?: ArrayLike<number>): number[] {
   // pre-emphasis (standard for speech): tilts away from low rumble, e.g. a kick still ringing under a hi-hat
-  const pe = new Float32Array(1024);
-  for (let i = 0; i < 1024; i++) pe[i] = (seg[i] || 0) - 0.97 * (i ? seg[i - 1] || 0 : 0);
-  const p = fftPower(pe), bank = melBank(sr), e: number[] = [];
+  const emph = (x: ArrayLike<number>) => {
+    const pe = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) pe[i] = (x[i] || 0) - 0.97 * (i ? x[i - 1] || 0 : 0);
+    return pe;
+  };
+  const p = fftPower(emph(seg)), bank = melBank(sr), e: number[] = [];
+  // and only what is new: the sound before the attack (faded a bit) is taken off
+  if (pre) { const q = fftPower(emph(pre)); for (let i = 0; i < p.length; i++) p[i] = Math.max(p[i] * 0.05, p[i] - 0.7 * q[i]); }
   for (const f of bank) {
     let q = 1e-10;
     for (let k = Math.max(1, Math.floor(f.lo)); k <= Math.min(p.length - 1, Math.ceil(f.hi)); k++) {
@@ -102,8 +107,14 @@ export function mfcc(seg: ArrayLike<number>, sr: number): number[] {
 /** Length of a feature vector; taught examples of another length (an older app version) are ignored. */
 export const FEATURE_LEN = 11 + 24;
 /** Features of one hit. `seg` starts at the onset and runs up to 300 ms (or the next hit). */
-export function featVec(seg: Float32Array, sr: number): Features {
+export function featVec(seg: Float32Array, sr: number, pre?: Float32Array): Features {
   const p = fftPower(seg.subarray(0, 1024)), hz = sr / 1024, band = new Array(8).fill(0);
+  // only what is new at the attack: a "boom" still ringing underneath would otherwise make a "ts" look low
+  // (the 1024 samples before the attack, a bit faded, are taken off; taught sounds have silence there)
+  if (pre && pre.length >= 1024) {
+    const q = fftPower(pre.subarray(pre.length - 1024));
+    for (let i = 0; i < p.length; i++) p[i] = Math.max(p[i] * 0.05, p[i] - 0.7 * q[i]);
+  }
   let tot = 1e-12, cen = 0, lo = 0, hi = 0;
   for (let i = 1; i < p.length; i++) {
     const f = i * hz;
@@ -120,7 +131,7 @@ export function featVec(seg: Float32Array, sr: number): Features {
   for (let j = pi; j < env.length; j++) if (env[j] < pk * 0.2) { dec = j; break; }
   const c = cen / tot, decMs = dec * 5;
   // timbre of the attack, and of what follows (the vowel or the hiss after a consonant)
-  const attack = mfcc(seg.subarray(0, 1024), sr);
+  const attack = mfcc(seg.subarray(0, 1024), sr, pre && pre.length >= 1024 ? pre.subarray(pre.length - 1024) : undefined);
   const tail = new Array(12).fill(0);
   let nt = 0;
   for (let st = 1024; st + 512 <= seg.length && st < Math.round(sr * 0.085); st += 1024, nt++) {
@@ -138,7 +149,11 @@ export function featVec(seg: Float32Array, sr: number): Features {
 }
 
 // weights: band shares, brightness, ring-out, loudness, then 24 MFCCs (lighter each, there are many)
-const W = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1.6, 0.8, ...new Array(12).fill(0.55), ...new Array(12).fill(0.4)];
+// (loudness counts little: you beatbox softer or louder in a groove than when teaching; accents and ghosts come later,
+// except when a ghost snare is taught, see knn)
+const W = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1.2, 0.25, ...new Array(12).fill(0.55), ...new Array(12).fill(0.4)];
+/** ring-out feature value for 200 ms (see featVec): longer only tells an open hi-hat apart, and that still fits */
+const DEC_CAP = Math.log2(200 / 5) / 6;
 const valid = (samples: Samples, k: SoundKey) => (samples[k] || []).filter((v) => v.length === FEATURE_LEN);
 export const taughtSounds = (samples: Samples): SoundKey[] => SOUNDS.map((s) => s.k).filter((k) => valid(samples, k).length >= 2);
 /** True when taught examples come from an older feature set and need teaching again. */
@@ -165,8 +180,18 @@ function model(samples: Samples): Model {
 /** Nearest taught sounds; returns the winner and a confidence margin (0 = tie, 1 = clear). */
 export function knn(v: number[], samples: Samples, k = 3): { key: SoundKey; margin: number } {
   const { all, sd } = model(samples);
+  // loudness only matters when a soft sound is taught on its own (ghost snare)
+  const loudW = valid(samples, 'sng').length >= 2 ? 0.8 : W[10];
   const ds = all
-    .map(([key, x]) => { let q = 0; for (let d = 0; d < W.length; d++) q += W[d] * ((v[d] - x[d]) / sd[d]) ** 2; return [key, Math.sqrt(q)] as const; })
+    .map(([key, x]) => {
+      let q = 0;
+      for (let d = 0; d < W.length; d++) {
+        // ring-out: in a groove the next sound cuts it short, so taught (long) and played (short) are compared up to 200 ms
+        const a = d === 9 ? Math.min(v[d], DEC_CAP) : v[d], b = d === 9 ? Math.min(x[d], DEC_CAP) : x[d];
+        q += (d === 10 ? loudW : W[d]) * ((a - b) / sd[d]) ** 2;
+      }
+      return [key, Math.sqrt(q)] as const;
+    })
     .sort((a, b) => a[1] - b[1]);
   const vote: Partial<Record<SoundKey, number>> = {};
   for (const [key, d] of ds.slice(0, k)) vote[key] = (vote[key] || 0) + 1 / (d + 0.25);
@@ -235,15 +260,24 @@ export function analyze(data: Float32Array, sr: number, samples: Samples, ghostP
     avg /= 6;
     return e[i] > Math.max(nf * over, m * 0.004) && env[i] > noise * over * 0.5 && e[i] > avg * ratio + m * 0.004 && e[i] >= e[i - 1];
   };
-  const ons: { t: number; start: number; peak: number }[] = [];
-  let lastI = -1e9, lastPk = 0;
-  const gap = Math.round(0.09 / 0.005);
+  // every attack is a candidate first; then, within 90 ms, only the loudest stays. So a soft breath or lip noise
+  // just before a "boom" doesn't take the place of the boom (it used to, and the boom went missing).
+  const cand: { i: number; peak: number }[] = [];
   for (let i = 8; i < nh; i++) {
-    if (i - lastI < gap) continue;
     // the high-frequency envelope catches soft "ts", but the full signal must still be above half the floor (room hiss)
     if (!jump(env, mx, noise, i) && !jump(henv, hmx, hnoise, i)) continue;
     let pk = 0;
     for (let k = 0; k < 12 && i + k < nh; k++) pk = Math.max(pk, env[i + k]);
+    const last = cand[cand.length - 1];
+    if (last && i - last.i < 4) { if (pk > last.peak) cand[cand.length - 1] = { i: last.i, peak: pk }; continue; }
+    cand.push({ i, peak: pk });
+  }
+  const gap = Math.round(0.09 / 0.005), keep: typeof cand = [];
+  for (const c of cand.slice().sort((x, y) => y.peak - x.peak)) if (!keep.some((k) => Math.abs(k.i - c.i) < gap)) keep.push(c);
+  keep.sort((x, y) => x.i - y.i);
+  const ons: { t: number; start: number; peak: number }[] = [];
+  let lastI = -1e9, lastPk = 0;
+  for (const { i, peak: pk } of keep) {
     // still ringing from the last hit and not much louder: same sound, not a new hit
     if (i - lastI < 60 && env[i - 1] > lastPk * 0.5 && pk < lastPk * 1.3) continue;
     ons.push({ t: (i * hop) / sr, start: Math.max(0, (i - 1) * hop), peak: pk });
@@ -257,7 +291,7 @@ export function analyze(data: Float32Array, sr: number, samples: Samples, ghostP
   }
   let hits: Hit[] = ons.map((o, j) => {
     const lim = Math.min((ons[j + 1] ? ons[j + 1].start : data.length) - o.start, Math.round(sr * 0.3));
-    const f = featVec(data.subarray(o.start, o.start + lim), sr);
+    const f = featVec(data.subarray(o.start, o.start + lim), sr, o.start >= 1024 ? data.subarray(o.start - 1024, o.start) : undefined);
     return { t: o.t, peak: o.peak, f, ...decide(f, samples) };
   });
   // lip pops, tongue clicks and breath ticks: very short and much softer than the sounds around them

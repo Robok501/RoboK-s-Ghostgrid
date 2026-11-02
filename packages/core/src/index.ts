@@ -14,3 +14,4 @@ export * from './tempoear';
 export * from './notation';
 export * from './midiimport';
 export * from './beatmap';
+export * from './drumscore';

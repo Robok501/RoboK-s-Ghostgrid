@@ -33,9 +33,11 @@ export function themeSvg(svg: string): string {
   });
 }
 
-export function Score({ idea, width, style, count, selectedBar, playBar, onSelectBar, from = 0, to }: {
+export function Score({ idea, width, style, count, selectedBar, playBar, playStep, onSelectBar, from = 0, to }: {
   idea: Idea; width: number; style: NotationStyle; count: boolean;
   selectedBar: number | null; playBar?: number | null; onSelectBar?: (b: number) => void;
+  /** grid step playing inside `playBar`: draws the same moving line as the grid */
+  playStep?: number | null;
   /** show only bars from … to (exclusive); numbers stay those of the whole idea */
   from?: number; to?: number;
 }) {
@@ -51,7 +53,10 @@ export function Score({ idea, width, style, count, selectedBar, playBar, onSelec
   return (
     <View style={{ width: e.width, height: e.height }}>
       <SvgXml xml={xml} width={e.width} height={e.height} />
-      {pb && <View pointerEvents="none" style={{ position: 'absolute', left: pb.x0, top: pb.top - 44, width: pb.barW, height: pb.h + 30, borderRadius: 8, backgroundColor: C.accentSoft, borderWidth: 1, borderColor: C.accent }} />}
+      {pb && <View pointerEvents="none" style={{ position: 'absolute', left: pb.x0, top: pb.top - 44, width: pb.barW, height: pb.h + 30, borderRadius: 8, backgroundColor: C.accentSoft }} />}
+      {pb && playStep !== null && playStep !== undefined && (
+        <View pointerEvents="none" style={{ position: 'absolute', left: pb.x0 + 10 + pb.slotW * playStep, top: pb.top - 30, width: pb.slotW, height: pb.h + 10, borderRadius: 4, backgroundColor: C.accent, opacity: 0.35 }} />
+      )}
       {onSelectBar && e.bars.map((b, i) => b && (
         <Pressable key={i} onPress={() => onSelectBar(i + from)} accessibilityRole="button" accessibilityLabel={`Bar ${i + 1 + from}`}
           style={{ position: 'absolute', left: b.x0, top: b.top - 44, width: b.barW, height: b.h + 30 }} />

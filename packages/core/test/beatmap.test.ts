@@ -125,3 +125,66 @@ describe('finding the "1" from the music', () => {
     expect(musicPhaseScores(music, m.beats, 4).length).toBe(4);
   });
 });
+
+/** A song from drum hits per bar (times in beats) and chords per bar; bars may have different lengths. */
+function song(bars: { beats: number; bd: number[]; sn: number[]; chordEvery?: number }[], bpm = 104, start = 0.8) {
+  const beat = 60 / bpm, ev: { t: number; k: 'bd' | 'sn' | 'hh' }[] = [], ones: number[] = [], beatsT: number[] = [];
+  const chordAt: { t: number; c: number[]; bassOn: boolean }[] = [];
+  const chords = [[0, 4, 7], [5, 9, 0], [7, 11, 2], [9, 0, 4], [2, 5, 9]];
+  let t = start, ci = 0;
+  for (const b of bars) {
+    ones.push(t);
+    for (let q = 0; q < b.beats; q++) beatsT.push(t + q * beat);
+    for (let h = 0; h < b.beats * 2; h++) ev.push({ t: t + (h * beat) / 2, k: 'hh' });
+    b.bd.forEach((x) => ev.push({ t: t + x * beat, k: 'bd' }));
+    b.sn.forEach((x) => ev.push({ t: t + x * beat, k: 'sn' }));
+    for (let q = 0; q < b.beats; q += b.chordEvery ?? b.beats) chordAt.push({ t: t + q * beat, c: chords[ci++ % chords.length], bassOn: true });
+    t += b.beats * beat;
+  }
+  const n = Math.ceil((t + 2) * RATE), full = new Float32Array(n), low = new Float32Array(n), mid = new Float32Array(n), high = new Float32Array(n);
+  for (const e of ev) {
+    const f0 = Math.round(e.t * RATE), amp = e.k === 'bd' ? 0.8 : e.k === 'sn' ? 0.6 : 0.15, dec = e.k === 'hh' ? 4 : 12;
+    for (let d = 0; d < 40 && f0 + d < n; d++) {
+      const v = amp * Math.exp(-d / dec);
+      full[f0 + d] += v;
+      if (e.k === 'bd') { low[f0 + d] += v * 0.9; mid[f0 + d] += v * 0.15; }
+      if (e.k === 'sn') { low[f0 + d] += v * 0.08; mid[f0 + d] += v * 0.7; high[f0 + d] += v * 0.2; }
+      if (e.k === 'hh') high[f0 + d] += v;
+    }
+  }
+  for (let i = 0; i < n; i++) { full[i] += 0.002; low[i] += 0.001; mid[i] += 0.001; high[i] += 0.001; }
+  const mr = 10, mn = Math.ceil((t + 2) * mr), chroma = new Float32Array(mn * 12), bass = new Float32Array(mn);
+  for (let f = 0; f < mn; f++) {
+    const tt = f / mr;
+    let cur = -1;
+    chordAt.forEach((c, i) => { if (c.t <= tt + 1e-6) cur = i; });
+    if (cur < 0) continue;
+    for (const pc of chordAt[cur].c) chroma[f * 12 + pc] = 1;
+    bass[f] = tt - chordAt[cur].t < beat ? 1 : 0.3;
+  }
+  return { env: { rate: RATE, full, low, mid, high } as Envelope, music: { rate: mr, chroma, bass }, ones, beat };
+}
+const groove = { beats: 4, bd: [0, 2.5], sn: [1, 3] };
+const hitRate = (found: number[], truth: number[], tol = 0.04) => truth.filter((t) => found.some((f) => Math.abs(f - t) <= tol)).length / truth.length;
+
+describe('finding the "1" in harder songs', () => {
+  it('a two-beat pickup before the first bar, chords changing every two beats', () => {
+    const { env, music, ones } = song([{ beats: 2, bd: [], sn: [0, 0.5, 1, 1.5] }, ...Array.from({ length: 16 }, () => ({ ...groove, chordEvery: 2 }))]);
+    const m = beatMap(env, 4, music);
+    expect(hitRate(barStarts(m), ones.slice(1))).toBeGreaterThan(0.9);
+  });
+  it('without chords, the kick on 1 and the snare backbeat decide, even after a pickup', () => {
+    const { env, ones } = song([{ beats: 3, bd: [], sn: [0, 1, 2, 2.5] }, ...Array.from({ length: 16 }, () => groove)]);
+    expect(hitRate(barStarts(beatMap(env, 4)), ones.slice(1))).toBeGreaterThan(0.9);
+  });
+  it('follows a bar of 2/4 in the middle of the song', () => {
+    const { env, music, ones } = song([...Array.from({ length: 10 }, () => groove), { beats: 2, bd: [0], sn: [1] }, ...Array.from({ length: 10 }, () => groove)]);
+    const m = beatMap(env, 4, music);
+    const late = ones.slice(11);
+    expect(hitRate(barStarts(m), ones.slice(0, 10))).toBeGreaterThan(0.85);
+    expect(hitRate(barStarts(m), late)).toBeGreaterThan(0.85);
+    // tapping the 1 later in the song fixes from there on, not before
+    const fixed = setDownbeatAt(shiftDownbeat(m, 1), late[4]);
+    expect(hitRate(barStarts(fixed), late.slice(4))).toBeGreaterThan(0.85);
+  });
+});

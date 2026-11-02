@@ -14,7 +14,7 @@ const server = http.createServer((req, res) => {
 const beats = []; for (let t = 1.2; t < 210; t += 0.6) beats.push(+t.toFixed(3));
 const song = { id: 's1', name: 'John Brown - Papa Grows Funk', created: 1, source: 'file', original: 'original.mp3', duration: 213, separated: true,
   rate: 0.9, mix: 'nodrums', drumVol: 1, loop: true, loopA: 30, loopB: 39.6, click: true, clickVol: 0.8, countIn: 1, coach: true, coachInput: 'pads', grade: 2,
-  beatMap: { beats, beatsPerBar: 4, downbeat: 0, bpm: 100, source: 'drums', v: 2 },
+  beatMap: { beats, beatsPerBar: 4, downbeat: 0, bpm: 100, source: 'drums', v: 3 },
   check: { mixDb: -14.2, drumsDb: -19.8, restDb: -15.6, drumsShare: 0.27, invalid: 0 } };
 const song2 = { id: 's2', name: 'the hardest transcription - Oliver', created: 2, source: 'file', original: 'original.m4a', duration: 43, separated: false };
 const SEED = { 'doc/songs.json': JSON.stringify([song, song2]) };

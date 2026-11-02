@@ -8,7 +8,7 @@ import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import {
-  HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, halfTime, offsetToBeat, setBeatsPerBar,
+  HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, offsetToBeat, setBeatsPerBar,
   setDownbeatAt, shiftDownbeat, snapToBar, type BeatMap,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -16,6 +16,7 @@ import { CoachPanel } from '../click/CoachPanel';
 import type { CoachInput } from '../store';
 import { useApp } from '../AppContext';
 import { readVoiceFile, saveWav } from '../sketch/usePlayer';
+import { addIdeaFromOutside } from '../sketch/ideas';
 import {
   MODEL_MB, MODEL_NAME, MODEL_URL, deleteSongFiles, ensureDir, fmtTime, loadSongs, newSongId, originalPath, saveSongs, stemPath, toPath,
   type Mix, type Song,
@@ -210,7 +211,8 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   song: Song; update: (id: string, p: Partial<Song>) => void; separating: boolean; progress: Progress;
   onSeparate: () => void; onCancel: () => void; onDelete: () => void; canSeparate: boolean;
 }) {
-  const { info, on, mic, setMic, settings, micLevel } = useApp();
+  const { info, on, mic, setMic, settings, micLevel, goTab } = useApp();
+  const [scoring, setScoring] = useState(false);
   const [dur, setDur] = useState(song.duration ?? 0);
   const [pos, setPos] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -247,7 +249,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       // the "1" comes from the music: chord changes and bass notes, in the track without drums (or the whole song)
       let music: Awaited<ReturnType<typeof Engine.stemsMusicFeatures>> | undefined;
       try { music = await Engine.stemsMusicFeatures(song.separated ? stemPath(song, 'nodrums') : originalPath(song)); } catch { music = undefined; }
-      update(song.id, { beatMap: { ...beatMap(env, map?.beatsPerBar ?? 4, music), source: song.separated ? 'drums' : 'mix', v: 2 } });
+      update(song.id, { beatMap: { ...beatMap(env, map?.beatsPerBar ?? 4, music), source: song.separated ? 'drums' : 'mix', v: 3 } });
     } catch (e) {
       setErr(`Couldn't find the beat: ${(e as Error).message}`);
     }
@@ -259,7 +261,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   // a separated drum track beats the full mix for finding the beat: redo an old map once
   useEffect(() => {
     // redo maps from the whole mix, or from before the "1" came from the music (unless fixed by hand)
-    if (ready && map && !map.edited && ((song.separated && map.source === 'mix') || map.v !== 2)) analyse();
+    if (ready && map && !map.edited && ((song.separated && map.source === 'mix') || (map.v ?? 0) < 3)) analyse();
   }, [ready, song.separated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the click track follows the beat map
@@ -340,6 +342,26 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   };
 
   // ---- timing coach against the song's beat
+  // drums to score: the loop (or the whole song) from the drum track, opened as a new idea in Sketch
+  const toScore = async () => {
+    if (!map || !song.separated) return;
+    if (playing) { Engine.stemsPause(); setPlaying(false); }
+    setScoring(true); setErr('');
+    try {
+      const env = await Engine.stemsEnvelope(stemPath(song, 'drums'));
+      if (!env.mid || !env.high) throw new Error('this needs the newest version of the app');
+      const name = `${song.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 28)}${loopOn ? ` · bars ${barAt(map, A + 0.01) + 1}–${barAt(map, B - 0.01) + 1}` : ''}`;
+      const r = hitsToIdea(drumHits(env), map, loopOn ? A : 0, loopOn ? B : dur, name);
+      if (!r.notes) throw new Error('no drum hits found there');
+      addIdeaFromOutside(r.idea);
+      setScoring(false);
+      goTab('sketch');
+      return;
+    } catch (e) {
+      setErr(`Couldn't make a score: ${(e as Error).message}`);
+    }
+    setScoring(false);
+  };
   const [, bump] = useState(0);
   const logRef = useRef(new HitLog(32));
   const [last, setLast] = useState<number | null>(null);
@@ -474,6 +496,10 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
           {[1, 2, 4, 8].map((n) => <Btn key={n} label={`${n} bar${n > 1 ? 's' : ''}`} onPress={() => loopBars(n)} />)}
         </View>
       )}
+
+      <Row label="Drums to score" hint={!song.separated ? 'separate the drums first' : !map ? 'waiting for the beat map' : loopOn ? 'the loop, opened in Sketch' : 'the whole song (up to 64 bars), opened in Sketch'}>
+        <Btn label={scoring ? 'Writing…' : loopOn ? 'Loop to score' : 'Song to score'} disabled={!song.separated || !map || scoring} onPress={toScore} />
+      </Row>
 
       <Row label="Score my timing" hint="against the song's beat">
         <Btn label={song.coach ? 'On' : 'Off'} active={!!song.coach} disabled={!map} onPress={() => update(song.id, { coach: !song.coach })} />

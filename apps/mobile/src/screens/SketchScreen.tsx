@@ -299,7 +299,7 @@ export function SketchScreen() {
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         {scoreVisible && (
           <Score idea={idea} width={W} style={style} count={sk.count} selectedBar={scope === 'bar' ? selBar : null}
-            playBar={player.pos?.bar ?? null} onSelectBar={(b) => { setBar(b); setScope('bar'); }} from={lineFrom} to={lineFrom + perLine} />
+            playBar={player.pos?.bar ?? null} playStep={player.pos?.step ?? null} onSelectBar={(b) => { setBar(b); setScope('bar'); }} from={lineFrom} to={lineFrom + perLine} />
         )}
 
         {/* bars + grid button */}

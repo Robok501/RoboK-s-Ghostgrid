@@ -152,15 +152,19 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
 
   // MARK: - Analysis helpers for the beat map and click
 
-  /// Loudness envelopes of a (drum) track at 100 frames per second: the whole signal and its low end (< ~150 Hz, the kick).
+  /// Loudness envelopes at 100 frames per second: whole signal, low end (kick), mid band (snare, toms), high band (cymbals).
   static func envelope(_ url: URL) throws -> [String: Any] {
     let file = try AVAudioFile(forReading: url)
     let fmt = file.processingFormat
     let sr = fmt.sampleRate, hop = Int((sr / 100).rounded()), chans = Int(fmt.channelCount)
     guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(hop * 200)) else { return [:] }
-    let a = Float(1 - exp(-2 * Double.pi * 150 / sr))
-    var lp: Float = 0, accF: Float = 0, accL: Float = 0, k = 0
-    var full: [Double] = [], low: [Double] = []
+    // one-pole low-pass coefficient for a corner frequency; two in a row give 12 dB/octave
+    let co = { (f: Double) in Float(1 - exp(-2 * Double.pi * f / sr)) }
+    let a = co(150), aM1 = co(200), aM2 = co(2500), aH = co(7000)
+    var lp: Float = 0, accF: Float = 0, accL: Float = 0, accM: Float = 0, accH: Float = 0, k = 0
+    // mid band (snare, toms: ~200 Hz – 2.5 kHz) and high band (hi-hat, cymbals: above ~7 kHz)
+    var m1a: Float = 0, m1b: Float = 0, m2a: Float = 0, m2b: Float = 0, h1: Float = 0, h2: Float = 0
+    var full: [Double] = [], low: [Double] = [], mid: [Double] = [], high: [Double] = []
     while file.framePosition < file.length {
       try file.read(into: buf, frameCount: buf.frameCapacity)
       let n = Int(buf.frameLength)
@@ -171,14 +175,20 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
         for c in 0..<chans { x += ch[c][i] }
         x /= Float(chans)
         lp += a * (x - lp)
-        accF += x * x; accL += lp * lp; k += 1
+        m1a += aM1 * (x - m1a); m1b += aM1 * (m1a - m1b)
+        m2a += aM2 * (x - m2a); m2b += aM2 * (m2a - m2b)
+        h1 += aH * (x - h1); h2 += aH * (h1 - h2)
+        let md = m2b - m1b, hi = x - h2
+        accF += x * x; accL += lp * lp; accM += md * md; accH += hi * hi; k += 1
         if k == hop {
-          full.append(Double(sqrt(accF / Float(hop)))); low.append(Double(sqrt(accL / Float(hop))))
-          accF = 0; accL = 0; k = 0
+          let h = Float(hop)
+          full.append(Double(sqrt(accF / h))); low.append(Double(sqrt(accL / h)))
+          mid.append(Double(sqrt(accM / h))); high.append(Double(sqrt(accH / h)))
+          accF = 0; accL = 0; accM = 0; accH = 0; k = 0
         }
       }
     }
-    return ["rate": 100.0, "full": full, "low": low]
+    return ["rate": 100.0, "full": full, "low": low, "mid": mid, "high": high]
   }
 
   /// Features of the music (the track without drums) at 10 frames per second, for finding the "1":

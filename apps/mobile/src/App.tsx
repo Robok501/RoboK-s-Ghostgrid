@@ -36,7 +36,7 @@ export default function App() {
 
 function Shell() {
   const insets = useSafeAreaInsets();
-  const { stopAll } = useApp();
+  const { stopAll, on } = useApp();
   const [tab, setTab] = useState<Tab>('click');
   const win = useWindowDimensions();
   const compact = win.width > win.height && Math.min(win.width, win.height) < 600;
@@ -45,6 +45,9 @@ function Shell() {
     if (t === 'trainer' && tab !== 'trainer') stopAll();
     setTab(t);
   };
+  const goRef = React.useRef(go);
+  goRef.current = go;
+  React.useEffect(() => on('goTab', (t) => goRef.current(t)), [on]);
   return (
     <View style={[s.root, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <StatusBar style="light" />
