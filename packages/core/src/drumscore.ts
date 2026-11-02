@@ -5,7 +5,7 @@
  *     so a hit that shows in two bands is judged by how its bands compare with this song's own clear kicks
  *     and snares, not by fixed levels.
  *  2. Place: each hit gets its position from the song's beat map (bar, beat, and how far into the beat).
- *  3. Grid: per bar the coarsest grid that fits (8ths, 16ths or triplets), as in MIDI import; the exact positions
+ *  3. Grid: per bar the coarsest grid that fits (8ths, 16ths, triplets or 32nds), as in MIDI import; the exact positions
  *     stay with the idea, so the grid can still be changed afterwards.
  * Kick, snare (with ghost notes), hi-hat (open when it rings) and crash. Toms are not told apart yet.
  */
@@ -177,7 +177,7 @@ export function hitsToIdea(hits: DrumHit[], m: BeatMap, from: number, to: number
   });
   const votes = new Map<Grid, number>();
   for (const g of perBar) if (g) votes.set(g, (votes.get(g) ?? 0) + 1);
-  const pref: Record<Grid, number> = { 2: 0, 4: 1, 3: 2 };
+  const pref: Record<Grid, number> = { 2: 0, 4: 1, 3: 2, 8: 3 };
   const grid: Grid = [...votes.entries()].sort((x, y) => y[1] - x[1] || pref[x[0]] - pref[y[0]])[0]?.[0] ?? 4;
   const base: Idea = { id: newId(), name, bpm: Math.round(m.bpm || 100), beats: bpb, grid, swing: 0, bars: [] };
   base.bars = perBar.map((g) => ({ n: {} as Idea['bars'][number]['n'], ...(g && g !== grid ? { grid: g } : {}) }));

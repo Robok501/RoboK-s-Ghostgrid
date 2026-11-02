@@ -308,7 +308,7 @@ export function SketchScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.bars}>
             <Chip label="All" on={scope === 'all'} onPress={() => setScope('all')} />
             {idea.bars.map((b, i) => (
-              <Chip key={i} label={`${i + 1}${b.grid ? ` ${b.grid === 3 ? '³' : b.grid === 2 ? '⁸' : '¹⁶'}` : ''}`} on={scope === 'bar' && i === selBar}
+              <Chip key={i} label={`${i + 1}${b.grid ? ` ${b.grid === 3 ? '³' : b.grid === 2 ? '⁸' : b.grid === 8 ? '³²' : '¹⁶'}` : ''}`} on={scope === 'bar' && i === selBar}
                 onPress={() => { setBar(i); setScope('bar'); }} />
             ))}
             {idea.bars.length < MAX_BARS && <Chip label="+ Bar" onPress={() => { commit(addBar(idea)); setBar(idea.bars.length); setScope('bar'); }} />}

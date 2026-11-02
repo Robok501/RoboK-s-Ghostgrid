@@ -19,15 +19,19 @@ function fits(beats: number[], grid: Grid, tol = 0.07): boolean {
   return ok >= beats.length * 0.95;
 }
 
-/** Suggested grid: the coarsest that fits; otherwise whichever of 16ths and triplets fits best. */
+/**
+ * Suggested grid: the coarsest that fits; otherwise whichever of 16ths and triplets fits best.
+ * 32nds only when they fit tightly and triplets don't (a triplet sits close to a 32nd, so it would pass too).
+ */
 export function suggestGrid(beats: number[]): Grid {
   if (fits(beats, 2)) return 2;
   if (fits(beats, 4)) return 4;
   if (fits(beats, 3)) return 3;
+  if (fits(beats, 8, 0.03)) return 8;
   return gridError(beats, 3) < gridError(beats, 4) ? 3 : 4;
 }
 
-const PREF: Record<Grid, number> = { 2: 0, 4: 1, 3: 2 };
+const PREF: Record<Grid, number> = { 2: 0, 4: 1, 3: 2, 8: 3 };
 
 export interface MidiImport {
   idea: Idea;

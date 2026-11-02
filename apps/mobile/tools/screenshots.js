@@ -110,6 +110,7 @@ const W = 428, H = 926, TOP = 47, BOTTOM = 34;
     }],
     ['4-trainer', async (p) => { await tab(p, 'Trainer'); }],
     ['5-sketch', async (p) => { await tab(p, 'Sketch'); }],
+    ['5b-sketch-32nds', async (p) => { await tab(p, 'Sketch'); await p.getByRole('button', { name: /^Grid 16ths/ }).first().click(); await p.waitForTimeout(500); }],
     ['6-sketch-menu', async (p) => { await tab(p, 'Sketch'); await btn(p, '•••'); }],
     ['7-sketch-rec-choice', async (p) => { await tab(p, 'Sketch'); await btn(p, 'Record'); }],
     ['8-songs', async (p) => { await tab(p, 'Songs'); }],

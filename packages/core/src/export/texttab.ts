@@ -8,7 +8,7 @@ export function textTab(idea: Idea): string {
   const g = idea.grid;
   const used = INSTRUMENTS.filter((i) => idea.bars.some((b) => b.n[i.id].some((v) => v)));
   const mixed = idea.bars.some((_, b) => barGrid(idea, b) !== g);
-  const gridName = mixed ? 'mixed grid' : g === 4 ? '16ths' : g === 2 ? '8ths' : 'triplets';
+  const gridName = mixed ? 'mixed grid' : g === 4 ? '16ths' : g === 2 ? '8ths' : g === 8 ? '32nds' : 'triplets';
   const swing = idea.swing && g !== 3 ? `, swing ${idea.swing}%` : '';
   let out = `${idea.name} — ${idea.bpm} BPM, ${idea.beats}/4, ${gridName}${swing}\n\n`;
   out += '   |' + idea.bars.map((_, b) => { const bg = barGrid(idea, b); return Array.from({ length: idea.beats * bg }, (_, s) => countLabel(s, bg)).join(''); }).join('|') + '|\n';

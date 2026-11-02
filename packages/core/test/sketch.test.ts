@@ -35,7 +35,18 @@ describe('rows', () => {
 });
 
 describe('grid per bar', () => {
-  it('cycles 8ths → 16ths → triplets', () => expect([nextGrid(2), nextGrid(4), nextGrid(3)]).toEqual([4, 3, 2]));
+  it('cycles 8ths → 16ths → 32nds → triplets', () => expect([nextGrid(2), nextGrid(4), nextGrid(8), nextGrid(3)]).toEqual([4, 8, 3, 2]));
+  it('32nds: a 16th groove keeps every note, and a 32nd fill needs them', async () => {
+    const { setGrid: sg, ideaToRaw: toRaw, countLabel: cl } = await import('../src/groove');
+    const { suggestGrid } = await import('../src/midiimport');
+    const ex = exampleIdea();
+    const r = sg(ex, 8);
+    expect(r.lost).toBe(0);
+    expect(toRaw(r.idea).length).toBe(toRaw(ex).length);
+    expect(cl(2, 8)).toBe('e');
+    expect(suggestGrid([0, 0.125, 0.25, 0.375, 1, 1.5, 2, 2.125, 2.25])).toBe(8);
+    expect(suggestGrid([0, 1 / 3, 2 / 3, 1, 4 / 3])).toBe(3);
+  });
   it('gives one bar triplets and keeps the others straight', () => {
     const ex = exampleIdea();
     const { idea } = setBarGrid(ex, 1, 3);

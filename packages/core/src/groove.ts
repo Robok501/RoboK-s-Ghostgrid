@@ -4,7 +4,8 @@ export type InstrumentId = 'cr' | 'hh' | 'rd' | 't1' | 't2' | 'sn' | 'ft' | 'bd'
 /** 0 = off, 1 = hit, 2 = accent, 3 = alternative (open hi-hat or ghost snare) */
 export type NoteState = 0 | 1 | 2 | 3;
 /** 2 = eighths, 4 = sixteenths, 3 = eighth-note triplets */
-export type Grid = 2 | 3 | 4;
+/** steps per beat: 8ths, triplets, 16ths, 32nds */
+export type Grid = 2 | 3 | 4 | 8;
 
 export interface Instrument {
   id: InstrumentId;
@@ -61,9 +62,9 @@ export const steps = (idea: Pick<Idea, 'beats' | 'grid'>) => idea.beats * idea.g
 /** Grid and number of steps of one bar. */
 export const barGrid = (idea: Pick<Idea, 'grid' | 'bars'>, b: number): Grid => idea.bars[b]?.grid ?? idea.grid;
 export const barSteps = (idea: Pick<Idea, 'beats' | 'grid' | 'bars'>, b: number) => idea.beats * barGrid(idea, b);
-export const GRID_NAMES: Record<Grid, string> = { 2: '8ths', 4: '16ths', 3: 'Triplets' };
+export const GRID_NAMES: Record<Grid, string> = { 2: '8ths', 4: '16ths', 8: '32nds', 3: 'Triplets' };
 /** The big grid button cycles 8ths → 16ths → triplets. */
-export const nextGrid = (g: Grid): Grid => (g === 2 ? 4 : g === 4 ? 3 : 2);
+export const nextGrid = (g: Grid): Grid => (g === 2 ? 4 : g === 4 ? 8 : g === 8 ? 3 : 2);
 
 export const DEFAULT_ROWS: InstrumentId[] = ['hh', 'sn', 'bd'];
 const ORDER = INSTRUMENTS.map((i) => i.id);
@@ -236,16 +237,17 @@ export function deleteBar(idea: Idea, bar: number): Idea {
   const out = clone(idea); out.bars.splice(bar, 1); delete out.raw; return out;
 }
 
-/** Count labels per grid step: 1 e & a, 1 &, or 1 & a for triplets. */
+/** Count labels per grid step: 1 e & a, 1 &, 1 & a for triplets; 32nds count like 16ths with a dot between. */
 export function countLabel(step: number, grid: Grid): string {
-  const SUB: Record<Grid, string[]> = { 4: ['', 'e', '&', 'a'], 2: ['', '&'], 3: ['', '&', 'a'] };
+  const SUB: Record<Grid, string[]> = { 4: ['', 'e', '&', 'a'], 2: ['', '&'], 3: ['', '&', 'a'], 8: ['', '·', 'e', '·', '&', '·', 'a', '·'] };
   return step % grid ? SUB[grid][step % grid] : String(step / grid + 1);
 }
 
 /** Time in seconds of a grid step from the start of the idea, with swing applied. */
 export function stepTime(idea: Idea, bar: number, step: number): number {
   const beat = 60 / idea.bpm, g = barGrid(idea, bar), sd = beat / g;
-  const swing = g !== 3 && step % 2 === 1 ? (sd * idea.swing) / 100 : 0;
+  // swing moves the off-beat 8ths or 16ths; not used with triplets or 32nds
+  const swing = g !== 3 && g !== 8 && step % 2 === 1 ? (sd * idea.swing) / 100 : 0;
   return bar * idea.beats * beat + step * sd + swing;
 }
 

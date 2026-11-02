@@ -32,7 +32,7 @@ export function engrave(idea: Idea, opts: EngraveOptions): Engraving {
   STYLE = opts.style ?? DEFAULT_STYLE;
   const W = opts.width, nb = idea.bars.length, count = opts.count ?? true;
   const lead = 48, lead2 = 30;
-  const minBar = Math.max(...idea.bars.map((_, b) => { const g = barGrid(idea, b); return barSteps(idea, b) * (g === 4 ? 19 : g === 3 ? 26 : 30); })) + 20;
+  const minBar = Math.max(...idea.bars.map((_, b) => { const g = barGrid(idea, b); return barSteps(idea, b) * (g === 8 ? 11 : g === 4 ? 19 : g === 3 ? 26 : 30); })) + 20;
   let bpl = Math.max(1, Math.min(4, Math.floor((W - lead) / minBar)));
   const lines = Math.ceil(nb / bpl);
   bpl = Math.ceil(nb / lines);
@@ -85,47 +85,54 @@ function engraveBar(idea: Idea, b: number, x0: number, barW: number, top: number
       if (!on.length) { o += rest('q', X(base) + (slotW * (g - 1)) / 2, restY); continue; }
       const r = on[0] - base;
       if (r > 0) {
-        if (g === 4) {
-          if (r === 1) o += rest('s', X(base), restY);
-          if (r === 2) o += rest('e', X(base) + slotW / 2, restY);
-          if (r === 3) { o += rest('e', X(base) + slotW / 2, restY); o += rest('s', X(base + 2), restY); }
-        }
-        if (g === 2) o += rest('e', X(base), restY);
         if (g === 3) o += r === 1 ? rest('e', X(base), restY) : rest('q', X(base) + slotW / 2, restY);
+        else {
+          // rests up to the first note, largest first: 8th, 16th, 32nd (in 32nds: 4, 2, 1)
+          let left = (r * 8) / g, at = 0;
+          while (left > 0) {
+            const size = left >= 4 ? 4 : left >= 2 ? 2 : 1, st = (size * g) / 8;
+            o += rest(size === 4 ? 'e' : size === 2 ? 's' : 't', X(base + at) + ((st - 1) * slotW) / 2, restY);
+            at += st; left -= size;
+          }
+        }
       }
       const notes: Note[] = on.map((s, k) => {
         const d = (k < on.length - 1 ? on[k + 1] : base + g) - s;
-        const v = g === 4 ? d : g === 2 ? 2 * d : d === 1 ? 2 : 4;
+        // length in 32nds: 1 = 32nd, 2 = 16th, 3 = dotted 16th, 4 = 8th, 6 = dotted 8th, 8 = quarter
+        const v = g === 3 ? (d === 1 ? 4 : 8) : (d * 8) / g;
         const hs = ins.filter((i) => bar.n[i.id][s] > 0).map((i) => ({ i, v: bar.n[i.id][s] }));
         const ys = hs.map((h) => Y(P(h.i).step));
         return { s, v, x: X(s), hs, yTop: Math.min(...ys), yBot: Math.max(...ys) };
       });
       const tuplet = g === 3 && !(notes.length === 1 && notes[0].s === base);
       for (const nt of notes) o += heads(nt, up, Y, top);
-      const beam = notes.length > 1 && notes.every((nt) => nt.v < 4);
+      const beam = notes.length > 1 && notes.every((nt) => nt.v < 8);
       const stemLen = 3.5 * SP, sx = (nt: Note) => (up ? nt.x + 4.8 : nt.x - 4.8);
       if (beam) {
         const ey = up ? Math.min(...notes.map((nt) => nt.yTop)) - stemLen : Math.max(...notes.map((nt) => nt.yBot)) + stemLen;
         for (const nt of notes) o += `<line class="stk" x1="${r1(sx(nt))}" x2="${r1(sx(nt))}" y1="${up ? nt.yBot : nt.yTop}" y2="${ey}"/>`;
         const x1 = sx(notes[0]), x2 = sx(notes[notes.length - 1]);
         o += `<rect class="ink" x="${r1(x1 - 0.6)}" y="${up ? ey : ey - 4}" width="${r1(x2 - x1 + 1.2)}" height="4"/>`;
-        const y2 = up ? ey + 6 : ey - 10;
-        notes.forEach((nt, k) => {
-          if (nt.v !== 1) return;
-          const nx = notes[k + 1], pv = notes[k - 1];
-          if (nx && nx.v === 1) o += `<rect class="ink" x="${r1(sx(nt) - 0.6)}" y="${y2}" width="${r1(sx(nx) - sx(nt) + 1.2)}" height="4"/>`;
-          else if (!(pv && pv.v === 1)) {
-            const to = nx ? sx(nt) + 7 : sx(nt) - 7;
-            o += `<rect class="ink" x="${r1(Math.min(sx(nt), to) - 0.6)}" y="${y2}" width="7.6" height="4"/>`;
-          }
-        });
+        // second beam for 16ths (and dotted 16ths), third for 32nds; a lone short note gets a stub
+        for (const [lvl, max] of [[1, 3], [2, 1]] as const) {
+          const y2 = up ? ey + 6 * lvl : ey - 4 - 6 * lvl, short = (nt?: Note) => !!nt && nt.v <= max;
+          notes.forEach((nt, k) => {
+            if (!short(nt)) return;
+            const nx = notes[k + 1], pv = notes[k - 1];
+            if (short(nx)) o += `<rect class="ink" x="${r1(sx(nt) - 0.6)}" y="${y2}" width="${r1(sx(nx!) - sx(nt) + 1.2)}" height="4"/>`;
+            else if (!short(pv)) {
+              const to = nx ? sx(nt) + 7 : sx(nt) - 7;
+              o += `<rect class="ink" x="${r1(Math.min(sx(nt), to) - 0.6)}" y="${y2}" width="7.6" height="4"/>`;
+            }
+          });
+        }
         if (tuplet) o += `<text class="trip" x="${r1((x1 + x2) / 2)}" y="${up ? ey - 5 : ey + 12}" text-anchor="middle">3</text>`;
       } else {
         let tipY: number | null = null;
         for (const nt of notes) {
           const ey = up ? nt.yTop - stemLen : nt.yBot + stemLen;
           o += `<line class="stk" x1="${r1(sx(nt))}" x2="${r1(sx(nt))}" y1="${up ? nt.yBot : nt.yTop}" y2="${ey}"/>`;
-          const fl = nt.v === 1 ? 2 : nt.v === 2 || nt.v === 3 ? 1 : 0;
+          const fl = nt.v === 1 ? 3 : nt.v <= 3 ? 2 : nt.v <= 6 ? 1 : 0;
           for (let f = 0; f < fl; f++) o += flag(sx(nt), ey, up, f);
           tipY = tipY === null ? ey : up ? Math.min(tipY, ey) : Math.max(tipY, ey);
         }
@@ -157,7 +164,7 @@ function heads(nt: Note, up: boolean, Y: (st: number) => number, top: number): s
     const my = up ? top - 44 : top + 70;
     if (h.v === 2) o += `<path class="stk acc" d="M${r1(nt.x - 5)} ${my - 3.5}L${r1(nt.x + 5)} ${my}L${r1(nt.x - 5)} ${my + 3.5}"/>`;
     if (h.v === 3 && h.i.alt === 'open') o += `<circle class="stk open" cx="${r1(nt.x)}" cy="${my}" r="3.3"/>`;
-    if (nt.v === 3) o += `<circle class="ink dot" cx="${r1(x + (up ? 10 : 8))}" cy="${st % 2 === 0 ? y - SP / 2 : y}" r="1.7"/>`;
+    if (nt.v === 3 || nt.v === 6) o += `<circle class="ink dot" cx="${r1(x + (up ? 10 : 8))}" cy="${st % 2 === 0 ? y - SP / 2 : y}" r="1.7"/>`;
   }
   return o;
 }
@@ -167,10 +174,11 @@ function flag(sx: number, ey: number, up: boolean, f: number): string {
   return `<path class="ink flag" d="M${r1(sx)} ${y}C${r1(sx + 1)} ${y + 6 * s} ${r1(sx + 9)} ${y + 8 * s} ${r1(sx + 6)} ${y + 17 * s}C${r1(sx + 7)} ${y + 10 * s} ${r1(sx + 2)} ${y + 9 * s} ${r1(sx)} ${y + 8 * s}Z"/>`;
 }
 
-function rest(kind: 'q' | 'e' | 's', x: number, cy: number): string {
+function rest(kind: 'q' | 'e' | 's' | 't', x: number, cy: number): string {
   x = r1(x);
   if (kind === 'q') return `<path class="stk rq" d="M${r1(x - 2)} ${cy - 11}L${r1(x + 3)} ${cy - 5}L${r1(x - 2)} ${cy + 1}L${r1(x + 3)} ${cy + 6}Q${r1(x - 4)} ${cy + 5} ${r1(x + 1)} ${cy + 11}"/>`;
   if (kind === 'e') return `<g class="rest8"><circle class="ink" cx="${r1(x - 2.5)}" cy="${cy - 4}" r="2.3"/><path class="stk" d="M${r1(x - 2.5)} ${cy - 2.5}Q${r1(x + 1)} ${cy - 1} ${r1(x + 3.5)} ${cy - 5}L${r1(x - 1)} ${cy + 8}"/></g>`;
+  if (kind === 't') return `<g class="rest32"><circle class="ink" cx="${r1(x - 0.5)}" cy="${cy - 9}" r="2"/><circle class="ink" cx="${r1(x - 2.5)}" cy="${cy - 3}" r="2"/><circle class="ink" cx="${r1(x - 4.5)}" cy="${cy + 3}" r="2"/><path class="stk" d="M${r1(x - 0.5)} ${cy - 7.5}Q${r1(x + 3)} ${cy - 6} ${r1(x + 5)} ${cy - 10}L${r1(x - 2.5)} ${cy + 12}M${r1(x - 2.5)} ${cy - 1.5}Q${r1(x + 1)} ${cy} ${r1(x + 3.4)} ${cy - 4}M${r1(x - 4.5)} ${cy + 4.5}Q${r1(x - 1)} ${cy + 6} ${r1(x + 1.6)} ${cy + 2}"/></g>`;
   return `<g class="rest16"><circle class="ink" cx="${r1(x - 1.5)}" cy="${cy - 6}" r="2.1"/><circle class="ink" cx="${r1(x - 3.5)}" cy="${cy}" r="2.1"/><path class="stk" d="M${r1(x - 1.5)} ${cy - 4.5}Q${r1(x + 2)} ${cy - 3} ${r1(x + 4.5)} ${cy - 7}L${r1(x - 1.5)} ${cy + 10}M${r1(x - 3.5)} ${cy + 1.5}Q${r1(x)} ${cy + 3} ${r1(x + 2.4)} ${cy - 1}"/></g>`;
 }
 
@@ -179,7 +187,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 /** A complete, self-styled SVG document (black on white) for export or printing. */
 export function scoreDocument(idea: Idea, width = 900, count = true, style?: NotationStyle): string {
   const e = engrave(idea, { width, count, selectedBar: null, style });
-  const swing = idea.swing && idea.grid !== 3 ? ` · swing ${idea.swing}%` : '';
+  const swing = idea.swing && idea.grid !== 3 && idea.grid !== 8 ? ` · swing ${idea.swing}%` : '';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -40 ${e.width} ${e.height + 40}" width="${e.width}" height="${e.height + 40}"><style>.ln{stroke:#111;stroke-width:1;opacity:.5}.ink{fill:#111}.stk{stroke:#111;fill:none;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}.xh{stroke-width:1.7}.rq{stroke-width:2.3}.cnt{fill:#666;font:500 10px Helvetica,Arial,sans-serif}.cntb{fill:#111;font:700 11px Helvetica,Arial,sans-serif}.ts{fill:#111;font:800 21px "Arial Narrow",Arial,sans-serif}.trip{fill:#111;font:italic 600 11px Helvetica,Arial,sans-serif}.bnum{fill:#666;font:600 10px monospace}.selr,.hitr{display:none}.ttl{fill:#111;font:700 16px Helvetica,Arial,sans-serif}.sub{fill:#666;font:400 11px Helvetica,Arial,sans-serif}</style><rect x="0" y="-40" width="${e.width}" height="${e.height + 40}" fill="#fff"/><text class="ttl" x="6" y="-16">${esc(idea.name)}</text><text class="sub" x="${e.width - 6}" y="-16" text-anchor="end">♩ = ${idea.bpm}${swing}</text>${e.svg}</svg>`;
 }
