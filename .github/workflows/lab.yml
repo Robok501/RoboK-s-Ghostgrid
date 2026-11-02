@@ -31,8 +31,9 @@ jobs:
       - run: python tools/lab/render.py groove out ${{ inputs.files }} 30
       - run: npx vite-node tools/lab/ours.ts out
       - run: python tools/lab/oaf.py oaf.onnx out || true
+      - run: python tools/lab/oaf_run.py oaf.onnx out 0.5 0.3 0.2
       - name: Score
-        run: python tools/lab/score.py out ours | tee -a "$GITHUB_STEP_SUMMARY"
+        run: python tools/lab/score.py out ours oaf50 oaf30 oaf20 | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: lab-results
