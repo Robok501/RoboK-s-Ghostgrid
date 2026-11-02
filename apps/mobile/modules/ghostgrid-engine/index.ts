@@ -60,6 +60,7 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   stemsIsPlaying(): boolean;
   stemsSetVolumes(drums: number, rest: number, click: number): void;
   stemsEnvelope(path: string): Promise<{ rate: number; full: number[]; low: number[] }>;
+  stemsMusicFeatures(path: string): Promise<{ rate: number; chroma: number[]; bass: number[] }>;
   stemsWriteClick(path: string, seconds: number, times: number[], accents: boolean[]): Promise<void>;
   stemsSetClick(path: string | null): void;
   stemsPlayCountIn(beats: number, beatSeconds: number): void;

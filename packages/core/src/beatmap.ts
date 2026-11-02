@@ -6,7 +6,8 @@
  *  2. tempo: autocorrelation of the onset strength between 62 and 210 BPM, favouring ~110 BPM;
  *  3. beats: dynamic programming (Ellis 2007) — beats on strong onsets, spaced close to the tempo,
  *     so a band that speeds up or drags is followed;
- *  4. bars: the beat with the most kick (and least snare) is the "1".
+ *  4. bars: where the "1" is. Mostly from the music without drums: chords change and the bass lands on the "1"
+ *     (harmonic change per beat, from 12 pitch classes); the kick only helps break ties.
  * Everything can be corrected by hand: shift the "1", change beats per bar, halve or double the tempo.
  */
 
@@ -29,6 +30,8 @@ export interface BeatMap {
   edited?: boolean;
   /** found in the separated drum track, or in the whole mix (less reliable) */
   source?: 'drums' | 'mix';
+  /** analysis version (newer versions redo older, unedited maps) */
+  v?: number;
 }
 
 /** Onset strength per frame: positive change of log loudness, kick weighted. */
@@ -110,6 +113,17 @@ export function trackBeats(o: Float32Array, period: number, tightness = 120): nu
 
 /** Which beat (0 … beatsPerBar-1) is the "1": most kick, least snare/high, averaged over the song. */
 export function findDownbeat(env: Envelope, beatFrames: number[], beatsPerBar: number): number {
+  return pickPhase(kickPhaseScores(env, beatFrames, beatsPerBar));
+}
+
+/** Highest score wins; near-ties go to the earliest beat (songs usually start on a "1"). */
+function pickPhase(v: number[]): number {
+  const top = Math.max(...v), spread = top - Math.min(...v);
+  return v.findIndex((x) => x >= top - 0.1 * spread);
+}
+
+/** Kick evidence per beat position in the bar (higher = more like a "1"). */
+export function kickPhaseScores(env: Envelope, beatFrames: number[], beatsPerBar: number): number[] {
   const low = new Float64Array(beatsPerBar), high = new Float64Array(beatsPerBar), cnt = new Float64Array(beatsPerBar);
   const lf = (x: number) => Math.log(1 + 1000 * x);
   beatFrames.forEach((f, i) => {
@@ -123,22 +137,63 @@ export function findDownbeat(env: Envelope, beatFrames: number[], beatsPerBar: n
     }
     low[k] += l; high[k] += h; cnt[k]++;
   });
-  const v = Array.from({ length: beatsPerBar }, (_, k) => (low[k] - 0.5 * high[k]) / Math.max(1, cnt[k]));
-  const top = Math.max(...v), spread = top - Math.min(...v);
-  // kick on 1 and 3 makes those two look alike: then the earliest wins, since songs usually start on a "1"
-  return v.findIndex((x) => x >= top - 0.1 * spread);
+  return Array.from({ length: beatsPerBar }, (_, k) => (low[k] - 0.5 * high[k]) / Math.max(1, cnt[k]));
 }
 
 const median = (xs: number[]) => { const s = xs.slice().sort((a, b) => a - b); return s.length ? s[s.length >> 1] : 0; };
 
-/** The whole analysis: envelope in, beat and bar map out. */
-export function beatMap(env: Envelope, beatsPerBar = 4): BeatMap {
+/**
+ * Features of the music without drums, at a fixed frame rate: 12 pitch-class energies per frame (flattened)
+ * and the bass energy (roughly 40–150 Hz). The native side computes them from the "no drums" track.
+ */
+export interface MusicFeatures { rate: number; chroma: ArrayLike<number>; bass: ArrayLike<number> }
+
+const norm01 = (v: number[]) => {
+  const lo = Math.min(...v), hi = Math.max(...v);
+  return hi - lo > 1e-9 ? v.map((x) => (x - lo) / (hi - lo)) : v.map(() => 0);
+};
+
+/**
+ * Evidence per beat position in the bar from the music: how much the harmony changes on that beat
+ * (chords change on the "1"), and how much the bass jumps up there (a new bass note on the "1").
+ */
+export function musicPhaseScores(music: MusicFeatures, beats: number[], beatsPerBar: number): number[] {
+  const frames = Math.floor(music.chroma.length / 12);
+  const vec = (from: number, to: number) => {
+    const a = Math.max(0, Math.floor(from * music.rate)), b = Math.min(frames, Math.max(a + 1, Math.floor(to * music.rate)));
+    const c = new Array(12).fill(0);
+    let bass = 0;
+    for (let f = a; f < b; f++) {
+      for (let k = 0; k < 12; k++) c[k] += music.chroma[f * 12 + k];
+      bass += music.bass[f] ?? 0;
+    }
+    const len = Math.sqrt(c.reduce((s, x) => s + x * x, 0)) || 1;
+    return { c: c.map((x) => x / len), bass: bass / Math.max(1, b - a) };
+  };
+  const per = beats.map((t, i) => vec(t, beats[i + 1] ?? t + (t - (beats[i - 1] ?? t - 0.5))));
+  const change = new Array(beatsPerBar).fill(0), bassUp = new Array(beatsPerBar).fill(0), cnt = new Array(beatsPerBar).fill(0);
+  for (let i = 1; i < per.length; i++) {
+    const k = i % beatsPerBar;
+    const cos = per[i].c.reduce((s, x, j) => s + x * per[i - 1].c[j], 0);
+    change[k] += 1 - cos;
+    bassUp[k] += Math.max(0, Math.log((per[i].bass + 1e-6) / (per[i - 1].bass + 1e-6)));
+    cnt[k]++;
+  }
+  const ch = norm01(change.map((x, k) => x / Math.max(1, cnt[k])));
+  const bu = norm01(bassUp.map((x, k) => x / Math.max(1, cnt[k])));
+  return ch.map((x, k) => x + 0.5 * bu[k]);
+}
+
+/** The whole analysis: drum envelope (and, when available, the music without drums) in, beat and bar map out. */
+export function beatMap(env: Envelope, beatsPerBar = 4, music?: MusicFeatures): BeatMap {
   const o = onsetStrength(env);
   const period = estimatePeriod(o, env.rate);
   const frames = trackBeats(o, period);
   const beats = frames.map((f) => f / env.rate);
   const iv = beats.slice(1).map((b, i) => b - beats[i]);
-  return { beats, beatsPerBar, downbeat: findDownbeat(env, frames, beatsPerBar), bpm: iv.length ? Math.round(600 / median(iv)) / 10 : 0 };
+  const kick = norm01(kickPhaseScores(env, frames, beatsPerBar));
+  const scores = music ? musicPhaseScores(music, beats, beatsPerBar).map((x, k) => x + 0.35 * kick[k]) : kick;
+  return { beats, beatsPerBar, downbeat: pickPhase(scores), bpm: iv.length ? Math.round(600 / median(iv)) / 10 : 0 };
 }
 
 // ---------------------------------------------------------------- using the map

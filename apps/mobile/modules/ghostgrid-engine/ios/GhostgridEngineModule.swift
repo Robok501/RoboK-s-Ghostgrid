@@ -144,6 +144,11 @@ public class GhostgridEngineModule: Module {
       return try GGStems.envelope(URL(fileURLWithPath: path))
     }
 
+    /// Chords and bass of the music (the no-drums track), to find where bars start.
+    AsyncFunction("stemsMusicFeatures") { (path: String) -> [String: Any] in
+      return try GGStems.musicFeatures(URL(fileURLWithPath: path))
+    }
+
     /// Render a click track for the song (one click per beat time; accents on the "1").
     AsyncFunction("stemsWriteClick") { (path: String, seconds: Double, times: [Double], accents: [Bool]) in
       try GGStems.writeClick(URL(fileURLWithPath: path), seconds: seconds, times: times, accents: accents)

@@ -1,3 +1,4 @@
+import Accelerate
 import AVFoundation
 import Foundation
 import os
@@ -178,6 +179,61 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
       }
     }
     return ["rate": 100.0, "full": full, "low": low]
+  }
+
+  /// Features of the music (the track without drums) at 10 frames per second, for finding the "1":
+  /// 12 pitch-class energies per frame (chords) and the bass energy (40–150 Hz).
+  static func musicFeatures(_ url: URL) throws -> [String: Any] {
+    let file = try AVAudioFile(forReading: url)
+    let fmt = file.processingFormat
+    let sr = fmt.sampleRate, chans = Int(fmt.channelCount)
+    let N = 4096, hop = Int(sr / 10)
+    guard let dft = vDSP.DFT(count: N, direction: .forward, transformType: .complexComplex, ofType: Float.self),
+          let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 65_536) else { return [:] }
+    // mono samples of the whole song
+    var mono: [Float] = []
+    mono.reserveCapacity(Int(file.length))
+    while file.framePosition < file.length {
+      try file.read(into: buf, frameCount: 65_536)
+      let n = Int(buf.frameLength)
+      if n == 0 { break }
+      guard let ch = buf.floatChannelData else { break }
+      for i in 0..<n {
+        var x: Float = 0
+        for c in 0..<chans { x += ch[c][i] }
+        mono.append(x / Float(chans))
+      }
+    }
+    let window = (0..<N).map { Float(0.5 - 0.5 * cos(2 * Double.pi * Double($0) / Double(N - 1))) }
+    // which pitch class each FFT bin belongs to (55 Hz – 2 kHz), and which bins are bass
+    var pc = [Int](repeating: -1, count: N / 2), isBass = [Bool](repeating: false, count: N / 2)
+    for k in 1..<(N / 2) {
+      let f = Double(k) * sr / Double(N)
+      if f >= 55 && f <= 2000 {
+        let midi = 69 + 12 * log2(f / 440)
+        pc[k] = ((Int(midi.rounded()) % 12) + 12) % 12
+      }
+      isBass[k] = f >= 40 && f <= 150
+    }
+    var chroma: [Double] = [], bass: [Double] = []
+    var re = [Float](repeating: 0, count: N), im = [Float](repeating: 0, count: N)
+    var oRe = [Float](repeating: 0, count: N), oIm = [Float](repeating: 0, count: N)
+    var start = 0
+    while start + N <= mono.count {
+      for i in 0..<N { re[i] = mono[start + i] * window[i]; im[i] = 0 }
+      dft.transform(inputReal: re, inputImaginary: im, outputReal: &oRe, outputImaginary: &oIm)
+      var c = [Double](repeating: 0, count: 12)
+      var b: Double = 0
+      for k in 1..<(N / 2) {
+        let m = Double(oRe[k] * oRe[k] + oIm[k] * oIm[k])
+        if pc[k] >= 0 { c[pc[k]] += sqrt(m) }
+        if isBass[k] { b += m }
+      }
+      chroma.append(contentsOf: c)
+      bass.append(sqrt(b))
+      start += hop
+    }
+    return ["rate": 10.0, "chroma": chroma, "bass": bass]
   }
 
   /// Write a click track (44.1 kHz stereo) as long as the song, with a click at each time; accents are higher and louder.

@@ -239,7 +239,10 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     setAnalysing(true);
     try {
       const env = await Engine.stemsEnvelope(song.separated ? stemPath(song, 'drums') : originalPath(song));
-      update(song.id, { beatMap: { ...beatMap(env, map?.beatsPerBar ?? 4), source: song.separated ? 'drums' : 'mix' } });
+      // the "1" comes from the music: chord changes and bass notes, in the track without drums (or the whole song)
+      let music: Awaited<ReturnType<typeof Engine.stemsMusicFeatures>> | undefined;
+      try { music = await Engine.stemsMusicFeatures(song.separated ? stemPath(song, 'nodrums') : originalPath(song)); } catch { music = undefined; }
+      update(song.id, { beatMap: { ...beatMap(env, map?.beatsPerBar ?? 4, music), source: song.separated ? 'drums' : 'mix', v: 2 } });
     } catch (e) {
       setErr(`Couldn't find the beat: ${(e as Error).message}`);
     }
@@ -250,7 +253,8 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   }, [ready, map, separating]); // eslint-disable-line react-hooks/exhaustive-deps
   // a separated drum track beats the full mix for finding the beat: redo an old map once
   useEffect(() => {
-    if (ready && song.separated && map && !map.edited && map.source === 'mix') analyse();
+    // redo maps from the whole mix, or from before the "1" came from the music (unless fixed by hand)
+    if (ready && map && !map.edited && ((song.separated && map.source === 'mix') || map.v !== 2)) analyse();
   }, [ready, song.separated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the click track follows the beat map

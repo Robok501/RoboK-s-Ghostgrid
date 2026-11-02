@@ -96,3 +96,32 @@ describe('using the map', () => {
     expect(doubleTime(m).beats.length).toBe(17);
   });
 });
+
+describe('finding the "1" from the music', () => {
+  it('uses chord changes and the bass, even when the kick suggests another beat', async () => {
+    const { musicPhaseScores, beatMap: bm } = await import('../src/beatmap');
+    // drums whose kick pattern points at beat 3, music whose chords change on beat 1 of each bar
+    const bpm = 100, beat = 60 / bpm, bars = 16, start = 1;
+    const { env } = drums(bpm, bars, { start });
+    const rate = 10, n = Math.ceil((start + bars * 4 * beat + 2) * rate);
+    const chroma = new Float32Array(n * 12), bass = new Float32Array(n);
+    const chords = [[0, 4, 7], [5, 9, 0], [7, 11, 2], [9, 0, 4]];
+    for (let f = 0; f < n; f++) {
+      const t = f / rate - start;
+      if (t < 0) continue;
+      const bar = Math.floor(t / (4 * beat)), inBar = t - bar * 4 * beat;
+      for (const pc of chords[bar % 4]) chroma[f * 12 + pc] = 1;
+      bass[f] = inBar < beat ? 1 : 0.3; // a new bass note on the 1, held softer afterwards
+    }
+    const music = { rate, chroma, bass };
+    const m = bm(env, 4, music);
+    const first = barStarts(m)[0];
+    expect(Math.abs(((first - start) / beat) % 4)).toBeLessThan(0.1);
+    // shifting the music by two beats moves the "1" with it
+    const shifted = new Float32Array(n * 12), sb = new Float32Array(n), sh = Math.round(2 * beat * rate);
+    for (let f = 0; f < n; f++) { const g = Math.max(0, f - sh); for (let k = 0; k < 12; k++) shifted[f * 12 + k] = chroma[g * 12 + k]; sb[f] = bass[g]; }
+    const m2 = bm(env, 4, { rate, chroma: shifted, bass: sb });
+    expect(Math.round((barStarts(m2)[0] - start) / beat) % 4).toBe(2);
+    expect(musicPhaseScores(music, m.beats, 4).length).toBe(4);
+  });
+});
