@@ -14,7 +14,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import {
-  GRID_NAMES, INSTRUMENTS, MAX_BARS, UndoStack, addBar, addRow, barGrid, buildMidi, clearBar, cycleState, deleteBar, duplicateBar,
+  GRID_NAMES, INSTRUMENTS, getCountStyle, type CountStyle, MAX_BARS, UndoStack, addBar, addRow, barGrid, buildMidi, clearBar, cycleState, deleteBar, duplicateBar,
   SOUND, SOUNDS, addSamples, analyze, importMidi, newId, nextGrid, staleSamples, taughtSounds, usesOwnSounds, notationStyle, scoreDocument, setBarGrid, setBeats, setGrid, setNote, textTab, tidyRows, visibleRows,
   INSTRUMENT, type Idea, type InstrumentId, type SoundKey,
 } from '@ghostgrid/core';
@@ -412,10 +412,13 @@ export function SketchScreen() {
               <Row label="Beats per bar"><Stepper value={idea.beats} min={1} max={12} onChange={(b) => commit(setBeats(idea, b))} /></Row>
               <Row label="Swing" hint="not with triplets"><Stepper value={idea.swing} min={0} max={50} step={5} format={(v) => `${v}%`} onChange={(swing) => commit({ ...idea, swing }, false)} /></Row>
               <Toggle label="Click while playing" value={sk.click} onChange={(click) => setSketch({ click })} />
-              <Toggle label="Count under the score" hint="1 e & a" value={sk.count} onChange={(count) => setSketch({ count })} />
+              <Toggle label="Count under the score" value={sk.count} onChange={(count) => setSketch({ count })} />
+              <Row label="Counting" hint="under the score and above the grid">
+                <Seg small options={[{ value: 'en', label: '1 e & a' }, { value: 'nl', label: '1 eh en eh' }]} value={getCountStyle()} onChange={(v) => setSketch({ countStyle: v as CountStyle })} />
+              </Row>
             </Card>}
 
-            {show('settings') && <Card title={`Bar ${selBar + 1}`}>
+            {show('settings') && <Card title={t('Bar {{n}}', { n: selBar + 1 })}>
               <View style={s.btnRow}>
                 <Btn label="Duplicate" disabled={idea.bars.length >= MAX_BARS} onPress={() => commit(duplicateBar(idea, selBar))} />
                 <Btn label="Clear" onPress={() => commit(clearBar(idea, selBar))} />

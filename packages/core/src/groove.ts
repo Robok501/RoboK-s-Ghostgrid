@@ -237,10 +237,23 @@ export function deleteBar(idea: Idea, bar: number): Idea {
   const out = clone(idea); out.bars.splice(bar, 1); delete out.raw; return out;
 }
 
-/** Count labels per grid step: 1 e & a, 1 &, 1 & a for triplets; 32nds count like 16ths with a dot between. */
-export function countLabel(step: number, grid: Grid): string {
-  const SUB: Record<Grid, string[]> = { 4: ['', 'e', '&', 'a'], 2: ['', '&'], 3: ['', '&', 'a'], 8: ['', '·', 'e', '·', '&', '·', 'a', '·'] };
-  return step % grid ? SUB[grid][step % grid] : String(step / grid + 1);
+/**
+ * How the steps between beats are counted. English: 1 e & a (8ths 1 &, triplets 1 & a);
+ * Dutch: 1 eh en eh (8ths 1 en, triplets 1 tri ool). 32nds count like 16ths with a dot between.
+ */
+export type CountStyle = 'en' | 'nl';
+const COUNTS: Record<CountStyle, Record<Grid, string[]>> = {
+  en: { 4: ['', 'e', '&', 'a'], 2: ['', '&'], 3: ['', '&', 'a'], 8: ['', '·', 'e', '·', '&', '·', 'a', '·'] },
+  nl: { 4: ['', 'eh', 'en', 'eh'], 2: ['', 'en'], 3: ['', 'tri', 'ool'], 8: ['', '·', 'eh', '·', 'en', '·', 'eh', '·'] },
+};
+let countStyle: CountStyle = 'en';
+/** The app sets this from its settings (and language). */
+export function setCountStyle(s: CountStyle) { countStyle = COUNTS[s] ? s : 'en'; }
+export const getCountStyle = () => countStyle;
+
+/** Count label of a grid step, in the current counting style (or the one given). */
+export function countLabel(step: number, grid: Grid, style: CountStyle = countStyle): string {
+  return step % grid ? COUNTS[style][grid][step % grid] : String(step / grid + 1);
 }
 
 /** Time in seconds of a grid step from the start of the idea, with swing applied. */

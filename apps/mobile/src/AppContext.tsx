@@ -5,7 +5,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { HH_PEDAL_CC, PAD_NAMES, learnPad, resolveNote, stateFor, type NoteState, type PadKey, type PadSettings } from '@ghostgrid/core';
 import { setLanguage, t, type Lang, type LangSetting } from './i18n';
-import { setTranslator } from '@ghostgrid/core';
+import { setCountStyle, setTranslator, type CountStyle } from '@ghostgrid/core';
 // text that core builds (trainer questions and results) is translated too
 setTranslator(t);
 import Engine, { type EngineInfo } from '../modules/ghostgrid-engine';
@@ -26,6 +26,8 @@ interface Ctx {
   /** app language ('auto' = the iPhone's); the screens redraw in it */
   setLang: (l: LangSetting) => void;
   lang: Lang;
+  /** counting in use (1 e & a, or 1 eh en eh) */
+  countStyle: CountStyle;
   setPads: (fn: (p: PadSettings) => PadSettings) => void;
   info: EngineInfo | null;
   error: string;
@@ -92,6 +94,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setSketch = useCallback<Ctx['setSketch']>((patch) => update((s) => ({ ...s, sketch: { ...s.sketch, ...patch } })), [update]);
   const setPads = useCallback<Ctx['setPads']>((fn) => update((s) => ({ ...s, pads: fn(s.pads) })), [update]);
   const [lang, setLangNow] = useState<Lang>(() => setLanguage(settings.lang));
+  // counting: chosen in Sketch settings, otherwise Dutch counting when the app speaks Dutch
+  const countStyle: CountStyle = settings.sketch.countStyle ?? (lang === 'nl' ? 'nl' : 'en');
+  setCountStyle(countStyle);
   const setLang = useCallback((l: LangSetting) => { update((s) => ({ ...s, lang: l })); setLangNow(setLanguage(l)); }, [update]);
 
   const start = useCallback(async (keepBt: boolean, withMic: boolean) => {
@@ -171,8 +176,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(() => ({
     stopAll: () => emit('restart', null),
     goTab: (t) => emit('goTab', t),
-    settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setLang, lang, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
-  }), [settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setLang, lang, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on, emit]);
+    settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setLang, lang, countStyle, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
+  }), [settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setLang, lang, countStyle, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on, emit]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

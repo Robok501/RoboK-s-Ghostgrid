@@ -1,7 +1,7 @@
 /** Settings kept on the device (JSON file in the app's documents folder). Nothing leaves the phone. */
 import { File, Paths } from 'expo-file-system';
 import type { LangSetting } from './i18n';
-import { DEFAULT_CONFIG, DEFAULT_PAD_SETTINGS, type CustomStyle, type Level, type PadSettings, type Samples, type Section } from '@ghostgrid/core';
+import { DEFAULT_CONFIG, DEFAULT_PAD_SETTINGS, type CountStyle, type CustomStyle, type Level, type PadSettings, type Samples, type Section } from '@ghostgrid/core';
 
 export type ClickSound = 'click' | 'wood' | 'cowbell' | 'hat';
 export type CoachInput = 'tap' | 'mic' | 'pads';
@@ -28,6 +28,8 @@ export interface EarSettings { unlocked: number; best: Record<string, number>; o
 /** Score look: notation style preset (or 'custom') and sketch preferences. */
 export interface SketchSettings {
   style: string; custom: CustomStyle; count: boolean; click: boolean; recMode: 'replace' | 'layer';
+  /** how the count reads under the score and above the grid; unset = from the app language */
+  countStyle?: CountStyle;
   /** taught beatbox sounds (feature vectors) and the ghost-note loudness threshold */
   voice: Samples; ghostPct: number;
 }

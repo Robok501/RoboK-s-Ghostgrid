@@ -37,7 +37,7 @@ export default function App() {
 
 function Shell() {
   const insets = useSafeAreaInsets();
-  const { stopAll, on, lang } = useApp();
+  const { stopAll, on, lang, countStyle } = useApp();
   const [tab, setTab] = useState<Tab>('click');
   const win = useWindowDimensions();
   const compact = win.width > win.height && Math.min(win.width, win.height) < 600;
@@ -53,7 +53,7 @@ function Shell() {
     <View style={[s.root, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <StatusBar style="light" />
       {/* keyed by language: everything redraws when it changes */}
-      <View style={s.body} key={lang}>
+      <View style={s.body} key={`${lang}-${countStyle}`}>
         {/* Click and Songs stay mounted, so they keep playing while you look at another tab */}
         <View style={[s.page, tab !== 'click' && s.hidden]} pointerEvents={tab === 'click' ? 'auto' : 'none'}><ClickScreen active={tab === 'click'} /></View>
         {tab === 'trainer' && <View style={s.page}><TopBar title="Tempo trainer" /><TempoTrainer /></View>}
