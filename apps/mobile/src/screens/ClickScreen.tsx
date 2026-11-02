@@ -265,11 +265,15 @@ function ModeSettings({ c, setClick, setInput, k }: {
           <Seg small options={[{ value: 15, label: '±15' }, { value: 25, label: '±25' }, { value: 40, label: '±40' }]} value={c.tol} onChange={(tol) => setClick({ tol })} />
         </Row>
         <Note>±15 ms is tight (studio work), ±25 ms a good everyday goal, ±40 ms for starting out or fast, busy playing.</Note>
-        {c.level >= 4 && <Row label="Latency fix" hint="shifts every reading"><Stepper value={c.calib[fixKey]} min={-250} max={250} step={2} format={(v) => `${v > 0 ? '+' : ''}${v} ms`} onChange={(v) => setClick((cc) => ({ calib: { ...cc.calib, [fixKey]: v } }))} /></Row>}
+        {c.level >= 4 && <Row label="Latency fix" hint="shifts every reading"><Stepper value={c.calib[fixKey]} min={-400} max={400} step={2} format={(v) => `${v > 0 ? '+' : ''}${v} ms`} onChange={(v) => setClick((cc) => ({ calib: { ...cc.calib, [fixKey]: v } }))} /></Row>}
         <View style={s.btnRow}>
           <Btn label={k.calibrating ? t('Calibrating {{n}}/{{of}}', { n: k.calibCount, of: 8 }) : 'Calibrate'} onPress={() => k.startCalibration(c.input)} />
           <Btn label="Reset hits" onPress={k.resetHits} />
         </View>
+        {k.calibInfo && k.calibInfo.input === c.input && (
+          <Note>{t('Calibrated: {{fix}} ms correction, hits spread ±{{spread}} ms.', { fix: `${k.calibInfo.fix > 0 ? '+' : ''}${k.calibInfo.fix}`, spread: k.calibInfo.spread })}
+            {k.calibInfo.spread > 25 ? ` ${t('That is a lot: the hits arrive unevenly. Bluetooth audio and Bluetooth MIDI over the same connection add delay and wobble. Play the click through the phone or wired headphones, or connect the e-drum with USB, and calibrate again.')}` : ''}</Note>
+        )}
       </>;
     }
     case 'program':

@@ -45,6 +45,26 @@ export function calibrationFromHits(rawMs: number[], limit = 250): number {
 }
 
 /**
+ * Calibration that also works when the device's delay is near half a beat (Bluetooth audio): hits just before
+ * and just after the half-way point are one cluster on a circle, not two. Offsets (ms, against the nearest beat)
+ * are unwrapped around their circular mean; the correction is minus their median. Also returns how far the hits
+ * still spread around it (ms, root mean square), a measure of how steady the connection is.
+ */
+export function calibrateOnBeat(rawMs: number[], beatMs: number): { fix: number; spread: number } {
+  const v = rawMs.slice(2);
+  if (!v.length || beatMs <= 0) return { fix: 0, spread: 0 };
+  let s = 0, c = 0;
+  for (const x of v) { const a = (2 * Math.PI * x) / beatMs; s += Math.sin(a); c += Math.cos(a); }
+  const mean = (Math.atan2(s, c) / (2 * Math.PI)) * beatMs;
+  const un = v.map((x) => { let d = x - mean; d -= Math.round(d / beatMs) * beatMs; return mean + d; }).sort((a, b) => a - b);
+  const med = un[Math.floor(un.length / 2)];
+  let fix = -med;
+  fix -= Math.round(fix / beatMs) * beatMs; // keep within half a beat
+  const spread = Math.sqrt(un.reduce((a, x) => a + (x - med) ** 2, 0) / un.length);
+  return { fix: Math.round(fix), spread: Math.round(spread) };
+}
+
+/**
  * Hit log, overall and per pad. Scores count the whole session (up to `size` hits, ten thousand by default:
  * it used to be 32, so the count stopped at 32 and the scores only covered the last few bars).
  */

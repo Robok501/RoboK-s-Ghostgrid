@@ -40,3 +40,20 @@ describe('HitLog', () => {
     expect(log.byPad).toEqual({ bd: [2, 3, 4], sn: [9] });
   });
 });
+
+describe('calibration near half a beat (Bluetooth)', async () => {
+  const { calibrateOnBeat, gridOffset } = await import('../src/timing');
+  it('one cluster across the half-way point, and scoring after it lands on the beat', () => {
+    const beat = 500, delay = 245; // ms; hits heard 245 ms late at 120 BPM, a little jitter
+    const grid = Array.from({ length: 40 }, (_, i) => i * 0.5);
+    const jit = [0, 12, -9, 15, -14, 8, -6, 11, -12, 5];
+    const raw = jit.map((j, i) => gridOffset(4 + i * 0.5 + (delay + j) / 1000, grid, 0.5, 1)! * 1000);
+    expect(raw.some((x) => x < 0) && raw.some((x) => x > 0)).toBe(true); // they wrap
+    const { fix, spread } = calibrateOnBeat(raw, beat);
+    expect(Math.abs(fix + delay)).toBeLessThan(10);
+    expect(spread).toBeLessThan(20);
+    // after the fix, a hit right on the heard click scores near 0
+    const off = gridOffset(10 + (delay + 3) / 1000 + fix / 1000, grid, 0.5)! * 1000;
+    expect(Math.abs(off)).toBeLessThan(15);
+  });
+});

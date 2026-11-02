@@ -49,7 +49,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  v: 2,
+  v: 3,
   click: {
     level: 4, mode: 'basic', bpm: 100, beats: 4, unit: 4, sub: 1, sound: 'click', levels: [3, 2, 2, 2], groups: null,
     gapOn: DEFAULT_CONFIG.gapOn, gapOff: DEFAULT_CONFIG.gapOff,
@@ -75,8 +75,10 @@ export function loadSettings(): AppSettings {
     const saved = JSON.parse(f.textSync()) as Partial<AppSettings> & { v?: number };
     // version 2: the timing window's default went from ±15 to ±25 ms; move the old default along once
     if ((saved.v ?? 1) < 2 && saved.click && (saved.click.tol === 15 || saved.click.tol === 10)) saved.click.tol = saved.click.tol === 15 ? 25 : 15;
+    // version 3: calibration is measured differently (it used to come out wrong with Bluetooth): start over once
+    if ((saved.v ?? 1) < 3 && saved.click) saved.click.calib = { tap: 0, mic: 0, pads: 0 };
     return {
-      v: 2,
+      v: 3,
       click: { ...DEFAULT_SETTINGS.click, ...(saved.click || {}), calib: { ...DEFAULT_SETTINGS.click.calib, ...(saved.click?.calib || {}) } },
       ear: { ...DEFAULT_SETTINGS.ear, ...(saved.ear || {}) },
       sketch: { ...DEFAULT_SETTINGS.sketch, ...(saved.sketch || {}) },

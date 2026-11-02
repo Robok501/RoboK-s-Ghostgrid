@@ -391,11 +391,12 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   const scoreHit = useCallback((t: number, input: CoachInput, pad: string) => {
     const r = R.current;
     if (!r.coach || !r.map || !r.playing) return;
-    const songT = Engine.stemsSongTimeAt(t - r.outLat);
+    // the device's delay comes off before matching the hit to a beat (see the Click coach)
+    const songT = Engine.stemsSongTimeAt(t - r.outLat + r.calib[input] / 1000);
     if (songT < 0) return;
     const off = offsetToBeat(r.map, songT, r.grade);
     if (off === null) return;
-    const ms = off / r.rate + r.calib[input];
+    const ms = off / r.rate;
     logRef.current.add(ms, pad);
     setLast(ms);
     bump((x) => x + 1);

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
-  ClickPlan, HitLog, Scheduler, calibrationFromHits, gridOffset, levelsFor, tapTempo,
+  ClickPlan, HitLog, Scheduler, calibrateOnBeat, gridOffset, levelsFor, tapTempo,
   type ClickStep, type TrainingConfig,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -40,6 +40,8 @@ export function useClick() {
     scheduler: null as Scheduler<ClickStep> | null,
     timer: null as ReturnType<typeof setInterval> | null,
     grid: [] as number[],
+    /** beat times only (calibration always measures against the beats) */
+    beats: [] as number[],
     visual: [] as { t: number; st: ClickStep }[],
     log: new HitLog(),
     calibrating: null as CoachInput | null,
@@ -55,6 +57,8 @@ export function useClick() {
   const [last, setLast] = useState<number | null>(null);
   const [calibrating, setCalibratingState] = useState<CoachInput | null>(null);
   const [calibCount, setCalibCount] = useState(0);
+  /** result of the last calibration: correction and how far the hits still spread around it (ms) */
+  const [calibInfo, setCalibInfo] = useState<{ input: CoachInput; fix: number; spread: number } | null>(null);
   const [hitsVersion, bump] = useReducer((x: number) => x + 1, 0);
 
   const stop = useCallback(() => {
@@ -63,7 +67,7 @@ export function useClick() {
     if (r.timer) clearInterval(r.timer);
     r.timer = null; r.scheduler = null; r.plan = null; r.running = false;
     try { Engine.cancelAfter(Engine.now()); } catch { /* engine restarting */ }
-    r.visual = []; r.grid = [];
+    r.visual = []; r.grid = []; r.beats = [];
     setRunning(false);
     setCur(null);
     deactivateKeepAwake('click');
@@ -77,6 +81,7 @@ export function useClick() {
     const s = new Scheduler<ClickStep>({ now: () => Engine.now() }, plan, (st, t) => {
       if (st.audible && st.level > 0) Engine.scheduleClick(t, st.level);
       if (cRef.current.grade === 'sub' || st.sub === 0) { r.grid.push(t); if (r.grid.length > 96) r.grid.shift(); }
+      if (st.sub === 0) { r.beats.push(t); if (r.beats.length > 64) r.beats.shift(); }
       r.visual.push({ t, st });
     }, LOOKAHEAD);
     s.start(Engine.now() + 0.12);
@@ -116,15 +121,17 @@ export function useClick() {
   const score = useCallback((time: number, input: CoachInput, pad?: string) => {
     const r = R.current, cs = cRef.current;
     if (!r.running || !r.plan) return null;
-    const step = 60 / r.plan.tempo / (cs.grade === 'sub' ? cs.sub : 1);
-    const raw = gridOffset(time - r.outLat, r.grid, step);
-    if (raw === null) return null;
-    const rawMs = raw * 1000;
+    const beat = 60 / r.plan.tempo;
     if (r.calibrating === input) {
-      r.calibRaw.push(rawMs);
+      // calibration: against the beats only, over the whole beat, without the old correction
+      // (with subdivisions on, a late hit used to lock onto the wrong 16th, and the result was off by a 16th)
+      const raw = gridOffset(time - r.outLat, r.beats, beat, 1);
+      if (raw === null) return null;
+      r.calibRaw.push(raw * 1000);
       setCalibCount(r.calibRaw.length);
       if (r.calibRaw.length >= CALIB_HITS) {
-        const fix = calibrationFromHits(r.calibRaw);
+        const { fix, spread } = calibrateOnBeat(r.calibRaw, beat * 1000);
+        setCalibInfo({ input, fix, spread });
         setClick((cc) => ({ calib: { ...cc.calib, [input]: fix } }));
         r.calibrating = null;
         setCalibratingState(null);
@@ -134,7 +141,12 @@ export function useClick() {
       }
       return null;
     }
-    const off = rawMs + cs.calib[input];
+    // the device's delay is taken off BEFORE finding the nearest click: with a big correction (Bluetooth audio),
+    // a hit used to be matched to the wrong click first and then corrected, which made calibrating worse
+    const step = beat / (cs.grade === 'sub' ? cs.sub : 1);
+    const raw = gridOffset(time - r.outLat + cs.calib[input] / 1000, r.grid, step);
+    if (raw === null) return null;
+    const off = raw * 1000;
     r.log.add(off, pad ?? input);
     setLast(off);
     bump();
@@ -182,7 +194,7 @@ export function useClick() {
   }, [setClick]);
 
   return {
-    running, start, stop, cur, last, log: R.current.log, hitsVersion, calibrating, calibCount,
+    running, start, stop, cur, last, log: R.current.log, hitsVersion, calibrating, calibCount, calibInfo,
     startCalibration, resetHits, tap, tapTempoAt, mic,
     tempo: running && cur ? cur.bpm : c.bpm,
   };
