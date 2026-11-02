@@ -86,17 +86,18 @@ const W = 428, H = 926, TOP = 47, BOTTOM = 34;
     await p.evaluate(() => document.querySelectorAll('div[style*="z-index: 9999"]').forEach((d) => d.remove()));
   }
 
+  const btnStart = async (p, t) => { await p.getByRole('button', { name: new RegExp('^' + t) }).first().click(); await p.waitForTimeout(600); };
   const states = [
-    ['1-click-metronome', async (p) => {}],
-    ['2-click-coach', async (p) => { await text(p, 'Coach'); }],
-    ['3-click-program', async (p) => { await text(p, 'Program'); }],
-    ['4-click-tempo-trainer', async (p) => { await text(p, 'Tempo trainer'); }],
+    ['1-click', async (p) => {}],
+    ['2-click-mode-sheet', async (p) => { await btnStart(p, 'Mode'); }],
+    ['3-click-meter-sheet', async (p) => { await btnStart(p, 'Meter and sound'); }],
+    ['4-trainer', async (p) => { await tab(p, 'Trainer'); }],
     ['5-sketch', async (p) => { await tab(p, 'Sketch'); }],
-    ['6-sketch-settings-sheet', async (p) => { await tab(p, 'Sketch'); await btn(p, 'Settings'); }],
-    ['7-sketch-voice-sheet', async (p) => { await tab(p, 'Sketch'); await btn(p, 'Voice'); }],
+    ['6-sketch-menu', async (p) => { await tab(p, 'Sketch'); await btn(p, '•••'); }],
+    ['7-sketch-rec-choice', async (p) => { await tab(p, 'Sketch'); await btn(p, 'Record'); }],
     ['8-songs', async (p) => { await tab(p, 'Songs'); }],
     ['9-songs-player', async (p) => { await tab(p, 'Songs'); await text(p, 'John Brown - Papa Grows Funk'); }],
-    ['10-kit-settings', async (p) => { await tab(p, 'Kit & settings'); }],
+    ['10-settings', async (p) => { await tab(p, 'Settings'); }],
   ];
   for (const [name, go] of states) {
     const p = await page(W, H);

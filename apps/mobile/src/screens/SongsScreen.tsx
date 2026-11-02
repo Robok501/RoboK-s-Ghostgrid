@@ -21,7 +21,7 @@ import {
   type Mix, type Song,
 } from '../songs/songs';
 import { C, F } from '../theme';
-import { Btn, Card, Note, Row, Seg, Stepper } from '../ui';
+import { Btn, Card, Note, Row, Seg, Stepper, TopBar } from '../ui';
 
 type Progress = { phase: string; progress: number } | null;
 const PHASE: Record<string, string> = { decode: 'Reading the song', load: 'Loading the model', separate: 'Separating the drums', write: 'Saving', download: 'Downloading the model' };
@@ -150,6 +150,8 @@ export function SongsScreen() {
   };
 
   return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <TopBar title="Songs" />
     <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={s.scroll}>
       {!!notice && <Text style={s.notice}>{notice}</Text>}
 
@@ -200,6 +202,7 @@ export function SongsScreen() {
         </Card>
       )}
     </ScrollView>
+    </View>
   );
 }
 

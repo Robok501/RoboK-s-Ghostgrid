@@ -1,8 +1,11 @@
-/** Click Coach: levels, tempo, beats, six training modes, coach, meter & sound, presets. */
-import React from 'react';
+/**
+ * Click: the metronome on one screen — tempo, beats, mode, Play. Mode settings and meter & sound open in sheets;
+ * the player level lives in Settings. Coach, gap and drop show the timing pad while you play.
+ */
+import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  accentGroupStarts, applyLevel, cycleLevel, groupOptions, groupsFor, levelsFor, modesForLevel, sectionLetter,
+  accentGroupStarts, cycleLevel, groupOptions, groupsFor, levelsFor, modesForLevel, sectionLetter,
   type ClickStep, type Level, type Mode,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -12,13 +15,12 @@ import { CoachPanel } from '../click/CoachPanel';
 import { BUILTIN_PRESETS, SUB_NAMES } from '../click/presets';
 import { SongMap } from '../click/SongMap';
 import { TempoBlock } from '../click/TempoBlock';
-import { TempoTrainer } from '../click/TempoTrainer';
 import { useClick } from '../click/useClick';
 import { C } from '../theme';
-import { Btn, Card, Chip, Note, Pill, Row, Seg, Stepper, Toggle } from '../ui';
+import { Btn, Chip, Note, Pill, Row, Seg, SectionTitle, Sheet, Stepper, Toggle, TopBar } from '../ui';
 import type { ClickSettings, ClickSound, CoachInput, Preset } from '../store';
 
-const LEVELS = [
+export const LEVELS = [
   { level: 1, name: 'First Sticks', sub: 'just the click' },
   { level: 2, name: 'Groove', sub: 'gaps & ramps' },
   { level: 3, name: 'Chops', sub: 'odd meters' },
@@ -34,21 +36,30 @@ const MODE_DESC: Record<Mode, string> = {
   ramp: 'Speed builder: the tempo climbs (or falls) by a set step every few bars until it reaches the target.',
   program: 'A song or exercise as sections, each with its own bars, tempo and meter. Plays through or loops.',
 };
+const INPUT_NAME: Record<CoachInput, string> = { tap: 'tap pad', mic: 'mic', pads: 'e-drum' };
+
+function modeSummary(c: ClickSettings): string {
+  switch (c.mode) {
+    case 'coach': return `scoring by ${INPUT_NAME[c.input]}`;
+    case 'gap': return `${c.gapOn} bar${c.gapOn > 1 ? 's' : ''} on, ${c.gapOff} off`;
+    case 'drop': return `${c.dropChance}% of ${c.dropUnit} drop out`;
+    case 'ramp': return `${c.bpm} → ${c.rampTarget}, ${c.rampStep > 0 ? '+' : ''}${c.rampStep} every ${c.rampEvery} bars`;
+    case 'program': return `${c.program.length} sections${c.loop ? ', looping' : ''}`;
+    default: return 'a plain click';
+  }
+}
 
 export function ClickScreen() {
   const { settings, setClick, setMic, mic, micLevel } = useApp();
   const c = settings.click;
   const k = useClick();
-  const [view, setView] = React.useState<'metronome' | 'ear'>('metronome');
+  const [sheet, setSheet] = useState<null | 'mode' | 'meter'>(null);
   const program = c.mode === 'program';
   const showPad = c.mode === 'coach' || c.mode === 'gap' || c.mode === 'drop';
   const modes = MODE_ORDER.filter((m) => modesForLevel(c.level).includes(m));
   const meterBeats = program ? (k.running && k.cur ? k.cur.beats : c.program[0]?.beats ?? 4) : c.beats;
+  const meterLine = `${meterBeats}/${c.unit}${c.sub > 1 ? ` · ${SUB_NAMES[c.sub] ?? `${c.sub} per beat`}` : ''} · ${c.sound === 'cowbell' ? 'bell' : c.sound}`;
 
-  const setLevel = (level: number) => {
-    const next = applyLevel({ sub: c.sub, mode: c.mode, unit: c.unit, groups: c.groups }, level) as Pick<ClickSettings, 'sub' | 'mode' | 'unit' | 'groups'>;
-    setClick({ ...next, level });
-  };
   const setInput = async (input: CoachInput) => {
     setClick({ input });
     if (input === 'mic' && !mic) { if (!(await setMic(true))) setClick({ input: 'tap' }); }
@@ -64,38 +75,28 @@ export function ClickScreen() {
     mode: c.mode === 'program' ? 'basic' : c.mode,
   });
 
-  const switcher = (
-    <View style={s.switchWrap}>
-      <Seg options={[{ value: 'metronome', label: 'Metronome' }, { value: 'ear', label: 'Tempo trainer' }]} value={view} wide
-        onChange={(v) => { if (v === 'ear') k.stop(); setView(v as 'metronome' | 'ear'); }} />
-    </View>
-  );
-
-  if (view === 'ear') {
-    return <View style={s.root}>{switcher}<TempoTrainer /></View>;
-  }
-
   return (
     <View style={s.root}>
-      {switcher}
+      <TopBar title="Click" sub={LEVELS.find((l) => l.level === c.level)?.name} />
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <View style={s.levels} accessibilityRole="tablist">
-          {LEVELS.map((l) => {
-            const on = c.level === l.level;
-            return (
-              <Pressable key={l.level} onPress={() => setLevel(l.level)} style={[s.levelBtn, on && s.levelOn]} accessibilityRole="tab" accessibilityState={{ selected: on }}>
-                <Text style={[s.levelName, on && { color: C.fg }]} numberOfLines={1} adjustsFontSizeToFit>{l.name}</Text>
-                <Text style={s.levelSub} numberOfLines={1} adjustsFontSizeToFit>{l.sub}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
         <TempoBlock bpm={c.bpm} shown={k.tempo} meter={`${meterBeats}/${c.unit}`} disabled={program}
           onChange={(bpm) => setClick({ bpm })} onTap={k.tapTempoAt} />
 
         <BeatRow beats={c.beats} unit={c.unit} groups={c.groups} levels={levelsFor(c.levels, c.beats)} sub={c.sub} cur={k.cur}
           locked={program} onCycle={(i) => setClick((cc) => { const l = levelsFor(cc.levels, cc.beats); l[i] = cycleLevel(l[i]); return { levels: l }; })} />
+
+        <View style={s.pickers}>
+          <Pressable onPress={() => setSheet('mode')} style={({ pressed }) => [s.picker, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel={`Mode ${MODE_NAME[c.mode]}, ${modeSummary(c)}`}>
+            <Text style={s.pickLabel}>MODE</Text>
+            <Text style={s.pickValue} numberOfLines={1}>{MODE_NAME[c.mode]} ›</Text>
+            <Text style={s.pickSub} numberOfLines={1}>{modeSummary(c)}</Text>
+          </Pressable>
+          <Pressable onPress={() => setSheet('meter')} style={({ pressed }) => [s.picker, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel={`Meter and sound, ${meterLine}`}>
+            <Text style={s.pickLabel}>METER & SOUND</Text>
+            <Text style={s.pickValue} numberOfLines={1}>{meterBeats}/{c.unit} ›</Text>
+            <Text style={s.pickSub} numberOfLines={1}>{meterLine.split(' · ').slice(1).join(' · ')}</Text>
+          </Pressable>
+        </View>
 
         <Status c={c} cur={k.cur} running={k.running} />
 
@@ -105,21 +106,28 @@ export function ClickScreen() {
           <CoachPanel input={c.input} running={k.running} last={k.last} log={k.log} tol={c.tol}
             calibrating={k.calibrating} calibCount={k.calibCount} micLevel={micLevel} onTap={(ms) => { k.tap(ms); }} />
         )}
+      </ScrollView>
 
-        <Card title="Training mode">
-          <View style={s.modes}>
-            {modes.map((m) => (
-              <Pressable key={m} onPress={() => setClick({ mode: m })} style={[s.modeBtn, c.mode === m && s.modeOn]}
-                accessibilityRole="button" accessibilityState={{ selected: c.mode === m }}>
-                <Text style={[s.modeTxt, c.mode === m && { color: C.bg }]}>{MODE_NAME[m]}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <Note>{MODE_DESC[c.mode]}</Note>
-          <ModeSettings c={c} setClick={setClick} setInput={setInput} k={k} />
-        </Card>
+      <View style={s.playBar}>
+        <Btn label={k.running ? 'Stop' : 'Play'} primary active={k.running} onPress={() => (k.running ? k.stop() : k.start())} style={{ flex: 1 }} />
+      </View>
 
-        <Card title="Meter & sound">
+      <Sheet visible={sheet === 'mode'} title="Mode" onClose={() => setSheet(null)}>
+        <View style={s.modes}>
+          {modes.map((m) => (
+            <Pressable key={m} onPress={() => setClick({ mode: m })} style={[s.modeBtn, c.mode === m && s.modeOn]}
+              accessibilityRole="button" accessibilityState={{ selected: c.mode === m }}>
+              <Text style={[s.modeTxt, c.mode === m && { color: C.bg }]}>{MODE_NAME[m]}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Note>{MODE_DESC[c.mode]}</Note>
+        {modes.length < MODE_ORDER.length && <Note>More modes at a higher player level (Settings).</Note>}
+        <View><ModeSettings c={c} setClick={setClick} setInput={setInput} k={k} /></View>
+      </Sheet>
+
+      <Sheet visible={sheet === 'meter'} title="Meter & sound" onClose={() => setSheet(null)}>
+        <View>
           <Row label="Beats per bar" first>
             <Stepper value={c.beats} min={1} max={16} onChange={(beats) => setClick((cc) => ({ beats, levels: levelsFor(cc.levels, beats), groups: null }))} />
           </Row>
@@ -127,19 +135,6 @@ export function ClickScreen() {
             <Row label="Beat unit">
               <Seg options={[{ value: 4, label: '♩ 4' }, { value: 8, label: '♪ 8' }]} value={c.unit} onChange={(unit) => setClick({ unit: unit as 4 | 8 })} />
             </Row>
-          )}
-          {c.level >= 3 && c.beats >= 4 && (
-            <View style={s.block}>
-              <Row label="Grouping" hint="how the beats are counted and shown" />
-              <View style={s.chips}>
-                {groupOptions(c.beats, c.unit).map((g, i) => {
-                  const cur = groupsFor(c.beats, c.unit, c.groups).join('+');
-                  return <Chip key={g.join('+')} label={`${g.join('+')}${i === 0 ? ' · auto' : ''}`} on={g.join('+') === cur}
-                    onPress={() => setClick({ groups: i === 0 ? null : g })} />;
-                })}
-                <Chip label="Accent group starts" onPress={() => setClick({ levels: accentGroupStarts(groupsFor(c.beats, c.unit, c.groups)) })} />
-              </View>
-            </View>
           )}
           {c.level >= 2 && (
             <Row label="Subdivision">
@@ -150,10 +145,24 @@ export function ClickScreen() {
             <Seg small options={[{ value: 'click', label: 'Click' }, { value: 'wood', label: 'Wood' }, { value: 'cowbell', label: 'Bell' }, { value: 'hat', label: 'Hat' }]}
               value={c.sound} onChange={(v) => setSound(v as ClickSound)} />
           </Row>
-        </Card>
-
+        </View>
+        {c.level >= 3 && c.beats >= 4 && (
+          <View>
+            <SectionTitle>Grouping</SectionTitle>
+            <Note>How the beats are counted and shown.</Note>
+            <View style={s.chips}>
+              {groupOptions(c.beats, c.unit).map((g, i) => {
+                const cur = groupsFor(c.beats, c.unit, c.groups).join('+');
+                return <Chip key={g.join('+')} label={`${g.join('+')}${i === 0 ? ' · auto' : ''}`} on={g.join('+') === cur}
+                  onPress={() => setClick({ groups: i === 0 ? null : g })} />;
+              })}
+              <Chip label="Accent group starts" onPress={() => setClick({ levels: accentGroupStarts(groupsFor(c.beats, c.unit, c.groups)) })} />
+            </View>
+          </View>
+        )}
         {c.level >= 2 && (
-          <Card title="Presets">
+          <View>
+            <SectionTitle>Presets</SectionTitle>
             <View style={s.chips}>
               {BUILTIN_PRESETS.filter((p) => c.level >= 3 || p.unit === 4).map((p) => <Chip key={p.name} label={p.name} onPress={() => applyPreset(p)} />)}
               {c.presets.filter((p) => c.level >= 3 || p.unit === 4).map((p, i) => (
@@ -167,13 +176,9 @@ export function ClickScreen() {
                 }],
               }))} />
             </View>
-          </Card>
+          </View>
         )}
-      </ScrollView>
-
-      <View style={s.playBar}>
-        <Btn label={k.running ? 'Stop' : 'Play'} primary active={k.running} onPress={() => (k.running ? k.stop() : k.start())} style={{ flex: 1 }} />
-      </View>
+      </Sheet>
     </View>
   );
 }
@@ -181,7 +186,7 @@ export function ClickScreen() {
 function Status({ c, cur, running }: { c: ClickSettings; cur: ClickStep | null; running: boolean }) {
   if (!running || !cur) {
     const idle: Record<Mode, string> = {
-      basic: 'Tap a beat to cycle accent · normal · soft · mute',
+      basic: 'Tap a beat to change its accent',
       coach: 'Press Play and hit on every click.',
       gap: `${c.gapOn} bar${c.gapOn > 1 ? 's' : ''} click, ${c.gapOff} bar${c.gapOff > 1 ? 's' : ''} silent. Keep the time yourself.`,
       drop: `Random ${c.dropUnit} go silent after ${c.dropWarm} warm-up bars.`,
@@ -243,7 +248,7 @@ function ModeSettings({ c, setClick, setInput, k }: {
         <Row label="Input"><Seg small options={[{ value: 'tap', label: 'Tap' }, { value: 'mic', label: 'Mic' }, { value: 'pads', label: 'E-drum' }]} value={c.input} onChange={(v) => setInput(v as CoachInput)} /></Row>
         {c.input === 'mic' && <Note>Use headphones or Bluetooth to your module, so the mic hears your drums and not the click.</Note>}
         {c.input === 'mic' && <Row label="Mic sensitivity" hint="higher hears softer hits"><Stepper value={settings.micSens} min={1} max={10} onChange={setMicSens} /></Row>}
-        {c.input === 'pads' && <Note>Pair your e-drum under Kit & settings. Every pad is scored, with a breakdown per pad.</Note>}
+        {c.input === 'pads' && <Note>Pair your e-drum in Settings. Every pad is scored, with a breakdown per pad.</Note>}
         {c.level >= 2 && <Row label="Grade against"><Seg options={[{ value: 'beat', label: 'Beats' }, { value: 'sub', label: 'Subdivisions' }]} value={c.grade} onChange={(v) => setClick({ grade: v as 'beat' | 'sub' })} /></Row>}
         <Row label="Window"><Seg small options={[{ value: 10, label: 'Pro ±10' }, { value: 15, label: '±15' }, { value: 25, label: 'Easy ±25' }]} value={c.tol} onChange={(tol) => setClick({ tol })} /></Row>
         {c.level >= 4 && <Row label="Latency fix" hint="shifts every reading"><Stepper value={c.calib[fixKey]} min={-250} max={250} step={2} format={(v) => `${v > 0 ? '+' : ''}${v} ms`} onChange={(v) => setClick((cc) => ({ calib: { ...cc.calib, [fixKey]: v } }))} /></Row>}
@@ -281,23 +286,21 @@ function ModeSettings({ c, setClick, setInput, k }: {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  switchWrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, alignItems: 'stretch', zIndex: 2, backgroundColor: C.bg },
-  scroll: { padding: 16, gap: 14, paddingBottom: 24 },
-  levels: { flexDirection: 'row', backgroundColor: C.raised, borderRadius: 14, padding: 4, gap: 4 },
-  levelBtn: { flex: 1, minHeight: 52, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  levelOn: { backgroundColor: C.surface },
-  levelName: { color: C.muted, fontSize: 13, fontWeight: '700' },
-  levelSub: { color: C.muted, fontSize: 10, marginTop: 1 },
-  status: { color: C.muted, fontSize: 14, textAlign: 'center', minHeight: 24 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 28, flexWrap: 'wrap' },
+  scroll: { paddingHorizontal: 16, paddingBottom: 20, gap: 16 },
+  pickers: { flexDirection: 'row', gap: 10 },
+  picker: { flex: 1, minHeight: 72, borderRadius: 14, backgroundColor: C.surface, paddingHorizontal: 14, paddingVertical: 10, justifyContent: 'center' },
+  pickLabel: { color: C.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.4 },
+  pickValue: { color: C.fg, fontSize: 18, fontWeight: '700', marginTop: 2 },
+  pickSub: { color: C.muted, fontSize: 12, marginTop: 1 },
+  status: { color: C.muted, fontSize: 14, textAlign: 'center', minHeight: 20 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 24, flexWrap: 'wrap' },
   statusStrong: { color: C.fg, fontSize: 15, fontWeight: '600' },
   statusMuted: { color: C.muted, fontSize: 14 },
-  modes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 },
-  modeBtn: { flexGrow: 1, flexBasis: '30%', minHeight: 48, borderRadius: 12, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center' },
+  modes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  modeBtn: { flexGrow: 1, flexBasis: '30%', minHeight: 52, borderRadius: 12, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center' },
   modeOn: { backgroundColor: C.fg },
-  modeTxt: { color: C.muted, fontSize: 14, fontWeight: '700' },
-  block: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingBottom: 8 },
+  modeTxt: { color: C.muted, fontSize: 15, fontWeight: '700' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 6 },
   btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 6 },
   secCard: { borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingHorizontal: 10, marginVertical: 4 },
   secHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 },

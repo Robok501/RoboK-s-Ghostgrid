@@ -12,3 +12,4 @@ apps/mobile/android/
 # personal voice recordings for local tests: never commit
 *.f32
 *.wav
+dist-web/

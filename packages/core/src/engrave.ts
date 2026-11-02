@@ -16,6 +16,8 @@ export interface EngraveOptions {
   count?: boolean;
   /** staff positions, noteheads and voices */
   style?: NotationStyle;
+  /** number shown on the first bar minus one (when engraving a slice of a longer idea) */
+  barOffset?: number;
 }
 export interface BarBox { x0: number; barW: number; top: number; slotW: number; h: number }
 export interface Engraving { svg: string; width: number; height: number; bars: BarBox[] }
@@ -50,7 +52,7 @@ export function engrave(idea: Idea, opts: EngraveOptions): Engraving {
     o += `<line class="stk" x1="4" x2="4" y1="${top}" y2="${top + 4 * SP}"/>`;
     for (let b = first; b <= last; b++) {
       const x0 = ld + (b - first) * barW, xb = x0 + barW;
-      o += `<text class="bnum" x="${r1(x0 + 4)}" y="${top - 34}">${b + 1}</text>`;
+      o += `<text class="bnum" x="${r1(x0 + 4)}" y="${top - 34}">${b + 1 + (opts.barOffset ?? 0)}</text>`;
       o += engraveBar(idea, b, x0, barW, top, count);
       if (b === nb - 1) o += `<line class="stk" x1="${r1(xb - 6)}" x2="${r1(xb - 6)}" y1="${top}" y2="${top + 4 * SP}"/><rect class="ink" x="${r1(xb - 3.5)}" y="${top}" width="3.5" height="${4 * SP}"/>`;
       else o += `<line class="stk" x1="${r1(xb)}" x2="${r1(xb)}" y1="${top}" y2="${top + 4 * SP}"/>`;

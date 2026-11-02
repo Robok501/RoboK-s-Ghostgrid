@@ -1,7 +1,8 @@
 /**
  * Groove Sketch: tap grooves into a step grid, see them as a drum score, play them, record them from the e-drum,
  * record them by voice (beatbox), import MIDI and export PDF, MIDI, text tab or a Ghostgrid file.
- * A ribbon under the title (Ideas · Import · Export · Voice · Settings) opens everything that belongs to the sketch.
+ * The title bar holds the idea name (tap: ideas) and a ••• menu: Import · Export · Voice to notes · Settings.
+ * One Rec button asks E-drum or Voice; the score shows one line of bars that follows the bar you work on.
  * Layout: iPad shows score and full grid together; iPhone upright shows the score above a half-bar grid you swipe;
  * iPhone sideways shows a full bar of grid and only shows the score while playing.
  */
@@ -24,7 +25,7 @@ import { Score } from '../sketch/Score';
 import { freshIdea, loadIdeas, saveIdeas, type IdeaStore } from '../sketch/ideas';
 import { applyTake, readVoiceFile, saveWav, useSketchPlayer, type VoiceTake } from '../sketch/usePlayer';
 import { C, F } from '../theme';
-import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle } from '../ui';
+import { Btn, Card, Chip, NavRow, Note, Row, Seg, Stepper, Toggle, TopBar } from '../ui';
 
 /** Examples per taught sound; teaching stops by itself once this many are heard. */
 const TEACH_MAX = 6;
@@ -43,7 +44,8 @@ export function SketchScreen() {
   const idea = store.ideas.find((i) => i.id === store.current) ?? store.ideas[0];
   const [bar, setBar] = useState(0);
   const [scope, setScope] = useState<'all' | 'bar'>('all');
-  const [sheet, setSheet] = useState<null | 'ideas' | 'export' | 'voice' | 'settings' | 'all'>(null);
+  const [sheet, setSheet] = useState<null | 'menu' | 'ideas' | 'export' | 'voice' | 'settings'>(null);
+  const [recChoice, setRecChoice] = useState(false);
   const [teaching, setTeaching] = useState<SoundKey | null>(null);
   const micWasOff = useRef(false);
   const [take, setTake] = useState<VoiceTake | null>(null);
@@ -79,7 +81,7 @@ export function SketchScreen() {
     if (count === -2) { say('The microphone is off. Allow it in Settings → Ghostgrid.'); return; }
     if (count < 0) return;
     if (!count) {
-      say(source === 'voice' ? 'No sounds found. Beatbox a bit louder, close to the phone.' : 'No hits recorded. Is your e-drum connected? See Kit & settings.');
+      say(source === 'voice' ? 'No sounds found. Beatbox a bit louder, close to the phone.' : 'No hits recorded. Is your e-drum connected? See Settings.');
       return;
     }
     commit(next);
@@ -255,66 +257,49 @@ export function SketchScreen() {
   };
 
   const playBtn = <Btn label={player.playing && !player.rec ? 'Stop' : 'Play'} primary active={player.playing && !player.rec} onPress={() => { setSideView('auto'); if (player.playing) player.stop(); else player.play(); }} style={s.play} />;
-  const recOn = (src: 'pads' | 'voice') => !!player.rec && player.recSource === src;
-  const recLabel = (src: 'pads' | 'voice', idle: string) => (recOn(src) ? (player.rec === 'count' ? `${player.countBeat || '…'}` : 'Stop') : idle);
+  const recOn = !!player.rec;
   const recBtn = (
-    <Pressable onPress={() => (player.rec ? player.stop() : player.record('pads'))} style={[s.rec, recOn('pads') && s.recOn]} accessibilityRole="button" accessibilityLabel={player.rec ? 'Stop recording' : 'Record from e-drum'}>
-      <View style={[s.recDot, recOn('pads') && { backgroundColor: C.fg }]} />
-      <Text style={s.recTxt}>{recLabel('pads', 'E-drum')}</Text>
+    <Pressable onPress={() => { if (player.rec) player.stop(); else setRecChoice((v) => !v); }} style={[s.rec, recOn && s.recOn]}
+      accessibilityRole="button" accessibilityLabel={recOn ? 'Stop recording' : 'Record'}>
+      <View style={[s.recDot, recOn && { backgroundColor: C.fg }]} />
+      <Text style={s.recTxt}>{recOn ? (player.rec === 'count' ? `${player.countBeat || '…'}` : 'Stop') : 'Rec'}</Text>
     </Pressable>
   );
-  const voiceBtn = (
-    <Pressable onPress={recordVoice} style={[s.rec, recOn('voice') && s.recOn]} accessibilityRole="button" accessibilityLabel={player.rec ? 'Stop recording' : 'Record beatbox'}>
-      <Text style={[s.recTxt, { fontSize: 16 }]}>{recOn('voice') ? '' : '◉'}</Text>
-      <Text style={s.recTxt}>{recLabel('voice', 'Voice')}</Text>
-    </Pressable>
-  );
-  const RIBBON: { id: 'ideas' | 'import' | 'export' | 'voice' | 'settings'; glyph: string; label: string }[] = [
-    { id: 'ideas', glyph: '▤', label: 'Ideas' },
-    { id: 'import', glyph: '⤓', label: 'Import' },
-    { id: 'export', glyph: '⤴', label: 'Export' },
-    { id: 'voice', glyph: '◉', label: 'Voice' },
-    { id: 'settings', glyph: '⚙︎', label: 'Settings' },
-  ];
-  const ribbon = (
-    <View style={s.ribbon} accessibilityRole="toolbar">
-      {RIBBON.map((r) => (
-        <Pressable key={r.id} onPress={() => (r.id === 'import' ? importFile() : setSheet(r.id))} style={({ pressed }) => [s.ribBtn, pressed && { backgroundColor: C.raised2 }]}
-          accessibilityRole="button" accessibilityLabel={r.label}>
-          <Text style={s.ribGlyph}>{r.glyph}</Text>
-          <Text style={s.ribTxt}>{r.label}</Text>
-        </Pressable>
-      ))}
+  /** one Record button: choose the e-drum or your voice */
+  const recPick = recChoice && !player.rec && (
+    <View style={s.recPick}>
+      <Text style={s.recPickTitle}>Record from</Text>
+      <View style={s.recPickRow}>
+        <Btn label="● E-drum" onPress={() => { setRecChoice(false); player.record('pads'); }} style={{ flex: 1 }} />
+        <Btn label="◉ Voice" onPress={() => { setRecChoice(false); recordVoice(); }} style={{ flex: 1 }} />
+        <Btn label="Cancel" onPress={() => setRecChoice(false)} />
+      </View>
     </View>
   );
-  const show = (k: 'ideas' | 'export' | 'voice' | 'settings') => sheet === k || sheet === 'all';
+  const show = (k: 'ideas' | 'export' | 'voice' | 'settings') => sheet === k;
+  // score: one line of bars that follows the selected (or playing) bar; the whole idea on an iPad
+  const perLine = tablet ? idea.bars.length : landscape ? 2 : 1;
+  const focusBar = player.pos?.bar ?? selBar;
+  const lineFrom = Math.floor(focusBar / perLine) * perLine;
   const own = usesOwnSounds(sk.voice), taught = taughtSounds(sk.voice);
 
   return (
     <View style={s.root}>
-      {/* top bar */}
-      <View style={s.top}>
-        <Pressable onPress={() => setSheet('ideas')} style={s.ideaBtn} accessibilityRole="button" accessibilityLabel="Ideas">
-          <Text style={s.ideaName} numberOfLines={1}>{idea.name}</Text>
-          <Text style={s.ideaSub}>{idea.bpm} BPM · {idea.beats}/4 ▾</Text>
-        </Pressable>
-        {phoneSideways && <Btn label="☰ Menu" onPress={() => setSheet('all')} />}
+      <TopBar compact={phoneSideways} title={idea.name} sub={`${idea.bpm} BPM · ${idea.beats}/4`} onTitle={() => setSheet('ideas')} right={<>
         <Btn label="Undo" disabled={!undo.current.size} onPress={() => { const p = undo.current.pop(); if (p) commit(p, false); }} />
+        <Btn label="•••" onPress={() => setSheet('menu')} />
         {phoneSideways && <Btn label={sideScore ? 'Grid' : 'Score'} onPress={() => setSideView(sideScore ? 'grid' : 'score')} />}
         {phoneSideways && recBtn}
-        {phoneSideways && voiceBtn}
         {phoneSideways && playBtn}
-      </View>
-      {!phoneSideways && ribbon}
+      </>} />
+      {phoneSideways && recPick}
 
       {!!(player.error || notice) && <Text style={s.notice}>{player.error || notice}</Text>}
 
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         {scoreVisible && (
-          <ScrollView style={!tablet && !landscape ? { maxHeight: win.height * 0.3 } : undefined} nestedScrollEnabled>
-            <Score idea={idea} width={W} style={style} count={sk.count} selectedBar={scope === 'bar' ? selBar : null}
-              playBar={player.pos?.bar ?? null} onSelectBar={(b) => { setBar(b); setScope('bar'); }} />
-          </ScrollView>
+          <Score idea={idea} width={W} style={style} count={sk.count} selectedBar={scope === 'bar' ? selBar : null}
+            playBar={player.pos?.bar ?? null} onSelectBar={(b) => { setBar(b); setScope('bar'); }} from={lineFrom} to={lineFrom + perLine} />
         )}
 
         {/* bars + grid button */}
@@ -379,21 +364,30 @@ export function SketchScreen() {
       </ScrollView>
 
       {!phoneSideways && (
-        <View style={s.bottom}>
-          <Stepper value={idea.bpm} min={30} max={260} onChange={(bpm) => commit({ ...idea, bpm }, false)} format={(v) => `${v}`} />
-          {recBtn}
-          {voiceBtn}
-          {playBtn}
+        <View>
+          {recPick}
+          <View style={s.bottom}>
+            <Stepper value={idea.bpm} min={30} max={260} onChange={(bpm) => commit({ ...idea, bpm }, false)} format={(v) => `${v}`} />
+            {recBtn}
+            {playBtn}
+          </View>
         </View>
       )}
 
       <Modal visible={!!sheet} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSheet(null)}>
         <View style={s.sheet}>
           <View style={s.sheetHead}>
-            <Text style={s.sheetTitle}>{{ ideas: 'Ideas', export: 'Export', voice: 'Voice to notes', settings: 'Sketch settings', all: 'Sketch' }[sheet ?? 'all']}</Text>
+            <Text style={s.sheetTitle}>{{ menu: 'Sketch', ideas: 'Ideas', export: 'Export', voice: 'Voice to notes', settings: 'Sketch settings' }[sheet ?? 'menu']}</Text>
             <Btn label="Done" onPress={() => setSheet(null)} />
           </View>
           <ScrollView contentContainerStyle={s.sheetScroll} keyboardShouldPersistTaps="handled">
+            {sheet === 'menu' && <Card>
+              <NavRow first label="Ideas" value={`${store.ideas.length}`} onPress={() => setSheet('ideas')} />
+              <NavRow label="Import" hint="MIDI file or Ghostgrid file" onPress={importFile} />
+              <NavRow label="Export" hint="PDF score, MIDI, text tab, Ghostgrid file" onPress={() => setSheet('export')} />
+              <NavRow label="Voice to notes" hint="teach your beatbox sounds" onPress={() => setSheet('voice')} />
+              <NavRow label="Sketch settings" hint="tempo, beats, swing, bars, recording" onPress={() => setSheet('settings')} />
+            </Card>}
             {show('ideas') && <Card title="Ideas">
               <View style={s.chips}>
                 {store.ideas.map((i) => <Chip key={i.id} label={i.name} on={i.id === idea.id} onPress={() => switchTo(i.id)} />)}
@@ -433,11 +427,6 @@ export function SketchScreen() {
               <Row label="Mode"><Seg options={[{ value: 'replace', label: 'Replace' }, { value: 'layer', label: 'Layer' }]} value={sk.recMode} onChange={(recMode) => setSketch({ recMode: recMode as 'replace' | 'layer' })} /></Row>
             </Card>}
 
-            {sheet === 'all' && <Card title="Import">
-              <Note>A MIDI file (from your module, a DAW or a groove library) becomes a score. Then cycle the grid until it reads right; tap a bar first to change only that bar.</Note>
-              <View style={s.btnRow}><Btn label="Import MIDI or Ghostgrid file" onPress={importFile} /></View>
-            </Card>}
-
             {show('voice') && <Card title="Voice to notes">
               <Note>Press Voice, wait for the count-in, and beatbox the groove: “boom” for kick, “ka” or “psh” for snare, “ts” for hi-hat. When you stop, the hits are recognised and written into the bars. Use headphones or Bluetooth so the mic doesn't hear the click; on the phone speaker you only get the count-in.</Note>
               <Row label="Recognition"><Text style={[s.status, own && { color: C.good }]}>{own ? 'Your own sounds' : 'Built-in rules'}</Text></Row>
@@ -473,7 +462,7 @@ export function SketchScreen() {
               </View>
               <Note>PDF and text tab for reading and printing, MIDI for your DAW or module, a Ghostgrid file to open again in the app (Import).</Note>
             </Card>}
-            <Text style={s.footer}>Notation style: {style.name} · change it under Kit & settings</Text>
+            <Text style={s.footer}>Notation style: {style.name} · change it in Settings</Text>
           </ScrollView>
         </View>
         {teaching && (
@@ -525,7 +514,9 @@ const s = StyleSheet.create({
   btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 6 },
   input: { flex: 1, minHeight: 44, color: C.fg, fontSize: 16, textAlign: 'right' },
   footer: { color: C.muted, fontSize: 12, textAlign: 'center' },
-  ribbon: { flexDirection: 'row', gap: 4, paddingHorizontal: 12, paddingBottom: 6 },
+  recPick: { paddingHorizontal: 16, paddingTop: 10, gap: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line, backgroundColor: C.surface },
+  recPickTitle: { color: C.muted, fontSize: 12, fontWeight: '700', letterSpacing: 1.2 },
+  recPickRow: { flexDirection: 'row', gap: 8, paddingBottom: 6 },
   ribBtn: { flex: 1, minHeight: 48, borderRadius: 12, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center', paddingVertical: 4 },
   ribGlyph: { color: C.accent, fontSize: 17, lineHeight: 20 },
   ribTxt: { color: C.fg, fontSize: 11, fontWeight: '600', marginTop: 1 },

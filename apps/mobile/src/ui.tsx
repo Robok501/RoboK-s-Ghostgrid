@@ -1,6 +1,6 @@
 /** Small design system shared by all screens. Every control is at least 44 pt (Apple HIG). */
 import React, { useRef } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { C, F, HIT } from './theme';
 
 export function Card({ title, children, style }: { title?: string; children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
@@ -114,7 +114,7 @@ export function Pill({ label, strong }: { label: string; strong?: boolean }) {
 
 export const Note = ({ children }: { children: React.ReactNode }) => <Text style={u.note}>{children}</Text>;
 
-export const u = StyleSheet.create({
+export const u: Record<string, any> = StyleSheet.create({
   card: { backgroundColor: C.surface, borderColor: C.line, borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, gap: 4 },
   cardTitle: { color: C.muted, fontSize: 12, fontWeight: '600', letterSpacing: 1.6, marginTop: 4, marginBottom: 2 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 52, gap: 12 },
@@ -152,3 +152,67 @@ export const u = StyleSheet.create({
   pillTxt: { color: C.fg, fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
   pillTxtStrong: { color: C.accentInk },
 });
+
+/** Screen title bar: title (and optional subtitle) on the left, actions on the right. Replaces the app-wide header. */
+export function TopBar({ title, sub, onTitle, right, compact }: { title: string; sub?: string; onTitle?: () => void; right?: React.ReactNode; compact?: boolean }) {
+  const t = (
+    <View style={{ flexShrink: 1 }}>
+      <Text style={[u.topTitle, compact && { fontSize: 18 }]} numberOfLines={1}>{title}{onTitle ? <Text style={u.topChevron}> ▾</Text> : null}</Text>
+      {!!sub && <Text style={u.topSub} numberOfLines={1}>{sub}</Text>}
+    </View>
+  );
+  return (
+    <View style={[u.topBar, compact && { minHeight: 44, paddingTop: 0 }]}>
+      {onTitle ? <Pressable onPress={onTitle} style={u.topTitleBtn} accessibilityRole="button" accessibilityLabel={`${title}, change`}>{t}</Pressable> : <View style={u.topTitleBtn}>{t}</View>}
+      <View style={u.topRight}>{right}</View>
+    </View>
+  );
+}
+
+/** A page sheet with a title and Done: for settings that belong to the current screen. */
+export function Sheet({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={u.sheet}>
+        <View style={u.sheetHead}>
+          <Text style={u.sheetTitle}>{title}</Text>
+          <Btn label="Done" onPress={onClose} />
+        </View>
+        <ScrollView contentContainerStyle={u.sheetBody} keyboardShouldPersistTaps="handled">{children}</ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+/** A tappable row that opens something (a sheet or a sub-page): label, current value, chevron. */
+export function NavRow({ label, value, hint, onPress, first }: { label: string; value?: string; hint?: string; onPress: () => void; first?: boolean }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}${value ? `, ${value}` : ''}`}
+      style={({ pressed }) => [u.row, !first && u.rowLine, pressed && { opacity: 0.6 }]}>
+      <View style={u.rowText}>
+        <Text style={u.rowLabel}>{label}</Text>
+        {!!hint && <Text style={u.hint}>{hint}</Text>}
+      </View>
+      <Text style={u.navValue} numberOfLines={1}>{value ? `${value}  ` : ''}<Text style={u.chev}>›</Text></Text>
+    </Pressable>
+  );
+}
+
+/** Plain section title (instead of a bordered card) for grouping on a screen. */
+export const SectionTitle = ({ children }: { children: string }) => <Text style={u.section}>{children.toUpperCase()}</Text>;
+
+Object.assign(u, StyleSheet.create({
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, minHeight: 52, paddingTop: 4 },
+  topTitleBtn: { flex: 1, minHeight: 44, justifyContent: 'center' },
+  topTitle: { color: C.fg, fontSize: 26, fontWeight: '800', fontFamily: F.display, letterSpacing: 0.5 },
+  topChevron: { color: C.muted, fontSize: 18 },
+  topSub: { color: C.muted, fontSize: 12, marginTop: -2 },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sheet: { flex: 1, backgroundColor: C.bg },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  sheetTitle: { color: C.fg, fontSize: 22, fontWeight: '800' },
+  sheetBody: { padding: 16, paddingTop: 0, gap: 14, paddingBottom: 40 },
+  navValue: { color: C.muted, fontSize: 15, flexShrink: 1, textAlign: 'right' },
+  chev: { color: C.muted, fontSize: 22 },
+  section: { color: C.muted, fontSize: 12, fontWeight: '600', letterSpacing: 1.6, marginTop: 8, marginBottom: 2 },
+}));

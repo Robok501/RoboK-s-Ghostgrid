@@ -1,12 +1,14 @@
-/** Kit & settings: audio route, e-drum pairing and pad map (incl. learning pads), velocity rules, calibrations. */
+/** Settings: audio route, e-drum pairing and pad map (incl. learning pads), velocity rules, calibrations. */
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { INSTRUMENTS, NOTATION_STYLES, PAD_NAMES, exampleIdea, notationStyle, notesFor, staffName, type PadKey } from '@ghostgrid/core';
+import { INSTRUMENTS, NOTATION_STYLES, PAD_NAMES, applyLevel, exampleIdea, notationStyle, notesFor, staffName, type PadKey } from '@ghostgrid/core';
+import { LEVELS } from './ClickScreen';
+import type { ClickSettings } from '../store';
 import { Score } from '../sketch/Score';
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 import { C } from '../theme';
-import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle, Value } from '../ui';
+import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle, TopBar, Value } from '../ui';
 
 const LEARN_ORDER: PadKey[] = ['bd', 'sn', 'hh', 'hh+o', 'hf', 't1', 't2', 'ft', 'rd', 'cr'];
 
@@ -19,9 +21,24 @@ export function SettingsScreen() {
   const p = settings.pads, calib = settings.click.calib;
   const bt = info?.route === 'bluetooth';
 
+  const c = settings.click;
+  const setLevel = (level: number) => {
+    const next = applyLevel({ sub: c.sub, mode: c.mode, unit: c.unit, groups: c.groups }, level) as Pick<ClickSettings, 'sub' | 'mode' | 'unit' | 'groups'>;
+    setClick({ ...next, level });
+  };
+
   return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <TopBar title="Settings" />
     <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={s.scroll}>
       {!!error && <Text style={s.error}>{error}</Text>}
+
+      <Card title="Player level">
+        <Note>Shows the options that fit where you are. A lower level keeps the Click screen simple.</Note>
+        <View style={s.chips}>
+          {LEVELS.map((l) => <Chip key={l.level} label={`${l.name} · ${l.sub}`} on={c.level === l.level} onPress={() => setLevel(l.level)} />)}
+        </View>
+      </Card>
 
       <Card title="Audio out">
         <Row label="Playing through" first><Value good={bt}>{info ? `${info.routeName || info.route}${bt ? ' · Bluetooth' : ''}` : 'starting…'}</Value></Row>
@@ -101,8 +118,9 @@ export function SettingsScreen() {
         ))}
       </Card>
 
-      <Text style={s.footer}>Ghostgrid 0.3 · settings and ideas stay on this device</Text>
+      <Text style={s.footer}>Ghostgrid 0.4 · settings and ideas stay on this device</Text>
     </ScrollView>
+    </View>
   );
 }
 

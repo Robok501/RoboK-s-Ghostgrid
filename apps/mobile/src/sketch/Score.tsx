@@ -33,20 +33,27 @@ export function themeSvg(svg: string): string {
   });
 }
 
-export function Score({ idea, width, style, count, selectedBar, playBar, onSelectBar }: {
+export function Score({ idea, width, style, count, selectedBar, playBar, onSelectBar, from = 0, to }: {
   idea: Idea; width: number; style: NotationStyle; count: boolean;
   selectedBar: number | null; playBar?: number | null; onSelectBar?: (b: number) => void;
+  /** show only bars from … to (exclusive); numbers stay those of the whole idea */
+  from?: number; to?: number;
 }) {
+  const end = Math.min(idea.bars.length, to ?? idea.bars.length);
+  const part = useMemo(() => (from === 0 && end === idea.bars.length ? idea : { ...idea, bars: idea.bars.slice(from, end) }), [idea, from, end]);
+  const rel = (b: number | null | undefined) => (b === null || b === undefined || b < from || b >= end ? null : b - from);
+  const sel = rel(selectedBar);
   // the playing bar is marked with an overlay, so the score isn't re-drawn every bar during playback
-  const e = useMemo(() => engrave(idea, { width, count, style, selectedBar }), [idea, width, count, style, selectedBar]);
-  const pb = playBar !== null && playBar !== undefined ? e.bars[playBar] : null;
+  const e = useMemo(() => engrave(part, { width, count, style, selectedBar: sel, barOffset: from }), [part, width, count, style, sel, from]);
+  const pr = rel(playBar);
+  const pb = pr !== null ? e.bars[pr] : null;
   const xml = useMemo(() => `<svg xmlns="http://www.w3.org/2000/svg" width="${e.width}" height="${e.height}" viewBox="0 0 ${e.width} ${e.height}">${themeSvg(e.svg)}</svg>`, [e]);
   return (
     <View style={{ width: e.width, height: e.height }}>
       <SvgXml xml={xml} width={e.width} height={e.height} />
       {pb && <View pointerEvents="none" style={{ position: 'absolute', left: pb.x0, top: pb.top - 44, width: pb.barW, height: pb.h + 30, borderRadius: 8, backgroundColor: C.accentSoft, borderWidth: 1, borderColor: C.accent }} />}
       {onSelectBar && e.bars.map((b, i) => b && (
-        <Pressable key={i} onPress={() => onSelectBar(i)} accessibilityRole="button" accessibilityLabel={`Bar ${i + 1}`}
+        <Pressable key={i} onPress={() => onSelectBar(i + from)} accessibilityRole="button" accessibilityLabel={`Bar ${i + 1 + from}`}
           style={{ position: 'absolute', left: b.x0, top: b.top - 44, width: b.barW, height: b.h + 30 }} />
       ))}
     </View>

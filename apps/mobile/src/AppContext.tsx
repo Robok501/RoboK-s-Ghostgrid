@@ -31,6 +31,8 @@ interface Ctx {
   learning: PadKey | null;
   setLearning: (k: PadKey | null) => void;
   on: <K extends keyof EventMap>(type: K, cb: Listener<K>) => () => void;
+  /** stop whatever is playing (click, sketch, trainer), e.g. before another screen starts its own sound */
+  stopAll: () => void;
 }
 
 const AppCtx = createContext<Ctx | null>(null);
@@ -156,6 +158,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [start, emit, update, showLater]);
 
   const value = useMemo<Ctx>(() => ({
+    stopAll: () => emit('restart', null),
     settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
   }), [settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on]);
 
