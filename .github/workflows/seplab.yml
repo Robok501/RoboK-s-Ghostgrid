@@ -1,0 +1,56 @@
+name: Separation lab
+# Manual: scores drum separators (HT-Demucs drums vs Spleeter, with and without our own tweaks) on songs with known stems,
+# both as dB against the true drums and as what the notation recogniser makes of each stem. Nothing here ships in the app.
+on:
+  push:  # TEMP: runs on this branch until the workflow is on main; remove before merging
+    branches: [beat-this-model]
+    paths: ['.github/workflows/seplab.yml']
+  workflow_dispatch:
+    inputs:
+      files:
+        description: number of test songs
+        default: '16'
+jobs:
+  spleeter:
+    uses: ./.github/workflows/spleeter-model.yml
+  lab:
+    needs: spleeter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: sudo apt-get update && sudo apt-get install -y fluidsynth fluid-soundfont-gm
+      - run: pip install -r tools/lab/requirements.txt
+      - uses: actions/download-artifact@v4
+        with: { name: spleeter-onnx, path: models }
+      - name: Models for the comparison (lab only)
+        run: |
+          curl -fsSL -o models/demucs.onnx https://huggingface.co/StemSplitio/htdemucs-ft-drums-onnx/resolve/main/htdemucs_ft_drums.onnx
+          curl -fsSL -o models/oaf.onnx https://huggingface.co/thebluescreen/oaf-drums-onnx/resolve/main/oaf_drums.onnx
+          ls -la models
+      - name: Groove MIDI Dataset (CC BY 4.0) -> songs with known stems
+        run: |
+          curl -sSL -o gmd.zip https://storage.googleapis.com/magentadata/datasets/groove/groove-v1.0.0-midionly.zip
+          unzip -q gmd.zip
+          python tools/lab/render.py groove out ${{ inputs.files || '16' }} 30
+          python tools/lab/sep_mix.py out
+      - name: Separate with every variant and score in dB
+        run: python tools/lab/sep_lab.py out models/demucs.onnx models/spleeter_drums.onnx | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: What the notation recogniser makes of each stem
+        run: |
+          {
+            echo; echo '### Notation: onset F-measure of Onsets and Frames Drums on each separated stem (threshold 0.3)'; echo
+            echo '| stem from | tol | kick | snare | hh | tom | cym | all |'; echo '|---|---|---|---|---|---|---|---|'
+          } > notation.md
+          for v in out/v/*/; do
+            k=$(basename "$v")
+            python tools/lab/oaf_run.py models/oaf.onnx "$v" 0.3 > /dev/null
+            python tools/lab/score.py "$v" oaf30 | grep "oaf30 | ±50" | sed "s/oaf30/$k/" >> notation.md
+          done
+          echo '"truth" = recogniser on the real drums (ceiling), "mix" = on the unseparated song (floor).' >> notation.md
+          cat notation.md | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: separation-lab
+          path: notation.md
