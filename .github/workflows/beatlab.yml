@@ -42,7 +42,7 @@ jobs:
           python tools/lab/render.py groove gmd ${{ inputs.files || '24' }} 30
           python tools/lab/beats_truth.py gmd gmd
       - name: Ballroom (research data, lab only)
-        if: inputs.ballroom != '0'
+        if: (inputs.ballroom || '8') != '0'
         continue-on-error: true
         run: |
           curl -sSL -o br.tar.gz http://mtg.upf.edu/ismir2004/contest/tempoContest/data1.tar.gz
