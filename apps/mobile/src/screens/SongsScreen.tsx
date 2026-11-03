@@ -33,6 +33,10 @@ export function SongsScreen() {
   const { mic, setMic } = useApp();
   const [songs, setSongs] = useState<Song[]>(loadSongs);
   const [cur, setCur] = useState<string | null>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const playerY = useRef(0);
+  // choosing a song from the list brings its player (with the play button) into view
+  const pick = (id: string) => { setCur(id); setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, playerY.current - 8), animated: true }), 50); };
   const [model, setModel] = useState(() => Engine.stemsModelStatus(MODEL_NAME));
   // Spleeter ships inside the app (when this build has it): nothing to download
   const spleeter = useMemo(() => Engine.stemsModelStatus(SPLEETER_MODEL_NAME).present, []);
@@ -158,7 +162,7 @@ export function SongsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
     <TopBar title="Songs" />
-    <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={s.scroll}>
+    <ScrollView ref={scrollRef} style={{ backgroundColor: C.bg }} contentContainerStyle={s.scroll}>
       {!!notice && <Text style={s.notice}>{notice}</Text>}
 
       {!model.present && (
@@ -180,17 +184,19 @@ export function SongsScreen() {
       {recording !== null && <Note>Play the song on a speaker and hold the phone near it. Files sound better than room recordings.</Note>}
 
       {song && (
+        <View onLayout={(e) => { playerY.current = e.nativeEvent.layout.y; }}>
         <Player key={song.id} song={song} update={update} separating={work?.id === song.id} progress={work?.id === song.id ? work.p : null}
           onSeparate={(which) => separate(song, which)} onCancel={() => Engine.stemsCancel()} onDelete={() => remove(song)} canSeparate={!work} have={{ demucs: model.present, spleeter }} />
+        </View>
       )}
 
       <Card title="Songs">
         {!songs.length && <Note>No songs yet. Import an MP3, M4A or WAV from Files, or record a song playing in the room.</Note>}
         {songs.map((x, i) => (
-          <Pressable key={x.id} onPress={() => setCur(x.id)} style={[s.songRow, i > 0 && s.line, cur === x.id && { backgroundColor: C.raised }]} accessibilityRole="button">
+          <Pressable key={x.id} onPress={() => pick(x.id)} style={[s.songRow, i > 0 && s.line, cur === x.id && { backgroundColor: C.raised }]} accessibilityRole="button">
             <View style={{ flex: 1 }}>
               <Text style={s.songName} numberOfLines={1}>{x.name}</Text>
-              <Text style={s.dim}>{x.duration ? fmtTime(x.duration) : '–'} · {t(work?.id === x.id ? 'separating…' : x.separated ? 'drums separated' : x.error ? 'not separated (stopped)' : 'not separated yet')}{x.source === 'mic' ? ` · ${t('room recording')}` : ''}</Text>
+              <Text style={s.dim}>{x.duration ? fmtTime(x.duration) : '–'} · {t(work?.id === x.id ? 'separating…' : x.separated ? 'drums separated' : x.error ? 'not separated (stopped)' : 'not separated yet')}{x.source === 'mic' ? ` · ${t('room recording')}` : ''}{work?.id === x.id && work.p?.phase === 'separate' ? ` ${Math.round(work.p.progress * 100)} %` : ''}</Text>
             </View>
             <Text style={[s.badge, x.separated && { color: C.good }]}>{x.separated ? '✓' : '○'}</Text>
           </Pressable>
@@ -485,6 +491,13 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
 
   return (
     <Card title={song.name}>
+      {song.separated && separating && (
+        <>
+          <Text style={s.phase}>{t(PHASE[progress?.phase ?? 'decode'] ?? '')}{progress?.phase === 'separate' ? ` · ${Math.round(progress.progress * 100)} %` : '…'}</Text>
+          <Bar value={progress?.phase === 'separate' ? progress.progress : progress?.phase === 'write' ? 1 : 0.02} />
+          <View style={s.btnRow}><Btn label="Cancel" onPress={onCancel} /></View>
+        </>
+      )}
       {!song.separated && (
         separating ? (
           <>
