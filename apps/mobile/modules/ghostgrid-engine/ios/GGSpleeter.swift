@@ -6,8 +6,10 @@ import onnxruntime_objc
 /// own data). The four U-Nets of the 4-stem model are converted to ONNX (tools/spleeter) as one network that takes 512 frames of
 /// the song's magnitude spectrogram (first 1024 bins, both channels) and returns the soft mask of the drums. The STFT (4096
 /// window, hop 1024, periodic Hann), the mask and the inverse STFT are done here, one chunk of 512 frames at a time, so
-/// memory stays small. Above bin 1024 (about 11 kHz) the drums stem is empty, as in Spleeter itself; the song without drums
-/// is the song minus the drums, so those highs stay in it.
+/// memory stays small. Above bin 1024 (about 11 kHz) Spleeter itself leaves the drums stem empty, which strips hats and
+/// cymbals of their top. Our own addition: per frame, that band is brought back from the song by the share of the 3-11 kHz energy
+/// the mask gives to drums (smoothstep 0.3...0.8), so it only returns while a drum is clearly sounding. In the lab this
+/// raised drum SI-SDR from 8.3 to 10.3 dB. The song without drums is the song minus the drums.
 /// tools/spleeter/spleeter_ref.py is the same algorithm in NumPy (checked against Deezer's own TensorFlow graph).
 
 /// Radix-2 complex FFT, in place. Forward is e^{-i…}; inverse is e^{+i…} without the 1/n scale.
@@ -53,7 +55,7 @@ final class GGFFT {
 }
 
 extension GGStems {
-  static let spFL = 4096, spFS = 1024, spT = 512, spF = 1024
+  static let spFL = 4096, spFS = 1024, spT = 512, spF = 1024, spBand0 = 280
   static let spWin: [Float] = (0..<4096).map { Float(0.5 - 0.5 * cos(2 * Double.pi * Double($0) / 4096)) }
   /// Synthesis window: the analysis window divided by the sum of its squared overlaps (so overlap-add reconstructs exactly).
   static let spIWin: [Float] = {
@@ -97,6 +99,9 @@ extension GGStems {
     var re = [Float](repeating: 0, count: FL), im = [Float](repeating: 0, count: FL)
     // the complex spectra of this chunk, left and right (first F bins), kept to apply the mask to
     var xlRe = [Float](repeating: 0, count: T * F), xlIm = xlRe, xrRe = xlRe, xrIm = xlRe
+    // the packed spectrum above the network's range (indices F...FL-F, both channels and their mirrors), scaled per frame later
+    let HN = FL - 2 * F + 1
+    var zhRe = [Float](repeating: 0, count: T * HN), zhIm = zhRe
     let magData = NSMutableData(length: T * F * 2 * MemoryLayout<Float>.size)!
     let inv = 1 / Float(FL)
 
@@ -113,6 +118,7 @@ extension GGStems {
           if j < n { re[i] = l[j] * win[i]; im[i] = r[j] * win[i] } else { re[i] = 0; im[i] = 0 }
         }
         fft.transform(&re, &im, inverse: false)
+        for k in F...(FL - F) { zhRe[t * HN + k - F] = re[k]; zhIm[t * HN + k - F] = im[k] }
         for k in 0..<F {
           let nk = (FL - k) % FL
           let zr = re[k], zi = im[k], wr = re[nk], wi = im[nk]
@@ -132,6 +138,16 @@ extension GGStems {
 
       for t in 0..<fc {
         for i in 0..<FL { re[i] = 0; im[i] = 0 }
+        // how much of the 3-11 kHz energy (bins 280...F-1) the mask gives to drums decides how much of the top comes back
+        var eX: Float = 0, eY: Float = 0
+        for k in Self.spBand0..<F {
+          let idx = t * F + k, ml = mk[idx * 2], mr = mk[idx * 2 + 1]
+          let xl = xlRe[idx] * xlRe[idx] + xlIm[idx] * xlIm[idx], xr = xrRe[idx] * xrRe[idx] + xrIm[idx] * xrIm[idx]
+          eX += xl + xr; eY += xl * ml * ml + xr * mr * mr
+        }
+        let q = min(1, max(0, (eY / (eX + 1e-9) - 0.3) / 0.5))
+        let g = q * q * (3 - 2 * q)
+        if g > 0 { for k in F...(FL - F) { re[k] = g * zhRe[t * HN + k - F]; im[k] = g * zhIm[t * HN + k - F] } }
         for k in 0..<F {
           let idx = t * F + k, ml = mk[idx * 2], mr = mk[idx * 2 + 1]
           let ylr = xlRe[idx] * ml, yli = xlIm[idx] * ml, yrr = xrRe[idx] * mr, yri = xrIm[idx] * mr

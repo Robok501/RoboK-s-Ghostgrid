@@ -571,9 +571,13 @@
  "Ghostgrid works with open models that run on this phone. Your songs never leave it.": "Ghostgrid utilise des modèles ouverts qui tournent sur ce téléphone. Tes morceaux ne le quittent jamais.",
  "Demucs (best quality)": "Demucs (meilleure qualité)",
  "Spleeter (lighter)": "Spleeter (plus léger)",
- "Spleeter is lighter and faster but a bit less clean. Its drums leave out the highest cymbal sizzle (above about 11 kHz), which then stays in the song.": "Spleeter est plus léger et plus rapide mais un peu moins propre. Ses drums laissent de côté le grésillement le plus aigu des cymbales (au-dessus d'environ 11 kHz), qui reste alors dans le morceau.",
+ "Spleeter is lighter and faster but less clean: more of the band stays in the drums. Fine for playing along; for a score Demucs finds many more hits.": "Spleeter est plus léger et plus rapide, mais moins propre : plus du groupe reste dans la batterie. Parfait pour jouer avec ; pour une partition, Demucs trouve beaucoup plus de coups.",
  "Demucs separates best. It needs its 316 MB model on the phone.": "Demucs sépare le mieux. Il a besoin de son modèle de 316 Mo sur le téléphone.",
  "This build doesn't have Spleeter.": "Cette version n'a pas Spleeter.",
  "Show the licence texts": "Afficher les textes de licence",
- "Hide the licence texts": "Masquer les textes de licence"
+ "Hide the licence texts": "Masquer les textes de licence",
+ "Better notation": "Meilleure partition",
+ "Spleeter is quick but leaves more of the band in the drums, so the score misses hits. Demucs redoes the stems (this replaces them), then press \"Song to score\" again.": "Spleeter est rapide mais laisse plus du groupe dans la batterie, donc la partition rate des coups. Demucs refait les pistes (elles sont remplacées) ; appuyez ensuite à nouveau sur « Song to score ».",
+ "Spleeter leaves more of the band in the drums, so the score misses hits. Download the Demucs model (in a song that is not separated yet) to redo it.": "Spleeter laisse plus du groupe dans la batterie, donc la partition rate des coups. Téléchargez le modèle Demucs (dans un morceau pas encore séparé) pour le refaire.",
+ "Redo with Demucs": "Refaire avec Demucs"
 }

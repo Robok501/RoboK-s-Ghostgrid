@@ -571,9 +571,13 @@
  "Ghostgrid works with open models that run on this phone. Your songs never leave it.": "Ghostgrid werkt met open modellen die op deze telefoon draaien. Je nummers verlaten hem nooit.",
  "Demucs (best quality)": "Demucs (beste kwaliteit)",
  "Spleeter (lighter)": "Spleeter (lichter)",
- "Spleeter is lighter and faster but a bit less clean. Its drums leave out the highest cymbal sizzle (above about 11 kHz), which then stays in the song.": "Spleeter is lichter en sneller maar iets minder zuiver. De drums laten het hoogste bekkengesis (boven ongeveer 11 kHz) weg; dat blijft dan in het nummer.",
+ "Spleeter is lighter and faster but less clean: more of the band stays in the drums. Fine for playing along; for a score Demucs finds many more hits.": "Spleeter is lichter en sneller, maar minder zuiver: er blijft meer van de band in de drums zitten. Prima om mee te spelen; voor een partituur vindt Demucs veel meer noten.",
  "Demucs separates best. It needs its 316 MB model on the phone.": "Demucs scheidt het best. Het heeft zijn model van 316 MB op de telefoon nodig.",
  "This build doesn't have Spleeter.": "Deze versie heeft geen Spleeter.",
  "Show the licence texts": "Toon de licentieteksten",
- "Hide the licence texts": "Verberg de licentieteksten"
+ "Hide the licence texts": "Verberg de licentieteksten",
+ "Better notation": "Beter notenbeeld",
+ "Spleeter is quick but leaves more of the band in the drums, so the score misses hits. Demucs redoes the stems (this replaces them), then press \"Song to score\" again.": "Spleeter is snel maar laat meer van de band in de drums zitten, waardoor de partituur noten mist. Demucs maakt de stems opnieuw (dit vervangt ze); druk daarna opnieuw op \"Song to score\".",
+ "Spleeter leaves more of the band in the drums, so the score misses hits. Download the Demucs model (in a song that is not separated yet) to redo it.": "Spleeter laat meer van de band in de drums zitten, waardoor de partituur noten mist. Download het Demucs-model (bij een song die nog niet gescheiden is) om het opnieuw te doen.",
+ "Redo with Demucs": "Opnieuw met Demucs"
 }

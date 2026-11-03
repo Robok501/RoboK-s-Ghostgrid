@@ -502,7 +502,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
                   <Seg small options={[{ value: 'demucs', label: t('Demucs (best quality)') }, { value: 'spleeter', label: t('Spleeter (lighter)') }]} value={chosen}
                     onChange={(v) => update(song.id, { separator: v as Separator })} />
                 </View>
-                <Note>{chosen === 'spleeter' ? t('Spleeter is lighter and faster but a bit less clean. Its drums leave out the highest cymbal sizzle (above about 11 kHz), which then stays in the song.') : t('Demucs separates best. It needs its 316 MB model on the phone.')}</Note>
+                <Note>{chosen === 'spleeter' ? t('Spleeter is lighter and faster but less clean: more of the band stays in the drums. Fine for playing along; for a score Demucs finds many more hits.') : t('Demucs separates best. It needs its 316 MB model on the phone.')}</Note>
               </>
             )}
             <View style={s.btnRow}><Btn label="Separate drums" primary disabled={!canChosen} onPress={() => onSeparate(chosen)} style={{ flex: 1 }} /></View>
@@ -577,6 +577,11 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       <Row label="Drums to score" hint={!song.separated ? 'separate the drums first' : !map ? 'waiting for the beat map' : loopOn ? 'the loop, opened in Sketch' : 'the whole song (up to 64 bars), opened in Sketch'}>
         <Btn label={scoring ? 'Writing…' : loopOn ? 'Loop to score' : 'Song to score'} disabled={!song.separated || !map || scoring} onPress={toScore} />
       </Row>
+      {song.separated && song.separator === 'spleeter' && (
+        <Row label="Better notation" hint={have.demucs ? 'Spleeter is quick but leaves more of the band in the drums, so the score misses hits. Demucs redoes the stems (this replaces them), then press "Song to score" again.' : 'Spleeter leaves more of the band in the drums, so the score misses hits. Download the Demucs model (in a song that is not separated yet) to redo it.'}>
+          <Btn label="Redo with Demucs" disabled={!canSeparate || !have.demucs} onPress={() => onSeparate('demucs')} />
+        </Row>
+      )}
       {!!lastScan.current && (
         <View style={s.chipsRow}>
           <Text style={s.dim}>{t('Score not right?')}</Text>
