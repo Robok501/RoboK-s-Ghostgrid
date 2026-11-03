@@ -563,5 +563,8 @@
  "½ tempo": "½ tempo",
  "↺ Restart": "↺ Herstart",
  "◉ Voice": "◉ Stem",
- "● E-drum": "● E-drum"
+ "● E-drum": "● E-drum",
+ "Downloading the beat model… {{pct}}%": "Beatmodel downloaden… {{pct}}%",
+ "A beat model that also finds where the bars start ({{mb}} MB, downloaded once, stays on your phone).": "Een beatmodel dat ook vindt waar de maten beginnen ({{mb}} MB, eenmalig gedownload, blijft op je telefoon).",
+ "Get the beat model": "Beatmodel ophalen"
 }

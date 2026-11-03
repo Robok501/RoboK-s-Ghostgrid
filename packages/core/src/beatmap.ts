@@ -11,6 +11,7 @@
  *     A Viterbi pass walks through the bar (1, 2, 3, 4, 1, …) and only jumps when several bars disagree,
  *     so a bar of 2/4, or a beat the tracker missed, moves the "1" for the rest of the song instead of
  *     muddling the whole song.
+ * When the Beat This! model is on the phone it does all of this at once, in the whole song (see modelBeatMap).
  * Everything can be corrected by hand: shift the "1", change beats per bar, halve or double the tempo.
  */
 
@@ -36,8 +37,8 @@ export interface BeatMap {
   bpm: number;
   /** true when changed by hand */
   edited?: boolean;
-  /** found in the separated drum track, or in the whole mix (less reliable) */
-  source?: 'drums' | 'mix';
+  /** found with the beat model in the whole song, in the separated drum track, or in the whole mix (less reliable) */
+  source?: 'model' | 'drums' | 'mix';
   /** analysis version (newer versions redo older, unedited maps) */
   v?: number;
 }
@@ -285,6 +286,71 @@ export function beatMap(env: Envelope, beatsPerBar = 4, music?: MusicFeatures): 
   const iv = beats.slice(1).map((b, i) => b - beats[i]);
   const pos = barPositions(beatEvidence(env, frames, beats, music), beats.length, beatsPerBar);
   return withPos({ beats, beatsPerBar, downbeat: 0, bpm: iv.length ? Math.round(600 / median(iv)) / 10 : 0 }, pos);
+}
+
+// ---------------------------------------------------------------- beats from the Beat This! model
+
+/** Frames per second of the model's output. */
+export const BEAT_MODEL_RATE = 50;
+
+/**
+ * Peaks of a logit curve: a local maximum over 7 frames with a logit above 0 (as in Beat This!), neighbouring
+ * peaks merged, refined to a fraction of a frame. Returns times in seconds.
+ */
+export function logitPeaks(l: ArrayLike<number>, rate = BEAT_MODEL_RATE): number[] {
+  const n = l.length, groups: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    if (!(l[i] > 0)) continue;
+    let top = true;
+    for (let j = Math.max(0, i - 3); j <= Math.min(n - 1, i + 3); j++) if (l[j] > l[i]) { top = false; break; }
+    if (!top) continue;
+    const g = groups[groups.length - 1];
+    if (g && i - g[g.length - 1] <= 1) g.push(i); else groups.push([i]);
+  }
+  return groups.map((g) => {
+    if (g.length > 1) return (g.reduce((a, b) => a + b, 0) / g.length) / rate;
+    const i = g[0];
+    if (i < 1 || i >= n - 1) return i / rate;
+    const a = l[i - 1], b = l[i], c = l[i + 1], d = a - 2 * b + c;
+    return (i + (d < 0 ? Math.max(-0.5, Math.min(0.5, (0.5 * (a - c)) / d)) : 0)) / rate;
+  });
+}
+
+/** The most common bar length (in beats, 2 … 7) between the model's downbeats; 4 when there is no clear answer. */
+function barLength(downIdx: number[]): number {
+  const count = new Map<number, number>();
+  for (let i = 1; i < downIdx.length; i++) {
+    const d = downIdx[i] - downIdx[i - 1];
+    if (d >= 2 && d <= 7) count.set(d, (count.get(d) ?? 0) + 1);
+  }
+  let best = 4, n = 0;
+  for (const [d, c] of count) if (c > n || (c === n && d === 4)) { best = d; n = c; }
+  return best;
+}
+
+/**
+ * Beat and bar map from the Beat This! model's logits (beat and downbeat, 50 per second, on the whole song).
+ * Beats and downbeats are the peaks; every downbeat is moved to its nearest beat; a beat's place in its bar is
+ * the count since the last downbeat. Null when the model found hardly any beats (silence, speech).
+ */
+export function modelBeatMap(beatLogits: ArrayLike<number>, downLogits: ArrayLike<number>, rate = BEAT_MODEL_RATE): BeatMap | null {
+  const beats = logitPeaks(beatLogits, rate);
+  if (beats.length < 8) return null;
+  const downIdx = Array.from(new Set(logitPeaks(downLogits, rate).map((t) => {
+    let lo = 0, hi = beats.length - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (beats[m] < t) lo = m + 1; else hi = m; }
+    return lo > 0 && Math.abs(beats[lo - 1] - t) <= Math.abs(beats[lo] - t) ? lo - 1 : lo;
+  }))).sort((a, b) => a - b);
+  const beatsPerBar = barLength(downIdx);
+  const pos = beats.map((_, i) => {
+    if (!downIdx.length) return i % beatsPerBar;
+    let k = -1;
+    for (let j = 0; j < downIdx.length && downIdx[j] <= i; j++) k = j;
+    // before the first downbeat (a pick-up): count back from it
+    return k < 0 ? (((i - downIdx[0]) % beatsPerBar) + beatsPerBar) % beatsPerBar : (i - downIdx[k]) % beatsPerBar;
+  });
+  const iv = beats.slice(1).map((b, i) => b - beats[i]);
+  return { ...withPos({ beats, beatsPerBar, downbeat: 0, bpm: Math.round(600 / median(iv)) / 10 }, pos), source: 'model', v: 4 };
 }
 
 /** Store per-beat places; drop them when they are just the even pattern. */

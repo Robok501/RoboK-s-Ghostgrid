@@ -13,6 +13,11 @@ export const MODEL_MB = 316;
 export const DRUM_MODEL_NAME = 'oaf_drums.onnx';
 export const DRUM_MODEL_URL = 'https://huggingface.co/thebluescreen/oaf-drums-onnx/resolve/main/oaf_drums.onnx';
 
+/** Beat and downbeat finding: Beat This! (Foscarin, Schlüter, Widmer, ISMIR 2024), MIT, ONNX build, about 82 MB. */
+export const BEAT_MODEL_NAME = 'beat_this.onnx';
+export const BEAT_MODEL_URL = 'https://huggingface.co/thebluescreen/beat-this-onnx/resolve/main/beat_this.onnx';
+export const BEAT_MODEL_MB = 82;
+
 export interface Song {
   id: string;
   name: string;

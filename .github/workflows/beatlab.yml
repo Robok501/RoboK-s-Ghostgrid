@@ -1,0 +1,62 @@
+name: Beat lab
+# Manual: measures where beats and the "1" land (our beat map vs Beat This!) on pieces with known answers.
+# Nothing here ships in the app.
+on:
+  workflow_dispatch:
+    inputs:
+      files:
+        description: number of Groove MIDI grooves
+        default: '24'
+      ballroom:
+        description: Ballroom clips per genre (0 = skip)
+        default: '8'
+jobs:
+  beats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: sudo apt-get update && sudo apt-get install -y fluidsynth fluid-soundfont-gm
+      - run: npm ci
+      - run: pip install -r tools/lab/requirements.txt
+      - name: Beat This! ONNX (MIT)
+        run: |
+          curl -sSL https://huggingface.co/api/models/thebluescreen/beat-this-onnx/tree/main | python -m json.tool
+          curl -sSL https://huggingface.co/thebluescreen/beat-this-onnx/resolve/main/README.md | head -120
+          curl -sSL https://huggingface.co/thebluescreen/beat-this-onnx/resolve/main/LICENSE | head -30
+          curl -sSL https://huggingface.co/thebluescreen/beat-this-onnx/resolve/main/NOTICE.md | head -60
+          f=$(curl -sSL https://huggingface.co/api/models/thebluescreen/beat-this-onnx/tree/main | python -c "import json,sys; print([x['path'] for x in json.load(sys.stdin) if x['path'].endswith('.onnx')][0])")
+          echo "model file: $f"
+          curl -sSL -o bt.onnx "https://huggingface.co/thebluescreen/beat-this-onnx/resolve/main/$f"
+          ls -la bt.onnx
+      - name: Groove MIDI Dataset (CC BY 4.0)
+        run: |
+          curl -sSL -o gmd.zip https://storage.googleapis.com/magentadata/datasets/groove/groove-v1.0.0-midionly.zip
+          unzip -q gmd.zip
+          python tools/lab/render.py groove gmd ${{ inputs.files }} 30
+          python tools/lab/beats_truth.py gmd gmd
+      - name: Ballroom (research data, lab only)
+        if: inputs.ballroom != '0'
+        continue-on-error: true
+        run: |
+          curl -sSL -o br.tar.gz http://mtg.upf.edu/ismir2004/contest/tempoContest/data1.tar.gz
+          tar xzf br.tar.gz
+          curl -sSL -o ann.zip https://github.com/CPJKU/BallroomAnnotations/archive/refs/heads/master.zip
+          unzip -q ann.zip
+          python tools/lab/beats_truth.py ballroom BallroomData BallroomAnnotations-master br ${{ inputs.ballroom }}
+      - run: python tools/lab/beat_this_run.py bt.onnx gmd
+      - run: npx vite-node tools/lab/beats_ours.ts gmd
+      - run: if [ -f br/index.json ]; then python tools/lab/beat_this_run.py bt.onnx br && npx vite-node tools/lab/beats_ours.ts br; fi
+      - name: Score
+        run: |
+          python tools/lab/beats_score.py gmd "Groove MIDI (drums only)" gg bt | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -f br/index.json ]; then python tools/lab/beats_score.py br "Ballroom (full mix; ours on the mix, not a drum stem)" gg bt | tee -a "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beat-lab
+          path: |
+            gmd/*.json
+            br/*.json

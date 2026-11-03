@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  barAt, barStarts, barsFrom, beatMap, clickTimes, doubleTime, halfTime, offsetToBeat, setDownbeatAt, shiftDownbeat, snapToBar,
+  barAt, barStarts, barsFrom, beatMap, clickTimes, doubleTime, halfTime, logitPeaks, modelBeatMap, offsetToBeat, placeOf, setDownbeatAt, shiftDownbeat, snapToBar,
   type Envelope,
 } from '../src/beatmap';
 
@@ -186,5 +186,51 @@ describe('finding the "1" in harder songs', () => {
     // tapping the 1 later in the song fixes from there on, not before
     const fixed = setDownbeatAt(shiftDownbeat(m, 1), late[4]);
     expect(hitRate(barStarts(fixed), late.slice(4))).toBeGreaterThan(0.85);
+  });
+});
+
+describe('beat map from the beat model', () => {
+  /** Logits as the model gives them: a spike at every beat (and downbeat), negative elsewhere. */
+  function logits(beatFrames: number[], downFrames: number[], n: number) {
+    const b = new Float32Array(n).fill(-6), d = new Float32Array(n).fill(-6);
+    for (const f of beatFrames) { b[f] = 5; b[f - 1] = 1.5; b[f + 1] = 1.5; }
+    for (const f of downFrames) { d[f] = 4; d[f - 1] = 1; d[f + 1] = 1; }
+    return { b, d };
+  }
+  const every = (start: number, step: number, count: number) => Array.from({ length: count }, (_, i) => start + i * step);
+
+  it('finds peaks, and merges neighbours', () => {
+    const l = new Float32Array(60).fill(-4);
+    l[10] = 3; l[30] = 2; l[31] = 2; l[50] = 1;
+    const p = logitPeaks(l);
+    expect(p.length).toBe(3);
+    expect(p[1]).toBeCloseTo(30.5 / 50, 3);
+  });
+  it('reads 4/4 with the "1" every fourth beat', () => {
+    const beats = every(20, 25, 40), { b, d } = logits(beats, beats.filter((_, i) => i % 4 === 0), 1100);
+    const m = modelBeatMap(b, d)!;
+    expect(m.source).toBe('model');
+    expect(m.beatsPerBar).toBe(4);
+    expect(m.bpm).toBeCloseTo(120, 0);
+    expect(barStarts(m).length).toBe(10);
+    expect(barStarts(m)[0]).toBeCloseTo(0.4, 1);
+  });
+  it('puts the "1" where the downbeats are, also when the song starts on a pick-up', () => {
+    const beats = every(20, 25, 40), { b, d } = logits(beats, beats.filter((_, i) => i % 4 === 1), 1100);
+    const m = modelBeatMap(b, d)!;
+    expect(barStarts(m)[0]).toBeCloseTo(beats[1] / 50, 1);
+    expect(placeOf(m, 0)).toBe(3);
+  });
+  it('reads 3/4', () => {
+    const beats = every(20, 30, 36), { b, d } = logits(beats, beats.filter((_, i) => i % 3 === 0), 1200);
+    expect(modelBeatMap(b, d)!.beatsPerBar).toBe(3);
+  });
+  it('keeps counting through a downbeat the model missed', () => {
+    const beats = every(20, 25, 40), { b, d } = logits(beats, beats.filter((_, i) => i % 4 === 0 && i !== 16), 1100);
+    const m = modelBeatMap(b, d)!;
+    expect(barStarts(m).length).toBe(10);
+  });
+  it('gives up on silence', () => {
+    expect(modelBeatMap(new Float32Array(500).fill(-6), new Float32Array(500).fill(-6))).toBeNull();
   });
 });

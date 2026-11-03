@@ -9,7 +9,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import {
-  HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, modelDrumHits, offsetToBeat, setBeatsPerBar,
+  HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, modelBeatMap, modelDrumHits, offsetToBeat, setBeatsPerBar,
   setDownbeatAt, shiftDownbeat, snapToBar, type BeatMap,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -20,7 +20,7 @@ import { readVoiceFile, saveWav } from '../sketch/usePlayer';
 import { addIdeaFromOutside } from '../sketch/ideas';
 import { t } from '../i18n';
 import {
-  DRUM_MODEL_NAME, DRUM_MODEL_URL, MODEL_MB, MODEL_NAME, MODEL_URL, deleteSongFiles, ensureDir, fmtTime, loadSongs, newSongId, originalPath, saveSongs, stemPath, toPath,
+  BEAT_MODEL_MB, BEAT_MODEL_NAME, BEAT_MODEL_URL, DRUM_MODEL_NAME, DRUM_MODEL_URL, MODEL_MB, MODEL_NAME, MODEL_URL, deleteSongFiles, ensureDir, fmtTime, loadSongs, newSongId, originalPath, saveSongs, stemPath, toPath,
   type Mix, type Song,
 } from '../songs/songs';
 import { C, F } from '../theme';
@@ -241,27 +241,57 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     return () => { alive = false; Engine.stemsPause(); setPlaying(false); };
   }, [song.id, song.separated, separating]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // find beats and bars once (in the drum track when there is one); again after "Find again"
+  // the beat model (82 MB, downloaded once on request) finds the beats and the "1" in the whole song
+  const [beatModel, setBeatModel] = useState(() => Engine.stemsModelStatus(BEAT_MODEL_NAME).present);
+  const [beatDl, setBeatDl] = useState<number | null>(null);
+  useEffect(() => {
+    const sub = Engine.addListener('onStemsProgress', (e) => { if (e.phase === 'download') setBeatDl((d) => (d === null ? d : e.progress)); });
+    return () => sub.remove();
+  }, []);
+
+  // find beats and bars once (with the beat model when it is on the phone, else in the drum track); again after "Find again"
   const analyse = useCallback(async () => {
     setAnalysing(true);
     try {
+      const haveModel = Engine.stemsModelStatus(BEAT_MODEL_NAME).present;
+      if (haveModel) {
+        try {
+          const r = await Engine.stemsBeatLogits(originalPath(song), BEAT_MODEL_NAME);
+          const m = modelBeatMap(r.beat, r.down, r.rate);
+          if (m) { update(song.id, { beatMap: m }); setAnalysing(false); return; }
+        } catch { /* fall back to the drum track below */ }
+      }
       const env = await Engine.stemsEnvelope(song.separated ? stemPath(song, 'drums') : originalPath(song));
       // the "1" comes from the music: chord changes and bass notes, in the track without drums (or the whole song)
       let music: Awaited<ReturnType<typeof Engine.stemsMusicFeatures>> | undefined;
       try { music = await Engine.stemsMusicFeatures(song.separated ? stemPath(song, 'nodrums') : originalPath(song)); } catch { music = undefined; }
-      update(song.id, { beatMap: { ...beatMap(env, map?.beatsPerBar ?? 4, music), source: song.separated ? 'drums' : 'mix', v: 3 } });
+      // v 4 when the model was tried, so the map isn't redone every time the song opens
+      update(song.id, { beatMap: { ...beatMap(env, map?.beatsPerBar ?? 4, music), source: song.separated ? 'drums' : 'mix', v: haveModel ? 4 : 3 } });
     } catch (e) {
       setErr(t("Couldn't find the beat: {{msg}}", { msg: (e as Error).message }));
     }
     setAnalysing(false);
   }, [song, map?.beatsPerBar, update]);
+  const getBeatModel = async () => {
+    setBeatDl(0); setErr('');
+    try {
+      await Engine.stemsDownloadModel(BEAT_MODEL_URL, BEAT_MODEL_NAME);
+      setBeatModel(true);
+      setBeatDl(null);
+      analyse();
+      return;
+    } catch (e) {
+      setErr(t('Download failed: {{msg}}', { msg: (e as Error).message }));
+    }
+    setBeatDl(null);
+  };
   useEffect(() => {
     if (ready && !map && !analysing && !separating) analyse();
   }, [ready, map, separating]); // eslint-disable-line react-hooks/exhaustive-deps
   // a separated drum track beats the full mix for finding the beat: redo an old map once
   useEffect(() => {
-    // redo maps from the whole mix, or from before the "1" came from the music (unless fixed by hand)
-    if (ready && map && !map.edited && ((song.separated && map.source === 'mix') || (map.v ?? 0) < 3)) analyse();
+    // redo maps from the whole mix, from before the "1" came from the music, or from before the beat model (unless fixed by hand)
+    if (ready && map && !map.edited && ((song.separated && map.source === 'mix') || (map.v ?? 0) < 3 || (beatModel && (map.v ?? 0) < 4))) analyse();
   }, [ready, song.separated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the click track follows the beat map
@@ -551,7 +581,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
         </>
       )}
 
-      <BeatMapCard map={map} analysing={analysing} pos={pos} onChange={(m) => update(song.id, { beatMap: m })} onAgain={analyse} />
+      <BeatMapCard map={map} analysing={analysing} pos={pos} onChange={(m) => update(song.id, { beatMap: m })} onAgain={analyse} model={{ present: beatModel, progress: beatDl, onGet: getBeatModel }} />
 
       <View style={s.btnRow}>
         {song.separated && <Btn label="Separate again" disabled={!canSeparate} onPress={onSeparate} />}
@@ -562,11 +592,20 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
 }
 
 /** What the app found, and how to fix it: the "1", beats per bar, half or double tempo. */
-function BeatMapCard({ map, analysing, pos, onChange, onAgain }: {
+function BeatMapCard({ map, analysing, pos, onChange, onAgain, model }: {
   map: BeatMap | null; analysing: boolean; pos: number; onChange: (m: BeatMap) => void; onAgain: () => void;
+  model: { present: boolean; progress: number | null; onGet: () => void };
 }) {
   if (analysing) return <Note>Finding the beat and the bars…</Note>;
-  if (!map) return <View style={s.btnRow}><Btn label="Find the beat" onPress={onAgain} /></View>;
+  const offer = model.present ? null : model.progress !== null
+    ? <Note>{t('Downloading the beat model… {{pct}}%', { pct: Math.round(model.progress * 100) })}</Note>
+    : (
+      <View>
+        <Note>{t('A beat model that also finds where the bars start ({{mb}} MB, downloaded once, stays on your phone).', { mb: BEAT_MODEL_MB })}</Note>
+        <View style={s.btnRow}><Btn label="Get the beat model" onPress={model.onGet} /></View>
+      </View>
+    );
+  if (!map) return <View><View style={s.btnRow}><Btn label="Find the beat" onPress={onAgain} /></View>{offer}</View>;
   return (
     <View style={s.beatBox}>
       <Text style={s.beatTitle}>{t('Beat map · about {{bpm}} BPM', { bpm: Math.round(map.bpm) })} · {map.beatsPerBar}/4{map.edited ? ` · ${t('fixed by hand')}` : ''}</Text>
@@ -581,6 +620,7 @@ function BeatMapCard({ map, analysing, pos, onChange, onAgain }: {
         <Seg small options={[3, 4, 5, 6, 7].map((n) => ({ value: n, label: `${n}/4` }))} value={map.beatsPerBar} onChange={(n) => onChange(setBeatsPerBar(map, n as number))} />
         <Btn label="Find again" onPress={onAgain} />
       </View>
+      {offer}
     </View>
   );
 }

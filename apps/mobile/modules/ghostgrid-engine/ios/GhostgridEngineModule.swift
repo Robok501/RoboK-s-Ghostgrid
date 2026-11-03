@@ -153,6 +153,11 @@ public class GhostgridEngineModule: Module {
       return try GGStems.transcribe(URL(fileURLWithPath: path), modelName: model)
     }
 
+    /// Beat and downbeat logits of a whole song with the Beat This! model (see GGStems.beatLogits).
+    AsyncFunction("stemsBeatLogits") { (path: String, model: String) -> [String: Any] in
+      return try GGStems.beatLogits(URL(fileURLWithPath: path), modelName: model)
+    }
+
     /// Chords and bass of the music (the no-drums track), to find where bars start.
     AsyncFunction("stemsMusicFeatures") { (path: String) -> [String: Any] in
       return try GGStems.musicFeatures(URL(fileURLWithPath: path))

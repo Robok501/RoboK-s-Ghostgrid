@@ -499,6 +499,102 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
     return ["rate": 100, "t": ts, "c": cs, "p": ps, "v": vs, "duration": Double(n) / sampleRate]
   }
 
+  /// Beats and downbeats of a whole song with Beat This! (Foscarin, Schlüter, Widmer, ISMIR 2024; MIT; ONNX build with the
+  /// log-mel front end inside). The model wants mono at 22.05 kHz and works on 1500-frame pieces (50 frames a second) that
+  /// overlap 6 frames per side; each frame is taken from the first piece that covers it with context on both sides.
+  /// Returns the raw logits (50 per second); picking the peaks happens in TypeScript (modelBeatMap).
+  static func beatLogits(_ url: URL, modelName: String) throws -> [String: Any] {
+    let modelPath = modelURL(modelName).path
+    guard FileManager.default.fileExists(atPath: modelPath) else {
+      throw NSError(domain: "Ghostgrid", code: 50, userInfo: [NSLocalizedDescriptionKey: "The beat model isn't downloaded"])
+    }
+    // mono, then 44.1 → 22.05 kHz: a 63-tap windowed-sinc low-pass at 11 kHz, every second sample
+    var mono: [Float] = []
+    do {
+      let (l, r) = try readStereo(url)
+      mono = [Float](repeating: 0, count: l.count)
+      for i in 0..<l.count { mono[i] = (l[i] + r[i]) * 0.5 }
+    }
+    let taps = 63, half = taps / 2
+    var h = [Float](repeating: 0, count: taps)
+    var hs: Float = 0
+    for k in 0..<taps {
+      let m = Double(k - half)
+      let sinc = m == 0 ? 0.5 : sin(Double.pi * 0.5 * m) / (Double.pi * m)
+      let w = 0.54 - 0.46 * cos(2 * Double.pi * Double(k) / Double(taps - 1))
+      h[k] = Float(sinc * w); hs += h[k]
+    }
+    for k in 0..<taps { h[k] /= hs }
+    let n22 = mono.count / 2
+    guard n22 > 22_050 * 2 else {
+      throw NSError(domain: "Ghostgrid", code: 51, userInfo: [NSLocalizedDescriptionKey: "The song is too short to find a beat"])
+    }
+    var x = [Float](repeating: 0, count: n22)
+    mono.withUnsafeBufferPointer { src in
+      for i in 0..<n22 {
+        let c = 2 * i
+        var acc: Float = 0
+        for k in 0..<taps {
+          let j = c + k - half
+          if j >= 0 && j < src.count { acc += h[k] * src[j] }
+        }
+        x[i] = acc
+      }
+    }
+    mono = []
+    // reflect 512 samples at both ends (the model's context at the start and end of the piece)
+    let ctx = 512, hop = 441, win = 1024, chunk = 1500, border = 6
+    var xp = [Float](repeating: 0, count: n22 + 2 * ctx)
+    for i in 0..<ctx { xp[i] = x[ctx - i]; xp[ctx + n22 + i] = x[n22 - 2 - i] }
+    for i in 0..<n22 { xp[ctx + i] = x[i] }
+    x = []
+    let frames = (xp.count - win) / hop + 1
+
+    let env = try ORTEnv(loggingLevel: .warning)
+    let opts = try ORTSessionOptions()
+    try opts.setIntraOpNumThreads(Int32(max(2, min(4, ProcessInfo.processInfo.activeProcessorCount))))
+    let session = try ORTSession(env: env, modelPath: modelPath, sessionOptions: opts)
+
+    var beat = [Double](repeating: -10, count: frames), down = [Double](repeating: -10, count: frames)
+    var filled = [Bool](repeating: false, count: frames)
+    var a = 0
+    while true {
+      var b = min(a + chunk, frames)
+      if b == frames && b - a < chunk && a > 0 { a = max(0, frames - chunk) }   // the last piece is moved left
+      b = min(a + chunk, frames)
+      let count = b - a
+      let from = a * hop, to = (b - 1) * hop + win
+      let pad0 = a == 0 ? 6 : 0, pad1 = b == frames ? 6 : 0
+      let data = NSMutableData(length: (to - from) * MemoryLayout<Float>.size)!
+      xp.withUnsafeBufferPointer { src in
+        data.mutableBytes.copyMemory(from: src.baseAddress! + from, byteCount: (to - from) * MemoryLayout<Float>.size)
+      }
+      let padData = NSMutableData(length: 2 * MemoryLayout<Int64>.size)!
+      padData.mutableBytes.assumingMemoryBound(to: Int64.self)[0] = Int64(pad0)
+      padData.mutableBytes.assumingMemoryBound(to: Int64.self)[1] = Int64(pad1)
+      let input = try ORTValue(tensorData: data, elementType: .float, shape: [1, NSNumber(value: to - from)])
+      let padIn = try ORTValue(tensorData: padData, elementType: .int64, shape: [2])
+      let outs = try session.run(withInputs: ["waveform": input, "pad_frames": padIn], outputNames: Set(["beat", "downbeat"]), runOptions: nil)
+      guard let ob = outs["beat"], let od = outs["downbeat"] else {
+        throw NSError(domain: "Ghostgrid", code: 52, userInfo: [NSLocalizedDescriptionKey: "The beat model gave no output"])
+      }
+      let bd = try ob.tensorData(), dd = try od.tensorData()
+      let bp = bd.bytes.assumingMemoryBound(to: Float.self), dp = dd.bytes.assumingMemoryBound(to: Float.self)
+      let got = bd.length / MemoryLayout<Float>.size
+      let lo = a == 0 ? 0 : a + border, hi = b == frames ? frames : b - border
+      if lo < hi {
+        for f in lo..<hi where !filled[f] {
+          let k = f - a + pad0
+          if k >= 0 && k < got { beat[f] = Double(bp[k]); down[f] = Double(dp[k]); filled[f] = true }
+        }
+      }
+      _ = count
+      if b == frames { break }
+      a = b - 2 * border
+    }
+    return ["rate": 50, "beat": beat, "down": down, "duration": Double(n22) / 22_050]
+  }
+
   /// Level check of a separated song's files (for songs separated before the check existed).
   static func levels(_ url: URL) throws -> [String: Any] {
     let file = try AVAudioFile(forReading: url)

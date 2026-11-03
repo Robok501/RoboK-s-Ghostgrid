@@ -563,5 +563,8 @@
  "½ tempo": "½ tempo",
  "↺ Restart": "↺ Recommencer",
  "◉ Voice": "◉ Voix",
- "● E-drum": "● Batterie élec."
+ "● E-drum": "● Batterie élec.",
+ "Downloading the beat model… {{pct}}%": "Téléchargement du modèle de tempo… {{pct}} %",
+ "A beat model that also finds where the bars start ({{mb}} MB, downloaded once, stays on your phone).": "Un modèle de tempo qui trouve aussi où commencent les mesures ({{mb}} Mo, téléchargé une fois, reste sur ton téléphone).",
+ "Get the beat model": "Obtenir le modèle de tempo"
 }
