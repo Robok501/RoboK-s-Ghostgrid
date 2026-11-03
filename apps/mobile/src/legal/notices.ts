@@ -23,7 +23,7 @@ export const CREDITS: Credit[] = [
     name: 'HT-Demucs (drums)',
     what: 'Separates the drums from a song (downloaded on request).',
     by: 'Simon Rouard, Francisco Massa, Alexandre Défossez (Meta AI). ONNX export by StemSplit.',
-    licence: 'code MIT; licence of the trained weights not confirmed (for testing only)',
+    licence: 'code MIT; the author says the weights\' licence is unclear (training data not cleared) and likely non-commercial: for the developer\'s own practice only',
     bundled: false,
   },
   {

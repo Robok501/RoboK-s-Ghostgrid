@@ -68,10 +68,15 @@ SOFTWARE.
   <https://huggingface.co/StemSplitio/htdemucs-ft-drums-onnx>
 - Original: Simon Rouard, Francisco Massa, Alexandre Défossez, "Hybrid Transformers for Music Source Separation", ICASSP 2023.
   <https://github.com/facebookresearch/demucs> (archived 1 Jan 2025; fork <https://github.com/adefossez/demucs>).
-- Licence: **unconfirmed; treat as for testing only.** StemSplit states the export is MIT "matching the original HT-Demucs". The
-  Demucs code is MIT, but the author is quoted (issue #327, second-hand) as saying the weights "are not covered by the MIT license,
-  and are provided only for scientific purposes", and the MIT tag was reportedly removed from the model card
-  (<https://huggingface.co/adefossez/HTDemucs-ft/discussions/1>). Several questions about commercial use are unanswered.
+- Licence: **not cleared; for the developer's own testing and practice only, never to be shipped, hosted or sold.** StemSplit states
+  the export is MIT "matching the original HT-Demucs", but that does not override the original author, who writes in the README of
+  <https://github.com/adefossez/demucs> (read 3 Nov 2026): "Demucs code is released under the MIT license ... The license of the
+  weights is not clear: MusDB contains some data that were only usable for research purpose. I sadly cannot help granting a license,
+  both coming from Meta custom data, or from the original MusDB data. The 6 source variant of htdemucs was trained only on Meta
+  internal dataset, which likely means CC-NC-BY license is applicable, as it was the case for all models released by FAIR. Do not
+  write me to ask about it, I won't be able to clarify the situation further." So: no mail to the author; the weights stay unusable
+  for a public or paid app. Earlier second-hand evidence (issue #327; MIT tag removed from the model card,
+  <https://huggingface.co/adefossez/HTDemucs-ft/discussions/1>) points the same way.
 
 ## Onsets and Frames Drums (downloaded on request, not bundled)
 
@@ -81,8 +86,9 @@ SOFTWARE.
 
 ## Open points
 
-1. HT-Demucs weights: not cleared for commercial use (see above). Written answers requested from StemSplit and the original author
-   before any public or paid release; Spleeter is the fallback separator.
+1. HT-Demucs weights: cannot be cleared (the author says so himself, 3 Nov 2026). Own use only; remove the Demucs download before
+   any public or paid release. StemSplit may still be asked what they claim, but their answer cannot override the original data terms.
+   Spleeter is the separator for release; a model trained by us on data we may use is the route to better quality.
 1b. Spleeter weights: no separate statement from Deezer; same question, but Deezer trained and published them itself.
 2. Onsets and Frames Drums: confirm the licence and, if Apache-2.0, add the licence text and NOTICE if it is ever bundled.
 3. Training data of all three models: see the caveat above for Beat This!.

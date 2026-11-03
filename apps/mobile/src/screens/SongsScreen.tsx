@@ -515,7 +515,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
                   <Seg small options={[{ value: 'demucs', label: t('Demucs (best quality)') }, { value: 'spleeter', label: t('Spleeter (lighter)') }]} value={chosen}
                     onChange={(v) => update(song.id, { separator: v as Separator })} />
                 </View>
-                <Note>{chosen === 'spleeter' ? t('Spleeter is lighter and faster but less clean: more of the band stays in the drums. Fine for playing along; for a score Demucs finds many more hits.') : t('Demucs separates best. It needs its 316 MB model on the phone.')}</Note>
+                <Note>{chosen === 'spleeter' ? t('Spleeter is lighter and faster but less clean: more of the band stays in the drums. Fine for playing along; for a score Demucs finds many more hits.') : t('Demucs separates best, but only for your own practice: the licence of its weights is unclear. It needs its 316 MB model on the phone.')}</Note>
               </>
             )}
             <View style={s.btnRow}><Btn label="Separate drums" primary disabled={!canChosen} onPress={() => onSeparate(chosen)} style={{ flex: 1 }} /></View>
