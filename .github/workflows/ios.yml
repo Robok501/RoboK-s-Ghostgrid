@@ -17,7 +17,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  spleeter:
+    uses: ./.github/workflows/spleeter-model.yml
   ios:
+    needs: spleeter
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -49,6 +52,12 @@ jobs:
           curl -fsSL -o "$M/beat_this.onnx" https://huggingface.co/thebluescreen/beat-this-onnx/resolve/main/beat_this.onnx
           echo "ab31b5a815e2d90c6cb523e33f0ce45590fdcf80c4181a8115394d94633be14a  $M/beat_this.onnx" | shasum -a 256 -c -
           ls -la "$M"
+
+      # Spleeter (Deezer) as the second separator: converted and checked by spleeter-model.yml, then copied into the app
+      - uses: actions/download-artifact@v4
+        with:
+          name: spleeter-onnx
+          path: apps/mobile/modules/ghostgrid-engine/ios/Models
 
       - name: Generate the iOS project (expo prebuild)
         working-directory: apps/mobile
@@ -91,6 +100,8 @@ jobs:
           echo "GhostgridEngine is linked into Ghostgrid.app"
           test -s build/Build/Products/Release-iphoneos/Ghostgrid.app/beat_this.onnx
           echo "beat_this.onnx is inside Ghostgrid.app"
+          test -s build/Build/Products/Release-iphoneos/Ghostgrid.app/spleeter_drums.onnx
+          echo "spleeter_drums.onnx is inside Ghostgrid.app"
 
       - name: Package Ghostgrid.ipa
         working-directory: apps/mobile/ios

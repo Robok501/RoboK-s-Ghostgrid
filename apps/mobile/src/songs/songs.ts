@@ -9,6 +9,9 @@ import type { CoachInput } from '../store';
 export const MODEL_NAME = 'htdemucs_ft_drums.onnx';
 export const MODEL_URL = 'https://huggingface.co/StemSplitio/htdemucs-ft-drums-onnx/resolve/main/htdemucs_ft_drums.onnx';
 export const MODEL_MB = 316;
+/** Second drum separator: Spleeter (Deezer, MIT), converted to ONNX by tools/spleeter and shipped inside the app, about 157 MB. */
+export const SPLEETER_MODEL_NAME = 'spleeter_drums.onnx';
+export type Separator = 'demucs' | 'spleeter';
 /** Drum transcription for "to score": Onsets and Frames Drums (Magenta, E-GMD), Apache-2.0, about 6 MB. */
 export const DRUM_MODEL_NAME = 'oaf_drums.onnx';
 export const DRUM_MODEL_URL = 'https://huggingface.co/thebluescreen/oaf-drums-onnx/resolve/main/oaf_drums.onnx';
@@ -27,6 +30,8 @@ export interface Song {
   original: string;
   duration?: number;
   separated?: boolean;
+  /** which separator to use (and, after separating, which one made the stems) */
+  separator?: Separator;
   error?: string;
   // practice state, remembered per song
   rate?: number;

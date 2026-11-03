@@ -1,0 +1,27 @@
+name: Spleeter model
+# Converts Deezer's Spleeter 4stems checkpoint (MIT code, trained by Deezer on its own data) into spleeter_drums.onnx
+# and checks the result against Deezer's own TensorFlow graph. Reused by the iOS build and the separation lab.
+on:
+  workflow_call:
+  workflow_dispatch:
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
+      - run: pip install -r tools/spleeter/requirements.txt
+      - name: Deezer's 4stems checkpoint (pinned SHA-256)
+        run: |
+          curl -fsSL -o 4stems.tar.gz https://github.com/deezer/spleeter/releases/download/v1.4.0/4stems.tar.gz
+          echo "3adb4a50ad4eb18c7c4d65fcf4cf2367a07d48408a5eb7d03cd20067429dfaa8  4stems.tar.gz" | sha256sum -c -
+          mkdir ckpt && tar xzf 4stems.tar.gz -C ckpt
+      - name: Convert and check against Deezer's graph
+        run: python tools/spleeter/export.py ckpt spleeter_drums.onnx
+      - run: ls -la spleeter_drums.onnx && sha256sum spleeter_drums.onnx
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spleeter-onnx
+          path: spleeter_drums.onnx
+          retention-days: 7

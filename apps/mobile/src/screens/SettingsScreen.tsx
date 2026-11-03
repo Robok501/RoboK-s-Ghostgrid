@@ -10,7 +10,7 @@ import { useApp } from '../AppContext';
 import { C } from '../theme';
 import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle, TopBar, Value } from '../ui';
 import { LANGUAGES, deviceLanguage, t } from '../i18n';
-import { BEAT_THIS_CHANGES, BEAT_THIS_CITATION, BEAT_THIS_LICENCE, BEAT_THIS_NOTE, CREDITS } from '../legal/notices';
+import { BEAT_THIS_CHANGES, BEAT_THIS_CITATION, BEAT_THIS_LICENCE, BEAT_THIS_NOTE, CREDITS, SPLEETER_CHANGES, SPLEETER_CITATION, SPLEETER_LICENCE, SPLEETER_NOTE } from '../legal/notices';
 
 /** On-time window that comes with each player level (the Coach can still change it). */
 export const LEVEL_TOL: Record<number, number> = { 1: 40, 2: 25, 3: 25, 4: 15 };
@@ -141,7 +141,7 @@ export function SettingsScreen() {
           </View>
         ))}
         <View style={s.btnRow}>
-          <Btn label={showLicence ? 'Hide the Beat This! licence' : 'Show the Beat This! licence'} onPress={() => setShowLicence((v) => !v)} />
+          <Btn label={showLicence ? 'Hide the licence texts' : 'Show the licence texts'} onPress={() => setShowLicence((v) => !v)} />
         </View>
         {showLicence && (
           <View>
@@ -149,6 +149,11 @@ export function SettingsScreen() {
             <Text style={s.creditText}>{BEAT_THIS_CHANGES}</Text>
             <Text style={s.creditText}>{BEAT_THIS_NOTE}</Text>
             <Text style={[s.creditText, s.mono2]}>{BEAT_THIS_LICENCE}</Text>
+            <Text style={s.creditName}>Spleeter</Text>
+            <Text style={s.creditText}>{SPLEETER_CITATION}</Text>
+            <Text style={s.creditText}>{SPLEETER_CHANGES}</Text>
+            <Text style={s.creditText}>{SPLEETER_NOTE}</Text>
+            <Text style={[s.creditText, s.mono2]}>{SPLEETER_LICENCE}</Text>
           </View>
         )}
       </Card>

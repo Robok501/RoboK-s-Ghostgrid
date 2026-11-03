@@ -569,6 +569,11 @@
  "Get the beat model": "Beat-Modell laden",
  "Licences": "Lizenzen",
  "Ghostgrid works with open models that run on this phone. Your songs never leave it.": "Ghostgrid arbeitet mit offenen Modellen, die auf diesem Telefon laufen. Deine Songs verlassen es nie.",
- "Show the Beat This! licence": "Beat-This!-Lizenz anzeigen",
- "Hide the Beat This! licence": "Beat-This!-Lizenz ausblenden"
+ "Demucs (best quality)": "Demucs (beste Qualität)",
+ "Spleeter (lighter)": "Spleeter (leichter)",
+ "Spleeter is lighter and faster but a bit less clean. Its drums leave out the highest cymbal sizzle (above about 11 kHz), which then stays in the song.": "Spleeter ist leichter und schneller, aber etwas weniger sauber. Die Drums lassen das höchste Beckenzischen (über etwa 11 kHz) aus; das bleibt dann im Song.",
+ "Demucs separates best. It needs its 316 MB model on the phone.": "Demucs trennt am besten. Es braucht sein 316-MB-Modell auf dem Telefon.",
+ "This build doesn't have Spleeter.": "Diese Version hat kein Spleeter.",
+ "Show the licence texts": "Lizenztexte anzeigen",
+ "Hide the licence texts": "Lizenztexte ausblenden"
 }

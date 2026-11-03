@@ -13,10 +13,17 @@ export const CREDITS: Credit[] = [
     bundled: true,
   },
   {
+    name: 'Spleeter',
+    what: 'A lighter way to separate the drums from a song (4-stem model, converted to ONNX; 157 MB).',
+    by: 'Deezer Research (Romain Hennequin, Anis Khlif, Felix Voituret, Manuel Moussallam). ONNX conversion made for Ghostgrid from the original checkpoint.',
+    licence: 'MIT (code); models trained by Deezer on its own data',
+    bundled: true,
+  },
+  {
     name: 'HT-Demucs (drums)',
     what: 'Separates the drums from a song (downloaded on request).',
     by: 'Simon Rouard, Francisco Massa, Alexandre Défossez (Meta AI). ONNX export by StemSplit.',
-    licence: 'MIT, as stated by the publisher of the ONNX export',
+    licence: 'code MIT; licence of the trained weights not confirmed (for testing only)',
     bundled: false,
   },
   {
@@ -27,6 +34,37 @@ export const CREDITS: Credit[] = [
     bundled: false,
   },
 ];
+
+export const SPLEETER_CITATION =
+  'Romain Hennequin, Anis Khlif, Felix Voituret, Manuel Moussallam. "Spleeter: a fast and efficient music source separation tool with pre-trained models." Journal of Open Source Software 5(50), 2154, 2020. https://doi.org/10.21105/joss.02154';
+
+export const SPLEETER_LICENCE = `MIT License
+
+Copyright (c) 2019-present, Deezer SA.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.`;
+
+export const SPLEETER_CHANGES =
+  'The four U-Nets of the 4-stem checkpoint were rebuilt in TensorFlow from the original weights and exported to ONNX (the network only; the STFT, mask and inverse STFT are done in the app). The result was checked against the original TensorFlow graph. No weights were changed.';
+
+export const SPLEETER_NOTE =
+  'Deezer states that the Spleeter code is MIT-licensed; it does not state separate terms for the pretrained models. They were trained on Deezer\'s own data (not MUSDB) and published by Deezer without research-only wording.';
 
 export const BEAT_THIS_CITATION =
   'Francesco Foscarin, Jan Schlüter, Gerhard Widmer. "Beat this! Accurate beat tracking without DBN postprocessing." Proceedings of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, 2024.';

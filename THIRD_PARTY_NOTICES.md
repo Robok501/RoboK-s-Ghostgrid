@@ -1,6 +1,6 @@
 # Third-party notices
 
-Ghostgrid runs three machine-learning models on the phone. This file lists them, who made them and under which licence
+Ghostgrid runs four machine-learning models on the phone. This file lists them, who made them and under which licence
 they are published. The same credits are shown in the app under Settings → Licences
 (`apps/mobile/src/legal/notices.ts`: keep the two in step).
 
@@ -47,14 +47,31 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Spleeter (built into the app, second separator)
+
+- What: drum separation. The four U-Nets of Deezer's 4-stem checkpoint (`4stems.tar.gz`, release v1.4.0, SHA-256
+  `3adb4a50ad4eb18c7c4d65fcf4cf2367a07d48408a5eb7d03cd20067429dfaa8`) rebuilt in TensorFlow from the original weights and
+  exported to ONNX by `tools/spleeter` (CI: `.github/workflows/spleeter-model.yml`), 157 MB. STFT, mask and inverse STFT are done in
+  the app. The conversion is checked in CI against Deezer's own TensorFlow graph (error more than 60 dB below the signal; 75 dB when
+  last run). No weights were changed.
+- Authors: Romain Hennequin, Anis Khlif, Felix Voituret, Manuel Moussallam (Deezer Research). <https://github.com/deezer/spleeter>
+- Licence: "The code of Spleeter is MIT-licensed" (README). Copyright (c) 2019-present, Deezer SA. The README states no separate terms
+  for the pretrained models. They were trained on Deezer's own data (not MUSDB) and published by Deezer without research-only wording
+  (JOSS paper: <https://doi.org/10.21105/joss.02154>). The MIT text is in `apps/mobile/src/legal/notices.ts` and shown in the app.
+- Not published anywhere: the converted file is only inside the (privately built) app. Hosting it for download would be redistribution.
+- Citation: Hennequin, Khlif, Voituret, Moussallam. "Spleeter: a fast and efficient music source separation tool with pre-trained
+  models." JOSS 5(50), 2154, 2020.
+
 ## HT-Demucs drums (downloaded on request, not bundled)
 
 - What: drum separation, sub-model 0 of `htdemucs_ft`, ONNX export by StemSplit, 316 MB.
   <https://huggingface.co/StemSplitio/htdemucs-ft-drums-onnx>
 - Original: Simon Rouard, Francisco Massa, Alexandre Défossez, "Hybrid Transformers for Music Source Separation", ICASSP 2023.
   <https://github.com/facebookresearch/demucs> (archived 1 Jan 2025; fork <https://github.com/adefossez/demucs>).
-- Licence: StemSplit states the export is MIT "matching the original HT-Demucs". The Demucs repository is MIT; it does not
-  state separate terms for the pretrained weights.
+- Licence: **unconfirmed; treat as for testing only.** StemSplit states the export is MIT "matching the original HT-Demucs". The
+  Demucs code is MIT, but the author is quoted (issue #327, second-hand) as saying the weights "are not covered by the MIT license,
+  and are provided only for scientific purposes", and the MIT tag was reportedly removed from the model card
+  (<https://huggingface.co/adefossez/HTDemucs-ft/discussions/1>). Several questions about commercial use are unanswered.
 
 ## Onsets and Frames Drums (downloaded on request, not bundled)
 
@@ -64,8 +81,8 @@ SOFTWARE.
 
 ## Open points
 
-1. HT-Demucs weights: whether MIT really covers the pretrained weights (a public question on the weights' Hugging Face
-   page, <https://huggingface.co/adefossez/HTDemucs/discussions/1>, is unanswered). Written answer requested from the
-   publisher and the original author before any paid release.
+1. HT-Demucs weights: not cleared for commercial use (see above). Written answers requested from StemSplit and the original author
+   before any public or paid release; Spleeter is the fallback separator.
+1b. Spleeter weights: no separate statement from Deezer; same question, but Deezer trained and published them itself.
 2. Onsets and Frames Drums: confirm the licence and, if Apache-2.0, add the licence text and NOTICE if it is ever bundled.
 3. Training data of all three models: see the caveat above for Beat This!.

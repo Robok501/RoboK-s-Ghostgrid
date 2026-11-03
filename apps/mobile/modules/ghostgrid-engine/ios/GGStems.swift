@@ -14,7 +14,7 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
 
   static let sampleRate = 44_100.0
   static let segment = 343_980
-  private var cancelled = false
+  var cancelled = false
   private var downloadDone: ((Result<URL, Error>) -> Void)?
   private var downloadTask: URLSessionDownloadTask?
 
@@ -302,7 +302,7 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
   }
   static func freeMB() -> Double { Double(os_proc_available_memory()) / 1_048_576 }
 
-  private func mark(_ phase: String, _ extra: [String: Any] = [:]) {
+  func mark(_ phase: String, _ extra: [String: Any] = [:]) {
     var info: [String: Any] = ["phase": phase, "time": Date().timeIntervalSince1970, "freeMB": Self.freeMB()]
     for (k, v) in extra { info[k] = v }
     if let data = try? JSONSerialization.data(withJSONObject: info) { try? data.write(to: Self.logURL, options: .atomic) }
@@ -317,6 +317,7 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
   /// Separate `input` into drums.caf and nodrums.caf in `outDir`. Returns the duration in seconds.
   func separate(input: URL, outDir: URL, modelName: String) throws -> [String: Any] {
     cancelled = false
+    if modelName.hasPrefix("spleeter") { return try separateSpleeter(input: input, outDir: outDir, modelName: modelName) }
     let modelPath = Self.modelURL(modelName).path
     guard FileManager.default.fileExists(atPath: modelPath) else {
       throw NSError(domain: "Ghostgrid", code: 30, userInfo: [NSLocalizedDescriptionKey: "The separation model isn't downloaded yet"])

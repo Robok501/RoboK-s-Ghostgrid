@@ -20,8 +20,8 @@ import { readVoiceFile, saveWav } from '../sketch/usePlayer';
 import { addIdeaFromOutside } from '../sketch/ideas';
 import { t } from '../i18n';
 import {
-  BEAT_MODEL_MB, BEAT_MODEL_NAME, BEAT_MODEL_URL, DRUM_MODEL_NAME, DRUM_MODEL_URL, MODEL_MB, MODEL_NAME, MODEL_URL, deleteSongFiles, ensureDir, fmtTime, loadSongs, newSongId, originalPath, saveSongs, stemPath, toPath,
-  type Mix, type Song,
+  BEAT_MODEL_MB, BEAT_MODEL_NAME, BEAT_MODEL_URL, DRUM_MODEL_NAME, DRUM_MODEL_URL, MODEL_MB, MODEL_NAME, MODEL_URL, SPLEETER_MODEL_NAME, deleteSongFiles, ensureDir, fmtTime, loadSongs, newSongId, originalPath, saveSongs, stemPath, toPath,
+  type Mix, type Separator, type Song,
 } from '../songs/songs';
 import { C, F } from '../theme';
 import { Btn, Card, Note, Row, Seg, Stepper, TopBar } from '../ui';
@@ -34,6 +34,8 @@ export function SongsScreen() {
   const [songs, setSongs] = useState<Song[]>(loadSongs);
   const [cur, setCur] = useState<string | null>(null);
   const [model, setModel] = useState(() => Engine.stemsModelStatus(MODEL_NAME));
+  // Spleeter ships inside the app (when this build has it): nothing to download
+  const spleeter = useMemo(() => Engine.stemsModelStatus(SPLEETER_MODEL_NAME).present, []);
   const [dl, setDl] = useState<Progress>(null);
   const [work, setWork] = useState<{ id: string; p: Progress } | null>(null);
   const [notice, setNotice] = useState(() => {
@@ -128,16 +130,17 @@ export function SongsScreen() {
   }, [recording]);
 
   // ---- separation
-  const separate = async (s: Song) => {
-    if (!model.present) { setNotice(t('Download the model first.')); return; }
+  const separate = async (s: Song, which: Separator) => {
+    if (which === 'demucs' && !model.present) { setNotice(t('Download the model first.')); return; }
+    if (which === 'spleeter' && !spleeter) { setNotice(t("This build doesn't have Spleeter.")); return; }
     Engine.stemsUnload();
     setWork({ id: s.id, p: { phase: 'decode', progress: 0 } });
     try {
       const dir = ensureDir(s.id);
-      const r = await Engine.stemsSeparate(originalPath(s), toPath(dir.uri), MODEL_NAME);
+      const r = await Engine.stemsSeparate(originalPath(s), toPath(dir.uri), which === 'spleeter' ? SPLEETER_MODEL_NAME : MODEL_NAME);
       const check = { mixDb: r.mixDb, drumsDb: r.drumsDb, restDb: r.restDb, drumsShare: r.drumsShare, invalid: r.invalid };
       // a new separation means a new drum track: find the beat again
-      update(s.id, { separated: true, duration: r.duration, error: undefined, check, beatMap: undefined });
+      update(s.id, { separated: true, separator: which, duration: r.duration, error: undefined, check, beatMap: undefined });
       setNotice(r.invalid > 0 ? t('Done, but the model gave {{n}} invalid samples (silenced). Tell Claude.', { n: r.invalid }) : t('Done. Play it without drums, or with drums only.'));
     } catch (e) {
       update(s.id, { error: (e as Error).message });
@@ -178,7 +181,7 @@ export function SongsScreen() {
 
       {song && (
         <Player key={song.id} song={song} update={update} separating={work?.id === song.id} progress={work?.id === song.id ? work.p : null}
-          onSeparate={() => separate(song)} onCancel={() => Engine.stemsCancel()} onDelete={() => remove(song)} canSeparate={!work && model.present} />
+          onSeparate={(which) => separate(song, which)} onCancel={() => Engine.stemsCancel()} onDelete={() => remove(song)} canSeparate={!work} have={{ demucs: model.present, spleeter }} />
       )}
 
       <Card title="Songs">
@@ -207,10 +210,12 @@ export function SongsScreen() {
   );
 }
 
-function Player({ song, update, separating, progress, onSeparate, onCancel, onDelete, canSeparate }: {
+function Player({ song, update, separating, progress, onSeparate, onCancel, onDelete, canSeparate, have }: {
   song: Song; update: (id: string, p: Partial<Song>) => void; separating: boolean; progress: Progress;
-  onSeparate: () => void; onCancel: () => void; onDelete: () => void; canSeparate: boolean;
+  onSeparate: (which: Separator) => void; onCancel: () => void; onDelete: () => void; canSeparate: boolean; have: { demucs: boolean; spleeter: boolean };
 }) {
+  const chosen: Separator = song.separator ?? (have.demucs || !have.spleeter ? 'demucs' : 'spleeter');
+  const canChosen = canSeparate && have[chosen];
   const { info, on, mic, setMic, settings, micLevel, goTab } = useApp();
   const [scoring, setScoring] = useState(false);
   const [dur, setDur] = useState(song.duration ?? 0);
@@ -491,7 +496,16 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
         ) : (
           <>
             <Note>{song.error ? t('Last try stopped: {{msg}}', { msg: song.error }) : t('Separate the drums to practise without them, or with drums only.')}</Note>
-            <View style={s.btnRow}><Btn label="Separate drums" primary disabled={!canSeparate} onPress={onSeparate} style={{ flex: 1 }} /></View>
+            {have.spleeter && (
+              <>
+                <View style={s.btnRow}>
+                  <Seg small options={[{ value: 'demucs', label: t('Demucs (best quality)') }, { value: 'spleeter', label: t('Spleeter (lighter)') }]} value={chosen}
+                    onChange={(v) => update(song.id, { separator: v as Separator })} />
+                </View>
+                <Note>{chosen === 'spleeter' ? t('Spleeter is lighter and faster but a bit less clean. Its drums leave out the highest cymbal sizzle (above about 11 kHz), which then stays in the song.') : t('Demucs separates best. It needs its 316 MB model on the phone.')}</Note>
+              </>
+            )}
+            <View style={s.btnRow}><Btn label="Separate drums" primary disabled={!canChosen} onPress={() => onSeparate(chosen)} style={{ flex: 1 }} /></View>
           </>
         )
       )}
@@ -584,7 +598,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       <BeatMapCard map={map} analysing={analysing} pos={pos} onChange={(m) => update(song.id, { beatMap: m })} onAgain={analyse} model={{ present: beatModel, progress: beatDl, onGet: getBeatModel }} />
 
       <View style={s.btnRow}>
-        {song.separated && <Btn label="Separate again" disabled={!canSeparate} onPress={onSeparate} />}
+        {song.separated && <Btn label="Separate again" disabled={!canChosen} onPress={() => onSeparate(chosen)} />}
         <Btn label="Delete song" onPress={onDelete} />
       </View>
     </Card>
