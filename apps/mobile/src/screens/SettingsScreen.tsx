@@ -1,5 +1,5 @@
 /** Settings: audio route, e-drum pairing and pad map (incl. learning pads), velocity rules, calibrations. */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { INSTRUMENTS, NOTATION_STYLES, PAD_NAMES, applyLevel, exampleIdea, notationStyle, notesFor, staffName, type PadKey } from '@ghostgrid/core';
 import { LEVELS } from './ClickScreen';
@@ -10,6 +10,7 @@ import { useApp } from '../AppContext';
 import { C } from '../theme';
 import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle, TopBar, Value } from '../ui';
 import { LANGUAGES, deviceLanguage, t } from '../i18n';
+import { BEAT_THIS_CHANGES, BEAT_THIS_CITATION, BEAT_THIS_LICENCE, BEAT_THIS_NOTE, CREDITS } from '../legal/notices';
 
 /** On-time window that comes with each player level (the Coach can still change it). */
 export const LEVEL_TOL: Record<number, number> = { 1: 40, 2: 25, 3: 25, 4: 15 };
@@ -24,6 +25,7 @@ export function SettingsScreen() {
   const { width } = useWindowDimensions();
   const p = settings.pads, calib = settings.click.calib;
   const bt = info?.route === 'bluetooth';
+  const [showLicence, setShowLicence] = useState(false);
 
   const c = settings.click;
   const setLevel = (level: number) => {
@@ -129,6 +131,28 @@ export function SettingsScreen() {
         ))}
       </Card>
 
+      <Card title="Licences">
+        <Note>Ghostgrid works with open models that run on this phone. Your songs never leave it.</Note>
+        {CREDITS.map((c) => (
+          <View key={c.name} style={s.credit}>
+            <Text style={s.creditName}>{c.name} · {c.licence}</Text>
+            <Text style={s.creditText}>{c.what}</Text>
+            <Text style={s.creditText}>{c.by}</Text>
+          </View>
+        ))}
+        <View style={s.btnRow}>
+          <Btn label={showLicence ? 'Hide the Beat This! licence' : 'Show the Beat This! licence'} onPress={() => setShowLicence((v) => !v)} />
+        </View>
+        {showLicence && (
+          <View>
+            <Text style={s.creditText}>{BEAT_THIS_CITATION}</Text>
+            <Text style={s.creditText}>{BEAT_THIS_CHANGES}</Text>
+            <Text style={s.creditText}>{BEAT_THIS_NOTE}</Text>
+            <Text style={[s.creditText, s.mono2]}>{BEAT_THIS_LICENCE}</Text>
+          </View>
+        )}
+      </Card>
+
       <Text style={s.footer}>{t('Ghostgrid {{v}} · settings and ideas stay on this device', { v: '0.5' })}</Text>
     </ScrollView>
     </View>
@@ -142,5 +166,9 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 4 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   mono: { color: C.fg, fontSize: 13, fontFamily: 'Menlo', flexShrink: 1, textAlign: 'right' },
+  credit: { paddingVertical: 6, gap: 2 },
+  creditName: { color: C.fg, fontSize: 14, fontWeight: '600' },
+  creditText: { color: C.muted, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  mono2: { fontFamily: 'Menlo', fontSize: 11, lineHeight: 15 },
   footer: { color: C.muted, fontSize: 12, textAlign: 'center' },
 });

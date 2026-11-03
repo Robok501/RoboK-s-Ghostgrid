@@ -566,5 +566,9 @@
  "● E-drum": "● Batterie élec.",
  "Downloading the beat model… {{pct}}%": "Téléchargement du modèle de tempo… {{pct}} %",
  "A beat model that also finds where the bars start ({{mb}} MB, downloaded once, stays on your phone).": "Un modèle de tempo qui trouve aussi où commencent les mesures ({{mb}} Mo, téléchargé une fois, reste sur ton téléphone).",
- "Get the beat model": "Obtenir le modèle de tempo"
+ "Get the beat model": "Obtenir le modèle de tempo",
+ "Licences": "Licences",
+ "Ghostgrid works with open models that run on this phone. Your songs never leave it.": "Ghostgrid utilise des modèles ouverts qui tournent sur ce téléphone. Tes morceaux ne le quittent jamais.",
+ "Show the Beat This! licence": "Afficher la licence de Beat This!",
+ "Hide the Beat This! licence": "Masquer la licence de Beat This!"
 }

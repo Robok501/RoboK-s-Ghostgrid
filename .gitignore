@@ -13,3 +13,6 @@ apps/mobile/android/
 *.f32
 *.wav
 dist-web/
+
+# models that the iOS build copies into the app (see ios.yml)
+apps/mobile/modules/ghostgrid-engine/ios/Models/*.onnx

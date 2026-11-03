@@ -18,4 +18,6 @@ Pod::Spec.new do |s|
 
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.source_files = '**/*.{h,m,mm,swift}'
+  # models that ship inside the app (filled in by the build: see .github/workflows/ios.yml); empty when building by hand
+  s.resources = ['Models/*.onnx']
 end

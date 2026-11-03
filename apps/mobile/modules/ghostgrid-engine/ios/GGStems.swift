@@ -24,7 +24,12 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     return base.appendingPathComponent("models", isDirectory: true)
   }
-  static func modelURL(_ name: String) -> URL { modelDir.appendingPathComponent(name) }
+  /// A model that ships inside the app (Models/ in this module, copied in by the build) wins over a downloaded one.
+  static func modelURL(_ name: String) -> URL {
+    let ns = name as NSString
+    if let bundled = Bundle.main.url(forResource: ns.deletingPathExtension, withExtension: ns.pathExtension) { return bundled }
+    return modelDir.appendingPathComponent(name)
+  }
 
   func modelStatus(_ name: String) -> [String: Any] {
     let url = Self.modelURL(name)
@@ -33,7 +38,7 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
   }
 
   func deleteModel(_ name: String) {
-    try? FileManager.default.removeItem(at: Self.modelURL(name))
+    try? FileManager.default.removeItem(at: Self.modelDir.appendingPathComponent(name))
   }
 
   /// Download the model once (resumes from scratch if interrupted). Progress arrives as onStemsProgress {phase: "download"}.
@@ -62,7 +67,7 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
   }
 
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-    let dest = Self.modelURL(pendingName)
+    let dest = Self.modelDir.appendingPathComponent(pendingName)
     do {
       if let http = downloadTask.response as? HTTPURLResponse, http.statusCode >= 400 {
         throw NSError(domain: "Ghostgrid", code: 11, userInfo: [NSLocalizedDescriptionKey: "Download failed (HTTP \(http.statusCode))"])

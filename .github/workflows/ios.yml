@@ -41,6 +41,15 @@ jobs:
       - name: Core tests
         run: npm test --workspace @ghostgrid/core
 
+      # Beat This! (MIT) ships inside the app. Not committed: fetched here and checked against a pinned SHA-256.
+      - name: Fetch the beat model (Beat This!, MIT)
+        run: |
+          M=apps/mobile/modules/ghostgrid-engine/ios/Models
+          mkdir -p "$M"
+          curl -fsSL -o "$M/beat_this.onnx" https://huggingface.co/thebluescreen/beat-this-onnx/resolve/main/beat_this.onnx
+          echo "ab31b5a815e2d90c6cb523e33f0ce45590fdcf80c4181a8115394d94633be14a  $M/beat_this.onnx" | shasum -a 256 -c -
+          ls -la "$M"
+
       - name: Generate the iOS project (expo prebuild)
         working-directory: apps/mobile
         env:
@@ -80,6 +89,8 @@ jobs:
           grep -rq "GhostgridEngineModule" Pods/Target\ Support\ Files/Pods-Ghostgrid/ExpoModulesProvider.swift || grep -rq "GhostgridEngineModule" Ghostgrid/ build/Build/Intermediates.noindex 2>/dev/null
           strings build/Build/Products/Release-iphoneos/Ghostgrid.app/Ghostgrid | grep -q "GhostgridEngine"
           echo "GhostgridEngine is linked into Ghostgrid.app"
+          test -s build/Build/Products/Release-iphoneos/Ghostgrid.app/beat_this.onnx
+          echo "beat_this.onnx is inside Ghostgrid.app"
 
       - name: Package Ghostgrid.ipa
         working-directory: apps/mobile/ios
