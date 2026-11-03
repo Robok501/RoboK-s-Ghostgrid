@@ -4,7 +4,7 @@ name: iOS build (unsigned .ipa)
 
 on:
   push:
-    branches: [main]
+    branches: [main, beat-this-model]  # TEMP: beat-this-model, remove before merging
     paths:
       - 'apps/mobile/**'
       - 'packages/core/**'

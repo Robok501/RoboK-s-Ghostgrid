@@ -2,6 +2,9 @@ name: Beat lab
 # Manual: measures where beats and the "1" land (our beat map vs Beat This!) on pieces with known answers.
 # Nothing here ships in the app.
 on:
+  push:  # TEMP: runs on this branch until the workflow is on main; remove before merging
+    branches: [beat-this-model]
+    paths: ['.github/workflows/beatlab.yml']
   workflow_dispatch:
     inputs:
       files:
@@ -36,7 +39,7 @@ jobs:
         run: |
           curl -sSL -o gmd.zip https://storage.googleapis.com/magentadata/datasets/groove/groove-v1.0.0-midionly.zip
           unzip -q gmd.zip
-          python tools/lab/render.py groove gmd ${{ inputs.files }} 30
+          python tools/lab/render.py groove gmd ${{ inputs.files || '24' }} 30
           python tools/lab/beats_truth.py gmd gmd
       - name: Ballroom (research data, lab only)
         if: inputs.ballroom != '0'
@@ -46,7 +49,7 @@ jobs:
           tar xzf br.tar.gz
           curl -sSL -o ann.zip https://github.com/CPJKU/BallroomAnnotations/archive/refs/heads/master.zip
           unzip -q ann.zip
-          python tools/lab/beats_truth.py ballroom BallroomData BallroomAnnotations-master br ${{ inputs.ballroom }}
+          python tools/lab/beats_truth.py ballroom BallroomData BallroomAnnotations-master br ${{ inputs.ballroom || '8' }}
       - run: python tools/lab/beat_this_run.py bt.onnx gmd
       - run: npx vite-node tools/lab/beats_ours.ts gmd
       - run: if [ -f br/index.json ]; then python tools/lab/beat_this_run.py bt.onnx br && npx vite-node tools/lab/beats_ours.ts br; fi
