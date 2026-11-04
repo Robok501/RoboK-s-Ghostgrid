@@ -582,5 +582,10 @@
  "Redo with Demucs": "Neu mit Demucs",
  "Make a score": "Partitur erstellen",
  "Beat and bars": "Takt und Taktstriche",
- "Song options": "Song-Optionen"
+ "Song options": "Song-Optionen",
+ "Timing coach in Songs": "Timing-Coach bei Songs",
+ "How your hits are shown while a song plays. The Click screen always uses the needle meters.": "Wie deine Schläge beim Abspielen eines Songs angezeigt werden. Der Click-Bildschirm nutzt immer die Nadelanzeigen.",
+ "Needle meters": "Nadelanzeigen",
+ "Drift line (whole song)": "Driftlinie (ganzer Song)",
+ "bar": "Takt"
 }

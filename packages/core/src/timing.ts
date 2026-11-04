@@ -72,10 +72,11 @@ export class HitLog {
   all: number[] = [];
   byPad: Record<string, number[]> = {};
   /** recent hits with the moment they were played (seconds, any clock), for drawing them on a moving timeline */
-  events: { t: number; off: number; pad?: string }[] = [];
+  events: { t: number; off: number; pad?: string; bar?: number }[] = [];
   constructor(public size = 10_000) {}
-  add(offsetMs: number, pad?: string, t = Date.now() / 1000) {
-    this.events.push({ t, off: offsetMs, pad });
+  /** `bar`: the bar of the song the hit fell in (1-based), for the drift line */
+  add(offsetMs: number, pad?: string, t = Date.now() / 1000, bar?: number) {
+    this.events.push({ t, off: offsetMs, pad, bar });
     if (this.events.length > 400) this.events.shift();
     this.all.push(offsetMs);
     if (this.all.length > this.size) this.all.shift();
@@ -86,4 +87,17 @@ export class HitLog {
     }
   }
   reset() { this.all = []; this.byPad = {}; this.events = []; }
+}
+
+/** One bar's worth of hits: how many, the average timing (ms, minus = early) and how scattered. */
+export interface BarDrift { bar: number; n: number; mean: number; sd: number }
+
+/** Average timing per bar for the hits that know their bar, in bar order: the drift line through a song. */
+export function barDrift(events: { off: number; bar?: number }[]): BarDrift[] {
+  const by = new Map<number, number[]>();
+  for (const e of events) if (e.bar !== undefined) (by.get(e.bar) ?? by.set(e.bar, []).get(e.bar)!).push(e.off);
+  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([bar, v]) => {
+    const st = timingStats(v, 0);
+    return { bar, n: st.n, mean: st.mean, sd: st.sd };
+  });
 }

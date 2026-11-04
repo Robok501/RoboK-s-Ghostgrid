@@ -582,5 +582,10 @@
  "Redo with Demucs": "Refaire avec Demucs",
  "Make a score": "Faire une partition",
  "Beat and bars": "Pulsation et mesures",
- "Song options": "Options du morceau"
+ "Song options": "Options du morceau",
+ "Timing coach in Songs": "Coach de timing dans Morceaux",
+ "How your hits are shown while a song plays. The Click screen always uses the needle meters.": "Comment vos frappes sont affichées pendant un morceau. L'écran Click utilise toujours les aiguilles.",
+ "Needle meters": "Aiguilles",
+ "Drift line (whole song)": "Courbe de dérive (tout le morceau)",
+ "bar": "mesure"
 }

@@ -582,5 +582,10 @@
  "Redo with Demucs": "Opnieuw met Demucs",
  "Make a score": "Partituur maken",
  "Beat and bars": "Tempo en maten",
- "Song options": "Nummer-opties"
+ "Song options": "Nummer-opties",
+ "Timing coach in Songs": "Timingcoach bij Nummers",
+ "How your hits are shown while a song plays. The Click screen always uses the needle meters.": "Hoe je slagen getoond worden terwijl een nummer speelt. Het Click-scherm gebruikt altijd de naaldmeters.",
+ "Needle meters": "Naaldmeters",
+ "Drift line (whole song)": "Driftlijn (heel nummer)",
+ "bar": "maat"
 }

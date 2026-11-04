@@ -448,7 +448,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     const off = offsetToBeat(r.map, songT, r.grade);
     if (off === null) return;
     const ms = off / r.rate;
-    logRef.current.add(ms, pad);
+    logRef.current.add(ms, pad, undefined, barAt(r.map, songT) + 1);
     setLast(ms);
     bump((x) => x + 1);
   }, []);
@@ -548,6 +548,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
 
       {song.coach && (
         <CoachPanel input={coachInput} running={playing} last={last} log={logRef.current} tol={settings.click.tol}
+          view={settings.click.coachView} totalBars={bars.length}
           calibrating={null} calibCount={0} micLevel={micLevel} onTap={tap}
           onReset={() => { logRef.current.reset(); setLast(null); bump((x) => x + 1); }} />
       )}

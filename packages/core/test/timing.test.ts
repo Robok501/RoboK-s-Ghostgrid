@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HitLog, calibrationFromHits, gridOffset, timingStats, verdict } from '../src/timing';
+import { HitLog, barDrift, calibrationFromHits, gridOffset, timingStats, verdict } from '../src/timing';
 
 describe('gridOffset', () => {
   const grid = [0, 0.5, 1, 1.5];
@@ -55,5 +55,16 @@ describe('calibration near half a beat (Bluetooth)', async () => {
     // after the fix, a hit right on the heard click scores near 0
     const off = gridOffset(10 + (delay + 3) / 1000 + fix / 1000, grid, 0.5)! * 1000;
     expect(Math.abs(off)).toBeLessThan(15);
+  });
+});
+
+describe('barDrift', () => {
+  it('averages the hits of each bar, in bar order, and skips hits without a bar', () => {
+    const log = new HitLog();
+    log.add(-10, 'sn', 1, 2); log.add(-20, 'sn', 2, 2); log.add(10, 'bd', 3, 1); log.add(99, 'bd', 4);
+    const d = barDrift(log.events);
+    expect(d.map((x) => x.bar)).toEqual([1, 2]);
+    expect(d[0]).toMatchObject({ n: 1, mean: 10, sd: 0 });
+    expect(d[1].mean).toBeCloseTo(-15); expect(d[1].sd).toBeCloseTo(5); expect(d[1].n).toBe(2);
   });
 });

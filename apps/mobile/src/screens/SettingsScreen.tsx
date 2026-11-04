@@ -53,6 +53,14 @@ export function SettingsScreen() {
         </View>
       </Card>
 
+      <Card title="Timing coach in Songs">
+        <Note>How your hits are shown while a song plays. The Click screen always uses the needle meters.</Note>
+        <View style={s.chips}>
+          <Chip label={t('Needle meters')} on={c.coachView !== 'drift'} onPress={() => setClick({ coachView: 'needles' })} />
+          <Chip label={t('Drift line (whole song)')} on={c.coachView === 'drift'} onPress={() => setClick({ coachView: 'drift' })} />
+        </View>
+      </Card>
+
       <Card title="Audio out">
         <Row label="Playing through" first><Value good={bt}>{info ? `${info.routeName || info.route}${bt ? ' · Bluetooth' : ''}` : t('starting…')}</Value></Row>
         <Row label="Output delay" hint="measured by iOS; Bluetooth adds most of it"><Value>{info ? `${Math.round(info.outputLatency * 1000)} ms` : '–'}</Value></Row>

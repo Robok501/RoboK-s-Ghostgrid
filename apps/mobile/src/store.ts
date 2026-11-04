@@ -18,6 +18,8 @@ export interface ClickSettings {
   rampStep: number; rampEvery: number; rampTarget: number;
   program: Section[]; loop: boolean;
   tol: number; grade: 'beat' | 'sub'; input: CoachInput;
+  /** how the timing coach shows your hits in Songs: needle meters, or the drift line through the song */
+  coachView: 'needles' | 'drift';
   calib: Record<CoachInput, number>;
   presets: Preset[];
 }
@@ -56,7 +58,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     dropUnit: 'beats', dropChance: DEFAULT_CONFIG.dropChance, dropLen: DEFAULT_CONFIG.dropLen, dropWarm: DEFAULT_CONFIG.dropWarm,
     rampStep: DEFAULT_CONFIG.rampStep, rampEvery: DEFAULT_CONFIG.rampEvery, rampTarget: DEFAULT_CONFIG.rampTarget,
     program: DEFAULT_CONFIG.program, loop: true,
-    tol: 25, grade: 'beat', input: 'tap', calib: { tap: 0, mic: 0, pads: 0 }, presets: [],
+    tol: 25, grade: 'beat', input: 'tap', coachView: 'needles', calib: { tap: 0, mic: 0, pads: 0 }, presets: [],
   },
   ear: { unlocked: 0, best: {}, openAll: false, rung: 0 },
   sketch: { style: 'weinberg', custom: { voices: 2, map: {} }, count: true, click: false, recMode: 'replace', voice: {}, ghostPct: 45 },
