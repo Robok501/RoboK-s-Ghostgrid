@@ -579,5 +579,8 @@
  "Better notation": "Bessere Notation",
  "Spleeter is quick but leaves more of the band in the drums, so the score misses hits. Demucs redoes the stems (this replaces them), then press \"Song to score\" again.": "Spleeter ist schnell, lässt aber mehr von der Band im Schlagzeug, deshalb fehlen in der Partitur Schläge. Demucs erstellt die Stems neu (ersetzt sie); danach erneut „Song to score“ drücken.",
  "Spleeter leaves more of the band in the drums, so the score misses hits. Download the Demucs model (in a song that is not separated yet) to redo it.": "Spleeter lässt mehr von der Band im Schlagzeug, deshalb fehlen in der Partitur Schläge. Lade das Demucs-Modell (bei einem noch nicht getrennten Song) herunter, um es neu zu machen.",
- "Redo with Demucs": "Neu mit Demucs"
+ "Redo with Demucs": "Neu mit Demucs",
+ "Make a score": "Partitur erstellen",
+ "Beat and bars": "Takt und Taktstriche",
+ "Song options": "Song-Optionen"
 }

@@ -487,6 +487,9 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     return () => { alive = false; };
   }, [ready, song.separated, song.check]); // eslint-disable-line react-hooks/exhaustive-deps
   const chk = song.check;
+  // the less-used controls sit in folds, closed until asked for
+  const [fold, setFold] = useState<Record<string, boolean>>({});
+  const toggleFold = (k: string) => setFold((f) => ({ ...f, [k]: !f[k] }));
   const suspicious = !!chk && (chk.invalid > 0 || chk.drumsShare > 0.6 || chk.drumsDb < chk.mixDb - 35);
 
   return (
@@ -568,10 +571,12 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
           <Btn label={song.click ? 'On' : 'Off'} active={!!song.click} disabled={!map} onPress={() => update(song.id, { click: !song.click })} />
         </View>
       </Row>
-      <Row label="Count-in" hint="before Play, from the bar you're in">
-        <Seg small options={[{ value: 0, label: 'Off' }, { value: 1, label: '1 bar' }, { value: 2, label: '2 bars' }]} value={song.countIn ?? 0}
-          onChange={(v) => update(song.id, { countIn: v as number })} />
-      </Row>
+      {!!song.click && (
+        <Row label="Count-in" hint="before Play, from the bar you're in">
+          <Seg small options={[{ value: 0, label: 'Off' }, { value: 1, label: '1 bar' }, { value: 2, label: '2 bars' }]} value={song.countIn ?? 0}
+            onChange={(v) => update(song.id, { countIn: v as number })} />
+        </Row>
+      )}
 
       <Row label="Loop" hint={song.loop ? `${fmtTime(A)} – ${fmtTime(B)}${map ? ` · ${t('bars {{a}}–{{b}}', { a: barAt(map, A + 0.01) + 1, b: barAt(map, B - 0.01) + 1 })}` : ''}` : map ? 'A and B snap to bar lines' : 'set A and B while it plays'}>
         <View style={s.inline}>
@@ -587,7 +592,8 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
         </View>
       )}
 
-      <Row label="Drums to score" hint={!song.separated ? 'separate the drums first' : !map ? 'waiting for the beat map' : loopOn ? 'the loop, opened in Sketch' : 'the whole song (up to 64 bars), opened in Sketch'}>
+      <Fold title="Make a score" open={!!fold.score} onToggle={() => toggleFold('score')}>
+      <Row label="Drums to score" first hint={!song.separated ? 'separate the drums first' : !map ? 'waiting for the beat map' : loopOn ? 'the loop, opened in Sketch' : 'the whole song (up to 64 bars), opened in Sketch'}>
         <Btn label={scoring ? 'Writing…' : loopOn ? 'Loop to score' : 'Song to score'} disabled={!song.separated || !map || scoring} onPress={toScore} />
       </Row>
       {song.separated && song.separator === 'spleeter' && (
@@ -601,8 +607,10 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
           <Btn label="Share analysis" onPress={shareScan} />
         </View>
       )}
+      </Fold>
 
-      <Row label="Score my timing" hint="against the song's beat">
+      <Fold title="Score my timing" summary={song.coach ? 'On' : 'Off'} open={!!fold.coach} onToggle={() => toggleFold('coach')}>
+      <Row label="Score my timing" first hint="against the song's beat">
         <Btn label={song.coach ? 'On' : 'Off'} active={!!song.coach} disabled={!map} onPress={() => update(song.id, { coach: !song.coach })} />
       </Row>
       {song.coach && (
@@ -612,14 +620,34 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
           {coachInput === 'mic' && <Note>Use headphones or Bluetooth so the mic hears your drums, not the song.</Note>}
         </>
       )}
+      </Fold>
 
+      <Fold title="Beat and bars" summary={map ? `${Math.round(60 / beatLengthAt(map, pos) )} BPM · ${map.beatsPerBar}/4` : undefined} open={!!fold.beat} onToggle={() => toggleFold('beat')}>
       <BeatMapCard map={map} analysing={analysing} pos={pos} onChange={(m) => update(song.id, { beatMap: m })} onAgain={analyse} model={{ present: beatModel, progress: beatDl, onGet: getBeatModel }} />
+      </Fold>
 
-      <View style={s.btnRow}>
-        {song.separated && <Btn label="Separate again" disabled={!canChosen} onPress={() => onSeparate(chosen)} />}
-        <Btn label="Delete song" onPress={onDelete} />
-      </View>
+      <Fold title="Song options" open={!!fold.song} onToggle={() => toggleFold('song')}>
+        <View style={s.btnRow}>
+          {song.separated && <Btn label="Separate again" disabled={!canChosen} onPress={() => onSeparate(chosen)} />}
+          <Btn label="Delete song" onPress={onDelete} />
+        </View>
+      </Fold>
     </Card>
+  );
+}
+
+/** A section that opens and closes: a title row (with a short summary) and, when open, its controls. */
+function Fold({ title, summary, open, onToggle, children }: { title: string; summary?: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <View style={s.fold}>
+      <Pressable onPress={onToggle} style={s.foldHead} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={t(title)}>
+        <Text style={s.foldTitle}>{t(title)}</Text>
+        {!!summary && <Text style={s.dim}>{t(summary)}</Text>}
+        <View style={{ flex: 1 }} />
+        <Text style={s.foldChev}>{open ? '▾' : '▸'}</Text>
+      </Pressable>
+      {open && <View>{children}</View>}
+    </View>
   );
 }
 
@@ -709,6 +737,10 @@ const s = StyleSheet.create({
   ticks: { position: 'absolute', left: 0, right: 0, top: 4, height: 10 },
   tick: { position: 'absolute', width: 1, height: 6, backgroundColor: C.muted, opacity: 0.6 },
   tickBig: { height: 10, opacity: 1 },
+  fold: { borderTopWidth: 1, borderTopColor: C.line, marginTop: 8 },
+  foldHead: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48 },
+  foldTitle: { color: C.fg, fontSize: 15, fontWeight: '700' },
+  foldChev: { color: C.muted, fontSize: 16 },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center', paddingVertical: 4 },
   beatBox: { borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10, marginTop: 8, gap: 2 },
   beatTitle: { color: C.fg, fontSize: 14, fontWeight: '700' },

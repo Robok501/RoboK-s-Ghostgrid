@@ -579,5 +579,8 @@
  "Better notation": "Meilleure partition",
  "Spleeter is quick but leaves more of the band in the drums, so the score misses hits. Demucs redoes the stems (this replaces them), then press \"Song to score\" again.": "Spleeter est rapide mais laisse plus du groupe dans la batterie, donc la partition rate des coups. Demucs refait les pistes (elles sont remplacées) ; appuyez ensuite à nouveau sur « Song to score ».",
  "Spleeter leaves more of the band in the drums, so the score misses hits. Download the Demucs model (in a song that is not separated yet) to redo it.": "Spleeter laisse plus du groupe dans la batterie, donc la partition rate des coups. Téléchargez le modèle Demucs (dans un morceau pas encore séparé) pour le refaire.",
- "Redo with Demucs": "Refaire avec Demucs"
+ "Redo with Demucs": "Refaire avec Demucs",
+ "Make a score": "Faire une partition",
+ "Beat and bars": "Pulsation et mesures",
+ "Song options": "Options du morceau"
 }
