@@ -57,7 +57,7 @@ export interface Idea {
   raw?: RawNote[];
 }
 
-export const MAX_BARS = 64;
+export const MAX_BARS = 192;
 export const steps = (idea: Pick<Idea, 'beats' | 'grid'>) => idea.beats * idea.grid;
 /** Grid and number of steps of one bar. */
 export const barGrid = (idea: Pick<Idea, 'grid' | 'bars'>, b: number): Grid => idea.bars[b]?.grid ?? idea.grid;

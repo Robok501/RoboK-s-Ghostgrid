@@ -195,7 +195,7 @@ export interface DrumScore { idea: Idea; notes: number; bars: number; truncated:
 
 /**
  * Turn hits into an idea for the bars from `from` to `to` (seconds; whole bars, starting at the bar line at or
- * just before `from`). At most 64 bars.
+ * just before `from`). At most 192 bars.
  */
 export function hitsToIdea(hits: DrumHit[], m: BeatMap, from: number, to: number, name: string): DrumScore {
   const bars = barStarts(m), bpb = m.beatsPerBar;

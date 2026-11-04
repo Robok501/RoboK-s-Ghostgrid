@@ -1,5 +1,5 @@
 {
- " (first 64)": " (eerste 64)",
+ " (first 192)": " (eerste 192)",
  " · auto": " · auto",
  "+ Add section": "+ Deel toevoegen",
  "+ Bar": "+ Maat",
@@ -509,7 +509,7 @@
  "teach your beatbox sounds": "leer je beatboxklanken aan",
  "tempo, beats, swing, bars, recording": "tempo, tellen, swing, maten, opname",
  "the loop, opened in Sketch": "de loop, geopend in Schets",
- "the whole song (up to 64 bars), opened in Sketch": "het hele nummer (tot 64 maten), geopend in Schets",
+ "the whole song (up to 192 bars), opened in Sketch": "het hele nummer (tot 192 maten), geopend in Schets",
  "this looks wrong, please tell Claude these numbers": "dit lijkt fout, geef deze getallen door aan Claude",
  "this needs the newest version of the app": "hiervoor is de nieuwste versie van de app nodig",
  "triplets": "triolen",
@@ -587,5 +587,7 @@
  "How your hits are shown while a song plays. The Click screen always uses the needle meters.": "Hoe je slagen getoond worden terwijl een nummer speelt. Het Click-scherm gebruikt altijd de naaldmeters.",
  "Needle meters": "Naaldmeters",
  "Drift line (whole song)": "Driftlijn (heel nummer)",
- "bar": "maat"
+ "bar": "maat",
+ "From bar": "Van maat",
+ "To bar": "Tot maat"
 }

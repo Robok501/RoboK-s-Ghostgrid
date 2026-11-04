@@ -382,6 +382,15 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     update(song.id, { loopA: a, loopB: barsFrom(map, a, n, dur), loop: true });
   };
 
+  // loop from bar X to bar Y (1-based, both included)
+  const loopFrom = bars.length && map ? barAt(map, A + 0.01) + 1 : 1;
+  const loopTo = bars.length && map ? Math.max(barAt(map, B - 0.01) + 1, loopFrom) : 1;
+  const setBarRange = (from: number, to: number) => {
+    if (!map || !bars.length) return;
+    const f = Math.max(1, Math.min(bars.length, from)), e = Math.max(f, Math.min(bars.length, to));
+    update(song.id, { loopA: bars[f - 1], loopB: barsFrom(map, bars[f - 1], e - f + 1, dur), loop: true });
+  };
+
   // ---- timing coach against the song's beat
   // drums to score: the loop (or the whole song) from the drum track, opened as a new idea in Sketch
   const toScore = async () => {
@@ -407,7 +416,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       if (!r.notes) throw new Error('no drum hits found there');
       const raw = r.idea.raw ?? [];
       const n = (id: string, v?: number) => raw.filter((x) => x.id === id && (v === undefined || x.v === v)).length;
-      addIdeaFromOutside(r.idea, t('From the song: {{bd}} kicks, {{sn}} snares ({{g}} ghost), {{hh}} hi-hats, {{tom}} toms, {{cy}} cymbals in {{bars}} bars{{cut}}. Not right? Share the analysis from Songs.', { bd: n('bd'), sn: n('sn'), g: n('sn', 3), hh: n('hh'), tom: n('t1') + n('t2') + n('ft'), cy: n('cr') + n('rd'), bars: r.bars, cut: r.truncated ? t(' (first 64)') : '' }));
+      addIdeaFromOutside(r.idea, t('From the song: {{bd}} kicks, {{sn}} snares ({{g}} ghost), {{hh}} hi-hats, {{tom}} toms, {{cy}} cymbals in {{bars}} bars{{cut}}. Not right? Share the analysis from Songs.', { bd: n('bd'), sn: n('sn'), g: n('sn', 3), hh: n('hh'), tom: n('t1') + n('t2') + n('ft'), cy: n('cr') + n('rd'), bars: r.bars, cut: r.truncated ? t(' (first 192)') : '' }));
       setScoring(false);
       goTab('sketch');
       return;
@@ -586,6 +595,12 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
           <Btn label={song.loop ? 'Off' : 'On'} active={!!song.loop} onPress={() => update(song.id, { loop: !song.loop })} />
         </View>
       </Row>
+      {map && song.loop && bars.length > 0 && (
+        <>
+          <Row label="From bar"><Stepper value={loopFrom} min={1} max={bars.length} step={1} format={(v) => `${v}`} onChange={(v) => setBarRange(v, Math.max(v, loopTo))} /></Row>
+          <Row label="To bar"><Stepper value={loopTo} min={1} max={bars.length} step={1} format={(v) => `${v}`} onChange={(v) => setBarRange(loopFrom, v)} /></Row>
+        </>
+      )}
       {map && (
         <View style={s.chipsRow}>
           <Text style={s.dim}>{t('Loop length:')}</Text>
@@ -594,7 +609,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       )}
 
       <Fold title="Make a score" open={!!fold.score} onToggle={() => toggleFold('score')}>
-      <Row label="Drums to score" first hint={!song.separated ? 'separate the drums first' : !map ? 'waiting for the beat map' : loopOn ? 'the loop, opened in Sketch' : 'the whole song (up to 64 bars), opened in Sketch'}>
+      <Row label="Drums to score" first hint={!song.separated ? 'separate the drums first' : !map ? 'waiting for the beat map' : loopOn ? 'the loop, opened in Sketch' : 'the whole song (up to 192 bars), opened in Sketch'}>
         <Btn label={scoring ? 'Writing…' : loopOn ? 'Loop to score' : 'Song to score'} disabled={!song.separated || !map || scoring} onPress={toScore} />
       </Row>
       {song.separated && song.separator === 'spleeter' && (

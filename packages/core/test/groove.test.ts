@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  INSTRUMENT, UndoStack, addBar, clearBar, countLabel, cycleState, deleteBar, duplicateBar, exampleIdea, newIdea, setBeats, setGrid, setNote, stepTime,
+  INSTRUMENT, MAX_BARS, UndoStack, addBar, clearBar, countLabel, cycleState, deleteBar, duplicateBar, exampleIdea, newIdea, setBeats, setGrid, setNote, stepTime,
 } from '../src/groove';
 
 describe('note states', () => {
@@ -51,8 +51,8 @@ describe('bars', () => {
     expect(Object.values(a.bars[1].n).flat().every((v) => v === 0)).toBe(true);
     a = deleteBar(a, 1);
     expect(a.bars.length).toBe(2);
-    for (let i = 0; i < 70; i++) a = addBar(a);
-    expect(a.bars.length).toBe(64);
+    for (let i = 0; i < 200; i++) a = addBar(a);
+    expect(a.bars.length).toBe(MAX_BARS);
   });
 });
 

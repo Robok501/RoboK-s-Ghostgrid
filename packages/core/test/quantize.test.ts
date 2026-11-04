@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exampleIdea, newIdea } from '../src/groove';
+import { MAX_BARS, exampleIdea, newIdea } from '../src/groove';
 import { guessTempo, quantize, writeHits, type TimedHit } from '../src/quantize';
 
 const sd = 60 / 100 / 4; // 16th at 100 BPM
@@ -20,7 +20,7 @@ describe('quantize', () => {
   });
   it('drops hits before beat 1 and past the bar limit', () => {
     expect(quantize([{ t: 0.5, cls: 'bd' }], 1, { bpm: 100, beats: 4, grid: 4 })).toEqual([]);
-    expect(quantize([{ t: 1 + 16 * 64 * sd, cls: 'bd' }], 1, { bpm: 100, beats: 4, grid: 4 })).toEqual([]);
+    expect(quantize([{ t: 1 + 16 * MAX_BARS * sd, cls: 'bd' }], 1, { bpm: 100, beats: 4, grid: 4 })).toEqual([]);
   });
 });
 

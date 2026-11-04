@@ -1,5 +1,5 @@
 {
- " (first 64)": " (64 premières)",
+ " (first 192)": " (192 premières)",
  " · auto": " · auto",
  "+ Add section": "+ Ajouter une section",
  "+ Bar": "+ Mesure",
@@ -509,7 +509,7 @@
  "teach your beatbox sounds": "apprenez vos sons de beatbox",
  "tempo, beats, swing, bars, recording": "tempo, temps, swing, mesures, enregistrement",
  "the loop, opened in Sketch": "la boucle, ouverte dans Esquisse",
- "the whole song (up to 64 bars), opened in Sketch": "tout le morceau (jusqu'à 64 mesures), ouvert dans Esquisse",
+ "the whole song (up to 192 bars), opened in Sketch": "tout le morceau (jusqu'à 192 mesures), ouvert dans Esquisse",
  "this looks wrong, please tell Claude these numbers": "cela semble faux, transmettez ces chiffres à Claude",
  "this needs the newest version of the app": "il faut la dernière version de l'app",
  "triplets": "triolets",
@@ -587,5 +587,7 @@
  "How your hits are shown while a song plays. The Click screen always uses the needle meters.": "Comment vos frappes sont affichées pendant un morceau. L'écran Click utilise toujours les aiguilles.",
  "Needle meters": "Aiguilles",
  "Drift line (whole song)": "Courbe de dérive (tout le morceau)",
- "bar": "mesure"
+ "bar": "mesure",
+ "From bar": "De la mesure",
+ "To bar": "À la mesure"
 }
