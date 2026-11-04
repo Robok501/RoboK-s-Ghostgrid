@@ -589,5 +589,8 @@
  "Drift line (whole song)": "Courbe de dérive (tout le morceau)",
  "bar": "mesure",
  "From bar": "De la mesure",
- "To bar": "À la mesure"
+ "To bar": "À la mesure",
+ "Parts:": "Parties :",
+ "Name of part {{l}}": "Nom de la partie {{l}}",
+ "every part with this letter gets the name": "chaque partie avec cette lettre prend ce nom"
 }

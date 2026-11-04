@@ -589,5 +589,8 @@
  "Drift line (whole song)": "Driftlijn (heel nummer)",
  "bar": "maat",
  "From bar": "Van maat",
- "To bar": "Tot maat"
+ "To bar": "Tot maat",
+ "Parts:": "Delen:",
+ "Name of part {{l}}": "Naam van deel {{l}}",
+ "every part with this letter gets the name": "elk deel met deze letter krijgt de naam"
 }

@@ -589,5 +589,8 @@
  "Drift line (whole song)": "Driftlinie (ganzer Song)",
  "bar": "Takt",
  "From bar": "Ab Takt",
- "To bar": "Bis Takt"
+ "To bar": "Bis Takt",
+ "Parts:": "Teile:",
+ "Name of part {{l}}": "Name von Teil {{l}}",
+ "every part with this letter gets the name": "jeder Teil mit diesem Buchstaben bekommt den Namen"
 }

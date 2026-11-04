@@ -4,13 +4,13 @@
  * and an A–B loop. Stems stay in the app.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import {
   HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, modelBeatMap, modelDrumHits, offsetToBeat, setBeatsPerBar,
-  setDownbeatAt, shiftDownbeat, snapToBar, type BeatMap,
+  setDownbeatAt, shiftDownbeat, snapToBar, songSections, type BeatMap,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
 import { CoachPanel } from '../click/CoachPanel';
@@ -24,7 +24,7 @@ import {
   type Mix, type Separator, type Song,
 } from '../songs/songs';
 import { C, F } from '../theme';
-import { Btn, Card, Note, Row, Seg, Stepper, TopBar } from '../ui';
+import { Btn, Card, Chip, Note, Row, Seg, Stepper, TopBar } from '../ui';
 
 type Progress = { phase: string; progress: number } | null;
 const PHASE: Record<string, string> = { decode: 'Reading the song', load: 'Loading the model', separate: 'Separating the drums', write: 'Saving', download: 'Downloading the model' };
@@ -296,6 +296,22 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     }
     setBeatDl(null);
   };
+  // parts of the song (A, B, C…): found once per beat map, from the chords and loudness of the music
+  const sectionsKey = map && bars.length ? `${bars.length}:${bars[0].toFixed(2)}:${map.beatsPerBar}` : '';
+  useEffect(() => {
+    if (!ready || !sectionsKey || separating || song.sectionsKey === sectionsKey) return;
+    let alive = true;
+    Engine.stemsMusicFeatures(song.separated ? stemPath(song, 'nodrums') : originalPath(song)).then((m) => {
+      if (!alive) return;
+      update(song.id, { sections: songSections(m, bars, dur), sectionsKey });
+    }).catch(() => { if (alive) update(song.id, { sections: [], sectionsKey }); });
+    return () => { alive = false; };
+  }, [ready, sectionsKey, separating]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sections = song.sections ?? [];
+  const nameOf = (l: string) => song.sectionNames?.[l]?.trim() || l;
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const inSection = (x: { from: number; to: number }) => loopOn && Math.abs(A - bars[x.from]) < 0.05 && x.to - 1 < bars.length && Math.abs(B - barsFrom(map!, bars[x.from], x.to - x.from, dur)) < 0.05;
+
   useEffect(() => {
     if (ready && !map && !analysing && !separating) analyse();
   }, [ready, map, separating]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -595,6 +611,21 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
           <Btn label={song.loop ? 'Off' : 'On'} active={!!song.loop} onPress={() => update(song.id, { loop: !song.loop })} />
         </View>
       </Row>
+      {map && sections.length > 1 && (
+        <View style={s.chipsRow}>
+          <Text style={s.dim}>{t('Parts:')}</Text>
+          {sections.map((x, i) => (
+            <Chip key={i} label={`${nameOf(x.letter)} · ${x.from + 1}–${x.to}`} on={inSection(x)}
+              onPress={() => { setBarRange(x.from + 1, x.to); setRenaming(x.letter); }} />
+          ))}
+        </View>
+      )}
+      {renaming && sections.some((x) => x.letter === renaming) && (
+        <Row label={t('Name of part {{l}}', { l: renaming })} hint="every part with this letter gets the name">
+          <TextInput value={song.sectionNames?.[renaming] ?? ''} placeholder={renaming} placeholderTextColor={C.muted} style={s.nameInput}
+            onChangeText={(v) => update(song.id, { sectionNames: { ...song.sectionNames, [renaming]: v.slice(0, 16) } })} />
+        </Row>
+      )}
       {map && song.loop && bars.length > 0 && (
         <>
           <Row label="From bar"><Stepper value={loopFrom} min={1} max={bars.length} step={1} format={(v) => `${v}`} onChange={(v) => setBarRange(v, Math.max(v, loopTo))} /></Row>
@@ -744,6 +775,7 @@ const s = StyleSheet.create({
   err: { color: C.late, fontSize: 14 },
   btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 6, alignItems: 'center' },
   dim: { color: C.muted, fontSize: 12 },
+  nameInput: { minHeight: 40, minWidth: 120, color: C.fg, fontSize: 16, textAlign: 'right' },
   songRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 6, borderRadius: 10 },
   line: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
   songName: { color: C.fg, fontSize: 15, fontWeight: '600' },

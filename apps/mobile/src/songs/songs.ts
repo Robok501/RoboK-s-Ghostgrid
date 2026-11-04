@@ -3,7 +3,7 @@
  * Stems never leave the phone (no export): they are for practising with music you have.
  */
 import { Directory, File, Paths } from 'expo-file-system';
-import type { BeatMap } from '@ghostgrid/core';
+import type { BeatMap, SongPart } from '@ghostgrid/core';
 import type { CoachInput } from '../store';
 
 export const MODEL_NAME = 'htdemucs_ft_drums.onnx';
@@ -48,6 +48,11 @@ export interface Song {
   countIn?: number;
   /** score my timing against the song's beat */
   coach?: boolean;
+  /** parts of the song (A, B, C…), found from the music; `sectionsKey` tells which beat map they were made for */
+  sections?: SongPart[];
+  sectionsKey?: string;
+  /** names the user gave to the letters */
+  sectionNames?: Record<string, string>;
   coachInput?: CoachInput;
   /** 1 = beats, 2 = 8ths, 4 = 16ths */
   grade?: 1 | 2 | 4;
