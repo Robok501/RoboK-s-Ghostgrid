@@ -21,7 +21,7 @@ jobs:
     uses: ./.github/workflows/spleeter-model.yml
   ios:
     needs: spleeter
-    runs-on: macos-15-intel  # TEMP: arm64 pool had no capacity on 4 Nov 2026; back to macos-latest later
+    runs-on: macos-26  # TEMP: explicit image; macos-latest could not get a runner on 4 Nov 2026
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
