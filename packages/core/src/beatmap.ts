@@ -158,7 +158,7 @@ const median = (xs: number[]) => { const s = xs.slice().sort((a, b) => a - b); r
  * Features of the music without drums, at a fixed frame rate: 12 pitch-class energies per frame (flattened)
  * and the bass energy (roughly 40–150 Hz). The native side computes them from the "no drums" track.
  */
-export interface MusicFeatures { rate: number; chroma: ArrayLike<number>; bass: ArrayLike<number> }
+export interface MusicFeatures { rate: number; chroma: ArrayLike<number>; bass: ArrayLike<number>; /** log mel-band energies per frame, `bands` per frame, flattened (optional, newer builds) */ mel?: ArrayLike<number>; bands?: number }
 
 const norm01 = (v: number[]) => {
   const lo = Math.min(...v), hi = Math.max(...v);

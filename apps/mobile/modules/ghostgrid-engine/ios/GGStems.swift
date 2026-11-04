@@ -197,7 +197,7 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
   }
 
   /// Features of the music (the track without drums) at 10 frames per second, for finding the "1":
-  /// 12 pitch-class energies per frame (chords) and the bass energy (40–150 Hz).
+  /// 12 pitch-class energies per frame (chords), the bass energy (40–150 Hz) and 24 mel bands of log energy (the sound colour, for finding song parts).
   static func musicFeatures(_ url: URL) throws -> [String: Any] {
     let file = try AVAudioFile(forReading: url)
     let fmt = file.processingFormat
@@ -230,6 +230,20 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
       }
       isBass[k] = f >= 40 && f <= 150
     }
+    // 24 mel bands (40 Hz – 8 kHz, triangular): for each bin the (up to two) bands it feeds, with weights
+    let NB = 24
+    func hz2mel(_ f: Double) -> Double { 2595 * log10(1 + f / 700) }
+    let m0 = hz2mel(40), m1 = hz2mel(min(8000, sr / 2 - 1))
+    let edges: [Double] = (0..<(NB + 2)).map { 700 * (pow(10, (m0 + (m1 - m0) * Double($0) / Double(NB + 1)) / 2595) - 1) }
+    var melBins = [[(Int, Double)]](repeating: [], count: N / 2)
+    for k in 1..<(N / 2) {
+      let f = Double(k) * sr / Double(N)
+      for j in 0..<NB where f >= edges[j] && f < edges[j + 2] {
+        let w = f < edges[j + 1] ? (f - edges[j]) / (edges[j + 1] - edges[j]) : (edges[j + 2] - f) / (edges[j + 2] - edges[j + 1])
+        melBins[k].append((j, w))
+      }
+    }
+    var mel: [Double] = []
     var chroma: [Double] = [], bass: [Double] = []
     var re = [Float](repeating: 0, count: N), im = [Float](repeating: 0, count: N)
     var oRe = [Float](repeating: 0, count: N), oIm = [Float](repeating: 0, count: N)
@@ -238,17 +252,20 @@ final class GGStems: NSObject, URLSessionDownloadDelegate {
       for i in 0..<N { re[i] = mono[start + i] * window[i]; im[i] = 0 }
       dft.transform(inputReal: re, inputImaginary: im, outputReal: &oRe, outputImaginary: &oIm)
       var c = [Double](repeating: 0, count: 12)
+      var mb = [Double](repeating: 0, count: NB)
       var b: Double = 0
       for k in 1..<(N / 2) {
         let m = Double(oRe[k] * oRe[k] + oIm[k] * oIm[k])
         if pc[k] >= 0 { c[pc[k]] += sqrt(m) }
         if isBass[k] { b += m }
+        for (j, w) in melBins[k] { mb[j] += w * m }
       }
       chroma.append(contentsOf: c)
       bass.append(sqrt(b))
+      for j in 0..<NB { mel.append(log(1e-8 + mb[j])) }
       start += hop
     }
-    return ["rate": 10.0, "chroma": chroma, "bass": bass]
+    return ["rate": 10.0, "chroma": chroma, "bass": bass, "mel": mel, "bands": NB]
   }
 
   /// Write a click track (44.1 kHz stereo) as long as the song, with a click at each time; accents are higher and louder.

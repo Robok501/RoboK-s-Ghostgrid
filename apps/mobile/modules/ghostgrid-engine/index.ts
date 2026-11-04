@@ -68,7 +68,7 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   stemsTranscribe(path: string, model: string): Promise<{ rate: number; t: number[]; c: number[]; p: number[]; v: number[]; duration: number }>;
   /** Beat This! logits for the beat and the downbeat of a whole song (50 per second) */
   stemsBeatLogits(path: string, model: string): Promise<{ rate: number; beat: number[]; down: number[]; duration: number }>;
-  stemsMusicFeatures(path: string): Promise<{ rate: number; chroma: number[]; bass: number[] }>;
+  stemsMusicFeatures(path: string): Promise<{ rate: number; chroma: number[]; bass: number[]; mel?: number[]; bands?: number }>;
   stemsWriteClick(path: string, seconds: number, times: number[], accents: boolean[]): Promise<void>;
   stemsSetClick(path: string | null): void;
   stemsPlayCountIn(beats: number, beatSeconds: number): void;

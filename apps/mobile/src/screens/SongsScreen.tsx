@@ -299,12 +299,15 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   // parts of the song (A, B, C…): found once per beat map, from the chords and loudness of the music
   const sectionsKey = map && bars.length ? `${bars.length}:${bars[0].toFixed(2)}:${map.beatsPerBar}` : '';
   useEffect(() => {
-    if (!ready || !sectionsKey || separating || song.sectionsKey === sectionsKey) return;
+    if (!ready || !sectionsKey || separating || song.sectionsKey?.startsWith(`${sectionsKey}:`)) return;
     let alive = true;
-    Engine.stemsMusicFeatures(song.separated ? stemPath(song, 'nodrums') : originalPath(song)).then((m) => {
-      if (!alive) return;
-      update(song.id, { sections: songSections(m, bars, dur), sectionsKey });
-    }).catch(() => { if (alive) update(song.id, { sections: [], sectionsKey }); });
+    // the whole song (drums included): how the arrangement sounds is what tells verse from chorus
+    (async () => {
+      const m = await Engine.stemsMusicFeatures(originalPath(song));
+      let env: Awaited<ReturnType<typeof Engine.stemsEnvelope>> | undefined;
+      try { env = await Engine.stemsEnvelope(originalPath(song)); } catch { env = undefined; }
+      if (alive) update(song.id, { sections: songSections(m, bars, dur, env), sectionsKey: `${sectionsKey}:${m.mel ? 't' : 'c'}` });
+    })().catch(() => { if (alive) update(song.id, { sections: [], sectionsKey }); });
     return () => { alive = false; };
   }, [ready, sectionsKey, separating]); // eslint-disable-line react-hooks/exhaustive-deps
   const sections = song.sections ?? [];

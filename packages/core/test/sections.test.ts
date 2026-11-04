@@ -9,7 +9,7 @@ function song(plan: [number, number][]) {
     bars.push(t);
     for (let f = 0; f < 20; f++) {
       const prog = [0, 4, 7, 9][Math.floor(b / 2) % 4] + kind * 2; // the chord changes every 2 bars
-      for (let k = 0; k < 12; k++) chroma.push((k === prog % 12 || k === (prog + 4) % 12 ? 0.8 : 0.02) + ((k + 12 - kind * 5) % 12 === 0 || (k + 12 - kind * 5) % 12 === 7 ? 0.9 : 0) + 0.03 * Math.sin(f + b + k));
+      for (let k = 0; k < 12; k++) chroma.push((k === prog % 12 || k === (prog + 4) % 12 ? 0.25 : 0.02) + ((k + 12 - kind * 5) % 12 === 0 || (k + 12 - kind * 5) % 12 === 7 ? 0.9 : 0) + 0.03 * Math.sin(f + b + k));
       bass.push(kind === 1 ? 0.8 : 0.3);
     }
     t += 2;
