@@ -27,6 +27,35 @@ export function timingStats(offsetsMs: number[], tolMs: number): TimingStats {
   return { n, mean, sd, score };
 }
 
+/** Score after taking away the player's average lean: what they'd score if they were centred on the grid. */
+export function correctedScore(offsetsMs: number[], tolMs: number): number {
+  const st = timingStats(offsetsMs, tolMs);
+  if (!st.n) return 0;
+  return timingStats(offsetsMs.map((v) => v - st.mean), tolMs).score;
+}
+
+/** Hits further than this from the chosen grid are "off-grid" (ghost notes, fills, other subdivisions): shown, not scored. */
+export const OFF_GRID_MS = 60;
+
+/**
+ * Pick the coarsest grid (1 = beats, 2 = eighths, 4 = sixteenths) that most hits sit on.
+ * `phasesMs`: each hit's distance to the nearest beat (ms, signed, within half a beat). Needs at least 8 hits, else 1.
+ */
+export function autoGrade(phasesMs: number[], beatMs: number, share = 0.85): 1 | 2 | 4 {
+  if (phasesMs.length < 8 || beatMs <= 0) return 1;
+  for (const g of [1, 2, 4] as const) {
+    const step = beatMs / g;
+    const lim = Math.min(OFF_GRID_MS, step / 2);
+    let on = 0;
+    for (const p of phasesMs) {
+      const d = p - Math.round(p / step) * step;
+      if (Math.abs(d) <= lim) on++;
+    }
+    if (on / phasesMs.length >= share && (g === 4 || step / 2 > OFF_GRID_MS * 0.75)) return g;
+  }
+  return 4;
+}
+
 export type Verdict = 'on' | 'early' | 'late';
 export function verdict(offsetMs: number, tolMs: number): Verdict {
   return Math.abs(offsetMs) <= tolMs ? 'on' : offsetMs < 0 ? 'early' : 'late';
@@ -73,7 +102,19 @@ export class HitLog {
   byPad: Record<string, number[]> = {};
   /** recent hits with the moment they were played (seconds, any clock), for drawing them on a moving timeline */
   events: { t: number; off: number; pad?: string; bar?: number }[] = [];
+  /** hits that fell between grid points (not scored), overall and per pad */
+  offGrid = 0;
+  offByPad: Record<string, number> = {};
   constructor(public size = 10_000) {}
+  addOff(pad?: string) {
+    this.offGrid++;
+    if (pad) this.offByPad[pad] = (this.offByPad[pad] ?? 0) + 1;
+  }
+  /** average timing of one pad (ms), or null when it has too few hits */
+  padMean(pad: string, min = 4): number | null {
+    const a = this.byPad[pad];
+    return a && a.length >= min ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  }
   /** `bar`: the bar of the song the hit fell in (1-based), for the drift line */
   add(offsetMs: number, pad?: string, t = Date.now() / 1000, bar?: number) {
     this.events.push({ t, off: offsetMs, pad, bar });
@@ -86,7 +127,7 @@ export class HitLog {
       if (a.length > this.size) a.shift();
     }
   }
-  reset() { this.all = []; this.byPad = {}; this.events = []; }
+  reset() { this.all = []; this.byPad = {}; this.events = []; this.offGrid = 0; this.offByPad = {}; }
 }
 
 /** One bar's worth of hits: how many, the average timing (ms, minus = early) and how scattered. */

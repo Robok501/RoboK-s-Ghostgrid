@@ -234,3 +234,17 @@ describe('beat map from the beat model', () => {
     expect(modelBeatMap(new Float32Array(500).fill(-6), new Float32Array(500).fill(-6))).toBeNull();
   });
 });
+
+import { refineBeats } from '../src/beatmap';
+describe('refineBeats', () => {
+  it('moves beats onto the drum hits', () => {
+    const beats = Array.from({ length: 16 }, (_, i) => i * 0.5 + 0.03);
+    const hits = Array.from({ length: 16 }, (_, i) => i * 0.5 + (i % 2 ? 0.001 : -0.001));
+    const r = refineBeats(beats, hits);
+    for (let i = 0; i < 16; i++) expect(Math.abs(r[i] - i * 0.5)).toBeLessThan(0.005);
+  });
+  it('leaves beats alone without evidence', () => {
+    const beats = [0, 0.5, 1, 1.5, 2];
+    expect(refineBeats(beats, [0.2, 0.7])).toEqual(beats);
+  });
+});

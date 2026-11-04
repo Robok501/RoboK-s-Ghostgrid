@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
-  ClickPlan, HitLog, Scheduler, calibrateOnBeat, gridOffset, levelsFor, tapTempo,
+  ClickPlan, HitLog, OFF_GRID_MS, Scheduler, calibrateOnBeat, gridOffset, levelsFor, tapTempo,
   type ClickStep, type TrainingConfig,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -145,8 +145,10 @@ export function useClick() {
     // a hit used to be matched to the wrong click first and then corrected, which made calibrating worse
     const step = beat / (cs.grade === 'sub' ? cs.sub : 1);
     const raw = gridOffset(time - r.outLat + cs.calib[input] / 1000, r.grid, step);
-    if (raw === null) return null;
+    if (raw === null) { if (r.grid.length) r.log.addOff(pad ?? input); return null; }
     const off = raw * 1000;
+    // far from every grid point: a ghost note, fill or other subdivision. Shown as a count, not scored.
+    if (Math.abs(off) > OFF_GRID_MS) { r.log.addOff(pad ?? input); bump(); return null; }
     r.log.add(off, pad ?? input);
     setLast(off);
     bump();

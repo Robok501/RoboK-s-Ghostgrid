@@ -592,5 +592,9 @@
  "To bar": "Tot maat",
  "Parts:": "Delen:",
  "Name of part {{l}}": "Naam van deel {{l}}",
- "every part with this letter gets the name": "elk deel met deze letter krijgt de naam"
+ "every part with this letter gets the name": "elk deel met deze letter krijgt de naam",
+ "Without your average lean of {{lean}} ms you would score {{pct}}%": "Zonder je gemiddelde afwijking van {{lean}} ms zou je {{pct}}% scoren",
+ "{{n}} hits between the grid points (not scored)": "{{n}} slagen tussen de rasterpunten (niet meegeteld)",
+ "Average {{ms}} ms": "Gemiddeld {{ms}} ms",
+ "Auto": "Auto"
 }

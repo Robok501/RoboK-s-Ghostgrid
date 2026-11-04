@@ -9,7 +9,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import {
-  HitLog, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, modelBeatMap, modelDrumHits, offsetToBeat, setBeatsPerBar,
+  HitLog, OFF_GRID_MS, autoGrade, refineBeats, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, modelBeatMap, modelDrumHits, offsetToBeat, setBeatsPerBar,
   setDownbeatAt, shiftDownbeat, snapToBar, songSections, type BeatMap,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -283,6 +283,21 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     }
     setAnalysing(false);
   }, [song, map?.beatsPerBar, update]);
+  // move the beats onto the real kick and snare hits of the drum track (once per map, only when the drums are separated)
+  const refining = useRef(false);
+  useEffect(() => {
+    if (!ready || !map || map.edited || map.refined || !song.separated || refining.current) return;
+    refining.current = true;
+    (async () => {
+      try {
+        const env = await Engine.stemsEnvelope(stemPath(song, 'drums'));
+        const on = drumHits(env).filter((h) => h.id === 'bd' || h.id === 'sn').map((h) => h.t);
+        const beats = refineBeats(map.beats, on);
+        update(song.id, { beatMap: { ...map, beats, refined: true } });
+      } catch { update(song.id, { beatMap: { ...map, refined: true } }); }
+      refining.current = false;
+    })();
+  }, [ready, map, song.separated]); // eslint-disable-line react-hooks/exhaustive-deps
   const getBeatModel = async () => {
     setBeatDl(0); setErr('');
     try {
@@ -463,19 +478,29 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   };
   const [, bump] = useState(0);
   const logRef = useRef(new HitLog());
+  const phasesRef = useRef<number[]>([]);
   const [last, setLast] = useState<number | null>(null);
   const coachInput: CoachInput = song.coachInput ?? 'pads';
-  const R = useRef({ map, rate, outLat: 0, calib: settings.click.calib, grade: song.grade ?? 1, coach: !!song.coach, playing });
-  R.current = { map, rate, outLat: info?.outputLatency ?? 0, calib: settings.click.calib, grade: song.grade ?? 1, coach: !!song.coach, playing };
+  const R = useRef({ map, rate, outLat: 0, calib: settings.click.calib, grade: song.grade ?? 0, coach: !!song.coach, playing });
+  R.current = { map, rate, outLat: info?.outputLatency ?? 0, calib: settings.click.calib, grade: song.grade ?? 0, coach: !!song.coach, playing };
   const scoreHit = useCallback((t: number, input: CoachInput, pad: string) => {
     const r = R.current;
     if (!r.coach || !r.map || !r.playing) return;
     // the device's delay comes off before matching the hit to a beat (see the Click coach)
     const songT = Engine.stemsSongTimeAt(t - r.outLat + r.calib[input] / 1000);
     if (songT < 0) return;
-    const off = offsetToBeat(r.map, songT, r.grade);
+    // Auto: the coarsest grid (beats, 8ths, 16ths) that most of your recent hits sit on
+    let grade: 1 | 2 | 4 = r.grade === 0 ? 1 : r.grade;
+    if (r.grade === 0) {
+      const ph = offsetToBeat(r.map, songT, 1);
+      if (ph !== null) { phasesRef.current.push(ph); if (phasesRef.current.length > 160) phasesRef.current.shift(); }
+      grade = autoGrade(phasesRef.current, 60000 / r.map.bpm);
+    }
+    const off = offsetToBeat(r.map, songT, grade);
     if (off === null) return;
     const ms = off / r.rate;
+    // between the grid points: a ghost note or fill. Counted and shown, not scored.
+    if (Math.abs(ms) > OFF_GRID_MS) { logRef.current.addOff(pad); bump((x) => x + 1); return; }
     logRef.current.add(ms, pad, undefined, barAt(r.map, songT) + 1);
     setLast(ms);
     bump((x) => x + 1);
@@ -568,7 +593,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       </View>
 
       <View style={s.transport}>
-        <Btn label="↺" onPress={() => { seek(loopOn ? A : 0); logRef.current.reset(); setLast(null); bump((x) => x + 1); }} />
+        <Btn label="↺" onPress={() => { seek(loopOn ? A : 0); logRef.current.reset(); phasesRef.current = []; setLast(null); bump((x) => x + 1); }} />
         <Btn label="−5 s" onPress={() => seek(pos - 5)} />
         <Btn label={playing ? 'Pause' : 'Play'} primary active={playing} disabled={!ready || separating} onPress={toggle} style={{ flex: 1 }} />
         <Btn label="+5 s" onPress={() => seek(pos + 5)} />
@@ -578,7 +603,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
         <CoachPanel input={coachInput} running={playing} last={last} log={logRef.current} tol={settings.click.tol}
           view={settings.click.coachView} totalBars={bars.length}
           calibrating={null} calibCount={0} micLevel={micLevel} onTap={tap}
-          onReset={() => { logRef.current.reset(); setLast(null); bump((x) => x + 1); }} />
+          onReset={() => { logRef.current.reset(); phasesRef.current = []; setLast(null); bump((x) => x + 1); }} />
       )}
 
       <Row label="Listen to" first>
@@ -666,7 +691,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       {song.coach && (
         <>
           <Row label="Input"><Seg small options={[{ value: 'pads', label: 'E-drum' }, { value: 'mic', label: 'Mic' }, { value: 'tap', label: 'Tap' }]} value={coachInput} onChange={(v) => setCoachInput(v as CoachInput)} /></Row>
-          <Row label="Grade against"><Seg small options={[{ value: 1, label: 'Beats' }, { value: 2, label: '8ths' }, { value: 4, label: '16ths' }]} value={song.grade ?? 1} onChange={(v) => update(song.id, { grade: v as 1 | 2 | 4 })} /></Row>
+          <Row label="Grade against"><Seg small options={[{ value: 0, label: 'Auto' }, { value: 1, label: 'Beats' }, { value: 2, label: '8ths' }, { value: 4, label: '16ths' }]} value={song.grade ?? 0} onChange={(v) => update(song.id, { grade: v as 0 | 1 | 2 | 4 })} /></Row>
           {coachInput === 'mic' && <Note>Use headphones or Bluetooth so the mic hears your drums, not the song.</Note>}
         </>
       )}

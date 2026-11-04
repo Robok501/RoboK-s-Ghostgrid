@@ -55,7 +55,8 @@ export interface Song {
   sectionNames?: Record<string, string>;
   coachInput?: CoachInput;
   /** 1 = beats, 2 = 8ths, 4 = 16ths */
-  grade?: 1 | 2 | 4;
+  /** 0 = auto */
+  grade?: 0 | 1 | 2 | 4;
   /** levels after separation, to spot a separation that went wrong */
   check?: { mixDb: number; drumsDb: number; restDb: number; drumsShare: number; invalid: number };
 }

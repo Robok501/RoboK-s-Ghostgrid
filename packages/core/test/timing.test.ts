@@ -68,3 +68,30 @@ describe('barDrift', () => {
     expect(d[1].mean).toBeCloseTo(-15); expect(d[1].sd).toBeCloseTo(5); expect(d[1].n).toBe(2);
   });
 });
+
+import { correctedScore, autoGrade } from '../src/timing';
+describe('lean-corrected score and auto grade', () => {
+  it('removes a constant lean', () => {
+    const v = [30, 28, 32, 31, 29, 30, 33, 27];
+    expect(correctedScore(v, 25)).toBe(100);
+  });
+  it('chooses the coarsest grid that fits', () => {
+    const beat = 500;
+    const quarters = Array.from({ length: 20 }, (_, i) => (i % 3) - 1);
+    expect(autoGrade(quarters, beat)).toBe(1);
+    const eighths = Array.from({ length: 20 }, (_, i) => (i % 2 ? 250 : 0) + (i % 3) - 1).map((x) => (x > 250 ? x - 500 : x));
+    expect(autoGrade(eighths, beat)).toBe(2);
+    const sixteenths = Array.from({ length: 20 }, (_, i) => [0, 125, -125, 250][i % 4] + 2);
+    expect(autoGrade(sixteenths, beat)).toBe(4);
+  });
+  it('counts off-grid hits and pad means', () => {
+    const l = new HitLog();
+    for (let i = 0; i < 5; i++) l.add(10, 'snare');
+    l.addOff('snare');
+    expect(l.offGrid).toBe(1);
+    expect(l.padMean('snare')).toBe(10);
+    expect(l.padMean('kick')).toBeNull();
+    l.reset();
+    expect(l.offGrid).toBe(0);
+  });
+});

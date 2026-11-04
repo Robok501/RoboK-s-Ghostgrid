@@ -592,5 +592,9 @@
  "To bar": "Bis Takt",
  "Parts:": "Teile:",
  "Name of part {{l}}": "Name von Teil {{l}}",
- "every part with this letter gets the name": "jeder Teil mit diesem Buchstaben bekommt den Namen"
+ "every part with this letter gets the name": "jeder Teil mit diesem Buchstaben bekommt den Namen",
+ "Without your average lean of {{lean}} ms you would score {{pct}}%": "Ohne deine durchschnittliche Abweichung von {{lean}} ms würdest du {{pct}}% erreichen",
+ "{{n}} hits between the grid points (not scored)": "{{n}} Schläge zwischen den Rasterpunkten (nicht gewertet)",
+ "Average {{ms}} ms": "Durchschnitt {{ms}} ms",
+ "Auto": "Auto"
 }

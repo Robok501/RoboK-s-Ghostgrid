@@ -8,7 +8,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Path, Polygon, Polyline } from 'react-native-svg';
-import { barDrift, timingStats, verdict, type HitLog } from '@ghostgrid/core';
+import { barDrift, correctedScore, timingStats, verdict, type HitLog } from '@ghostgrid/core';
 import { C, F } from '../theme';
 import type { CoachInput } from '../store';
 import { CALIB_HITS } from './useClick';
@@ -37,6 +37,7 @@ export function CoachPanel({ input, running, log, tol, calibrating, calibCount, 
 }) {
 
   const all = timingStats(log.all, tol);
+  const fixed = correctedScore(log.all, tol);
   const lastEv = log.events[log.events.length - 1];
   const lastV = lastEv ? verdict(lastEv.off, tol) : null;
   const drift = view === 'drift' && totalBars > 1;
@@ -65,6 +66,10 @@ export function CoachPanel({ input, running, log, tol, calibrating, calibCount, 
       <Text style={[s.pct, { color: colorOf(all.n ? all.score : null) }]}>{all.n ? `${Math.round(all.score)}%` : '–'}</Text>
       <Text style={s.sub}>{all.n ? t('{{count}} hits in the ±{{tol}} ms window', { count: all.n, tol }) : t('in the ±{{tol}} ms window', { tol })}</Text>
       {!!all.n && <Text style={s.sub}>{tendency(all.mean, all.sd, tol)}</Text>}
+      {!!all.n && Math.abs(all.mean) >= tol / 3 && fixed - all.score >= 8 && (
+        <Text style={s.sub}>{t('Without your average lean of {{lean}} ms you would score {{pct}}%', { lean: `${all.mean > 0 ? '+' : '−'}${Math.round(Math.abs(all.mean))}`, pct: Math.round(fixed) })}</Text>
+      )}
+      {log.offGrid > 0 && <Text style={s.sub}>{t('{{n}} hits between the grid points (not scored)', { n: log.offGrid })}</Text>}
       {drift ? <DriftLine events={log.events} tol={tol} totalBars={totalBars} /> : !perPad && <Gauge events={log.events} tol={tol} />}
       {input === 'mic' && <View style={s.meter}><View style={[s.meterFill, { width: `${Math.min(100, Math.sqrt(micLevel / 0.6) * 100)}%` }]} /></View>}
     </View>
@@ -86,6 +91,12 @@ export function CoachPanel({ input, running, log, tol, calibrating, calibCount, 
                   <Text style={[s.tilePct, { color: colorOf(st.n ? st.score : null) }]}>{st.n ? `${Math.round(st.score)}%` : '–'}</Text>
                 </View>
                 <Gauge events={ev} tol={tol} />
+                {(() => {
+                  const m = g.pads.map((p) => log.padMean(p)).filter((x): x is number => x !== null);
+                  if (!m.length) return null;
+                  const avg = m.reduce((a, b) => a + b, 0) / m.length;
+                  return <Text style={s.sub}>{t('Average {{ms}} ms', { ms: `${avg > 0 ? '+' : avg < 0 ? '−' : ''}${Math.round(Math.abs(avg))}` })}</Text>;
+                })()}
               </View>
             );
           })}

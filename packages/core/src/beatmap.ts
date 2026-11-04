@@ -39,6 +39,8 @@ export interface BeatMap {
   edited?: boolean;
   /** found with the beat model in the whole song, in the separated drum track, or in the whole mix (less reliable) */
   source?: 'model' | 'drums' | 'mix';
+  /** beats moved to the real kick/snare hits of the drum track */
+  refined?: boolean;
   /** analysis version (newer versions redo older, unedited maps) */
   v?: number;
 }
@@ -433,6 +435,36 @@ export function offsetToBeat(m: BeatMap, songTime: number, grid: 1 | 2 | 4 = 1):
   const d = songTime - (b[lo] + k * step);
   if (lo === b.length - 1 && k > grid) return null;
   return d * 1000;
+}
+
+/**
+ * Move the beats onto the drums that actually play them. The beat model is a few tens of ms off now and then
+ * (its frames are 20 ms); kick and snare hits near a beat show where the beat really is. For each beat, the
+ * offsets of onsets within ±`win` s are pooled over the beats around it (±`reach`), and the median of at least
+ * three is the shift. Beats without enough evidence keep their time.
+ */
+export function refineBeats(beats: number[], onsets: number[], win = 0.045, reach = 3): number[] {
+  if (beats.length < 4 || onsets.length < 4) return beats.slice();
+  const sorted = onsets.slice().sort((a, b) => a - b);
+  const near: (number | null)[] = beats.map((b) => {
+    let best: number | null = null;
+    let lo = 0, hi = sorted.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] < b - win) lo = mid + 1; else hi = mid; }
+    for (let i = lo; i < sorted.length && sorted[i] <= b + win; i++) {
+      const d = sorted[i] - b;
+      if (best === null || Math.abs(d) < Math.abs(best)) best = d;
+    }
+    return best;
+  });
+  const out = beats.map((b, i) => {
+    const v: number[] = [];
+    for (let j = Math.max(0, i - reach); j <= Math.min(beats.length - 1, i + reach); j++) { const d = near[j]; if (d !== null) v.push(d); }
+    if (v.length < 3) return b;
+    v.sort((x, y) => x - y);
+    return b + v[Math.floor(v.length / 2)];
+  });
+  for (let i = 1; i < out.length; i++) if (out[i] <= out[i - 1] + 0.05) out[i] = beats[i];
+  return out;
 }
 
 // ---------------------------------------------------------------- corrections by hand
