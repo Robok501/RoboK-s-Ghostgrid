@@ -90,7 +90,13 @@ final class GGEngine {
   @discardableResult
   func ensureRunning(force: Bool = false) -> Bool {
     guard let p = lastStart else { return false }
-    if !force, let e = engine, e.isRunning { return false }
+    if !force, let e = engine, e.isRunning {
+      // "running" is not enough: the render callback runs all the time (silence included), so a clock that does
+      // not move over a short moment means the engine is stalled and must be restarted
+      let a = now()
+      usleep(60_000)
+      if now() > a { return false }
+    }
     _ = try? start(keepBluetoothOutput: p.keepBt, mic: p.mic, sensitivity: p.sens)
     return true
   }
