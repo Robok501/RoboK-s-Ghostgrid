@@ -2,7 +2,7 @@
 import React, { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { engrave, type Idea, type NotationStyle } from '@ghostgrid/core';
+import { barSteps, engrave, type Idea, type NotationStyle } from '@ghostgrid/core';
 import { C } from '../theme';
 
 /** The engraver marks shapes with CSS classes; react-native-svg needs plain attributes. */
@@ -21,6 +21,8 @@ const CLASS_ATTRS: Record<string, string> = {
   hitr: 'fill="none"',
 };
 
+const MARK_COLOR: Record<string, string> = { ok: C.good, early: C.early, late: C.late, missed: '#d0443a', weak: C.accent, loud: C.accent };
+
 export function themeSvg(svg: string): string {
   return svg.replace(/class="([^"]+)"/g, (_, cls: string) => {
     const attrs: Record<string, string> = {};
@@ -33,13 +35,15 @@ export function themeSvg(svg: string): string {
   });
 }
 
-export function Score({ idea, width, style, count, selectedBar, playBar, playStep, onSelectBar, from = 0, to }: {
+export function Score({ idea, width, style, count, selectedBar, playBar, playStep, onSelectBar, from = 0, to, marks }: {
   idea: Idea; width: number; style: NotationStyle; count: boolean;
   selectedBar: number | null; playBar?: number | null; onSelectBar?: (b: number) => void;
   /** grid step playing inside `playBar`: draws the same moving line as the grid */
   playStep?: number | null;
   /** show only bars from … to (exclusive); numbers stay those of the whole idea */
   from?: number; to?: number;
+  /** practice mode: how each note of the latest pass went, keyed `bar:step`, drawn as small dots under the staff */
+  marks?: Record<string, string>;
 }) {
   const end = Math.min(idea.bars.length, to ?? idea.bars.length);
   const part = useMemo(() => (from === 0 && end === idea.bars.length ? idea : { ...idea, bars: idea.bars.slice(from, end) }), [idea, from, end]);
@@ -57,6 +61,10 @@ export function Score({ idea, width, style, count, selectedBar, playBar, playSte
       {pb && playStep !== null && playStep !== undefined && (
         <View pointerEvents="none" style={{ position: 'absolute', left: pb.x0 + 10 + pb.slotW * playStep, top: pb.top - 30, width: pb.slotW, height: pb.h + 10, borderRadius: 4, backgroundColor: C.accent, opacity: 0.35 }} />
       )}
+      {marks && e.bars.map((bx, i) => bx && Array.from({ length: barSteps(idea, i + from) }, (_, st) => {
+        const v = marks[`${i + from}:${st}`];
+        return v ? <View key={`${i}:${st}`} pointerEvents="none" style={{ position: 'absolute', left: bx.x0 + 10 + bx.slotW * (st + 0.5) - 4, top: bx.top + 70, width: 8, height: 8, borderRadius: 4, backgroundColor: MARK_COLOR[v] ?? C.muted }} /> : null;
+      }))}
       {onSelectBar && e.bars.map((b, i) => b && (
         <Pressable key={i} onPress={() => onSelectBar(i + from)} accessibilityRole="button" accessibilityLabel={`Bar ${i + 1 + from}`}
           style={{ position: 'absolute', left: b.x0, top: b.top - 44, width: b.barW, height: b.h + 30 }} />

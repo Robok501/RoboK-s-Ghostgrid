@@ -24,6 +24,7 @@ import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 import { GridPager } from '../sketch/GridPager';
 import { Score } from '../sketch/Score';
+import { PracticePanel } from '../sketch/PracticePanel';
 import { freshIdea, loadIdeas, saveIdeas, takeNote, type IdeaStore } from '../sketch/ideas';
 import { t } from '../i18n';
 import { applyTake, readVoiceFile, saveWav, useSketchPlayer, type VoiceTake } from '../sketch/usePlayer';
@@ -303,8 +304,10 @@ export function SketchScreen() {
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         {scoreVisible && (
           <Score idea={idea} width={W} style={style} count={sk.count} selectedBar={scope === 'bar' ? selBar : null}
-            playBar={player.pos?.bar ?? null} playStep={player.pos?.step ?? null} onSelectBar={(b) => { setBar(b); setScope('bar'); }} from={lineFrom} to={lineFrom + perLine} />
+            playBar={player.pos?.bar ?? null} playStep={player.pos?.step ?? null} onSelectBar={(b) => { setBar(b); setScope('bar'); }} from={lineFrom} to={lineFrom + perLine}
+            marks={idea.practice ? player.practice?.marks : undefined} />
         )}
+        {!!idea.practice && <PracticePanel idea={idea} grade={player.practice} playing={player.playing} demo={player.demo} />}
 
         {/* bars + grid button */}
         <View style={s.barRow}>

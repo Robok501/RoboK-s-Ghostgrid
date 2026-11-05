@@ -7,7 +7,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { File, Paths } from 'expo-file-system';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
-  DRUM_SOUNDS, INSTRUMENTS, SOUND, analyze, barGrid, barSteps, ideaToRaw, soundFor, stepTime, withRaw, type Idea, type InstrumentId, type RawNote, type SoundKey,
+  DRUM_SOUNDS, INSTRUMENTS, LIBRARY, SOUND, analyze, barGrid, barSteps, expectedNotes, gradeByPass, graceSteps, ideaToRaw, passLength, soundFor, stepTime, voiceOf, withRaw,
+  type Idea, type InstrumentId, type PlayedHit, type PracticeGrade, type RawNote, type SoundKey,
 } from '@ghostgrid/core';
 import { t } from '../i18n';
 import Engine from '../../modules/ghostgrid-engine';
@@ -81,6 +82,8 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
   route.current = info?.route;
   const outLat = useRef(0);
   outLat.current = info?.outputLatency ?? 0;
+  const tolMs = useRef(settings.click.tol);
+  tolMs.current = settings.click.tol;
 
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState<PlayPos | null>(null);
@@ -88,12 +91,19 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
   const [countBeat, setCountBeat] = useState(0);
   /** last playback problem, shown on screen instead of failing silently */
   const [error, setError] = useState('');
+  /** practice mode (an exercise from the library): the grade of the passes played so far, and whether the demo pass is still playing */
+  const [practice, setPractice] = useState<PracticeGrade | null>(null);
+  const [demo, setDemo] = useState(false);
 
   const R = useRef({
     timer: null as ReturnType<typeof setInterval> | null,
     nextT: 0, nextBar: 0, loopBars: 0,
     starts: [] as { t: number; bar: number; beat: number; g: number }[],
     rec: null as RecState, withGroove: true, recorded: 0,
+    /** bars scheduled since play started (the loop wraps `nextBar`, this does not) */
+    barsDone: 0,
+    /** practice mode: pass 0 is a demo you listen to, then every pass is graded against the score */
+    practice: null as null | { origin: number; len: number; hits: PlayedHit[]; graded: number; graces?: Set<string>; voices: Set<string> },
   });
 
   const scheduleBar = (t: number, b: number, notes: boolean) => {
@@ -108,7 +118,7 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
       }
     }
     const rc = R.current.rec;
-    if (sk.current.click || (rc && (rc.source === 'pads' || rc.clickOk))) {
+    if (sk.current.click || R.current.practice || (rc && (rc.source === 'pads' || rc.clickOk))) {
       const beat = 60 / I.bpm;
       for (let k = 0; k < I.beats; k++) Engine.scheduleDrum(t + k * beat, sound(k === 0 ? 'clickAcc' : 'click'), 0.7);
     }
@@ -118,6 +128,7 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     const r = R.current;
     if (r.timer) clearInterval(r.timer);
     r.timer = null;
+    r.practice = null;
     try { Engine.cancelAfter(Engine.now()); } catch { /* restarting */ }
     const wasRec = r.rec;
     r.rec = null;
@@ -179,7 +190,10 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
       }
       if (r.rec && r.nextBar >= r.rec.bars) { r.nextT = Infinity; break; }
       const b = r.nextBar % Math.max(1, I.bars.length);
-      scheduleBar(r.nextT, b, r.withGroove);
+      // practice: the exercise is played to you once (the demo), after that only the click, so you can hear yourself
+      const demoBar = !r.practice || r.barsDone < Math.max(1, I.bars.length);
+      scheduleBar(r.nextT, b, r.withGroove && demoBar);
+      r.barsDone++;
       r.starts.push({ t: r.nextT, bar: b, beat: 60 / I.bpm, g: barGrid(I, b) });
       if (r.starts.length > 16) r.starts.shift();
       r.nextT += I.beats * (60 / I.bpm);
@@ -191,6 +205,18 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     }
   }, [stop]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** after each completed pass: grade all passes so far against the score */
+  const gradePractice = () => {
+    const pr = R.current.practice;
+    if (!pr) return;
+    const done = Math.floor((Engine.now() - outLat.current - pr.origin - 0.2) / pr.len);
+    if (done < 1 || done <= pr.graded) return;
+    pr.graded = done;
+    const I = ideaRef.current;
+    const g = gradeByPass(I, expectedNotes(I, done, pr.graces), pr.hits, done, { tolMs: tolMs.current });
+    setPractice(g);
+  };
+
   const begin = useCallback((recording: boolean, source: RecSource = 'pads') => {
     stop();
     // the system may have stopped the audio engine behind our back (e.g. after the song player ran): wake it first
@@ -200,6 +226,15 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     const clickOk = source === 'pads' || route.current !== 'speaker';
     r.nextT = Engine.now() + 0.15;
     r.nextBar = 0;
+    r.barsDone = 0;
+    r.practice = null;
+    setPractice(null);
+    if (!recording && I.practice && LIBRARY.some((e) => e.id === I.practice)) {
+      const len = passLength(I);
+      const used = new Set<string>();
+      I.bars.forEach((bar) => { for (const k of Object.keys(bar.n)) if (bar.n[k as InstrumentId].some(Boolean)) used.add(k); });
+      r.practice = { origin: r.nextT + len, len, hits: [], graded: 0, graces: graceSteps(LIBRARY.find((e) => e.id === I.practice)!), voices: used };
+    }
     r.starts = [];
     r.withGroove = !recording || (sk.current.recMode === 'layer' && clickOk);
     r.rec = recording ? { phase: 'count', start: 0, bars: Math.max(1, I.bars.length), beat: 60 / I.bpm, hits: [], source, clickOk } : null;
@@ -208,6 +243,7 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     setError('');
     r.timer = setInterval(() => {
       try { pump(); } catch (e) { setError(t('Playback problem: {{msg}}', { msg: (e as Error).message })); stop(); }
+      gradePractice();
     }, 50);
     setPlaying(true);
     setRec(recording ? 'count' : null);
@@ -221,7 +257,8 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
       if (recording) { stop(); setError(t('Playback problem: {{msg}}', { msg: 'audio engine not running, restart the app' })); return; }
       try { Engine.ensureRunning(true); } catch { /* older native build */ }
       const t1 = Engine.now();
-      r2.nextT = t1 + 0.15; r2.nextBar = 0; r2.starts = [];
+      r2.nextT = t1 + 0.15; r2.nextBar = 0; r2.starts = []; r2.barsDone = 0;
+      if (r2.practice) { r2.practice.origin = r2.nextT + r2.practice.len; r2.practice.hits = []; r2.practice.graded = 0; }
       setTimeout(() => {
         if (R.current.timer && Engine.now() - t1 < 0.05) { stop(); setError(t('Playback problem: {{msg}}', { msg: 'audio engine not running, restart the app' })); }
       }, 600);
@@ -235,6 +272,7 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     const tick = () => {
       const r = R.current;
       const heard = Engine.now() - outLat.current;
+      if (r.practice) setDemo(heard < r.practice.origin); else setDemo(false);
       let cur: (typeof r.starts)[number] | null = null;
       for (const s of r.starts) if (s.t <= heard) cur = s;
       if (cur) {
@@ -261,8 +299,19 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     r.hits.push({ beat: (t - r.start) / r.beat, id, v: e.state });
   }), [on]);
 
+  // practice mode: your hits on the exercise's instruments, in seconds from the first graded note
+  useEffect(() => on('pad', (e) => {
+    const pr = R.current.practice;
+    if (!pr || !e.mapped) return;
+    const id = voiceOf(e.key);
+    if (!pr.voices.has(id)) return;
+    const t = e.time - outLat.current + calibPads.current / 1000 - pr.origin;
+    if (t < -0.15) return; // playing along with the demo pass is not graded
+    pr.hits.push({ t, id, vel: e.vel });
+  }), [on]);
+
   useEffect(() => on('restart', () => stop()), [on, stop]);
   useEffect(() => () => stop(), [stop]);
 
-  return { playing, pos, rec, countBeat, error, recSource: R.current.rec?.source ?? null, play: () => begin(false), record: (src: RecSource = 'pads') => begin(true, src), stop };
+  return { playing, pos, rec, countBeat, error, practice, demo, recSource: R.current.rec?.source ?? null, play: () => begin(false), record: (src: RecSource = 'pads') => begin(true, src), stop };
 }

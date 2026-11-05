@@ -604,5 +604,19 @@
  "Diddles": "Diddles",
  "Flams": "Flams",
  "Drags": "Drags",
- "Pick an exercise: it opens as a new idea you can play, loop and change. Tempo and counting are in Sketch settings.": "Kies een oefening: ze opent als nieuw idee dat je kunt afspelen, loopen en aanpassen. Tempo en tellen staan in de Schets-instellingen."
+ "Pick an exercise: it opens as a new idea you can play, loop and change. Tempo and counting are in Sketch settings.": "Kies een oefening: ze opent als nieuw idee dat je kunt afspelen, loopen en aanpassen. Tempo en tellen staan in de Schets-instellingen.",
+ "Practice": "Oefenen",
+ "Press play: you hear the exercise once, then play it on your e-drum snare. Every pass after that is graded against the score.": "Druk op play: je hoort de oefening één keer, daarna speel je ze op de snare van je e-drum. Elke ronde daarna wordt beoordeeld aan de hand van de partituur.",
+ "Listen first…": "Eerst luisteren…",
+ "Now you: play along": "Nu jij: speel mee",
+ "pass {{n}}": "ronde {{n}}",
+ "{{a}} of {{b}} notes right": "{{a}} van {{b}} noten goed",
+ "{{n}} missed": "{{n}} gemist",
+ "{{n}} extra hits": "{{n}} extra slagen",
+ "on average {{ms}}, spread ±{{sd}} ms": "gemiddeld {{ms}}, spreiding ±{{sd}} ms",
+ "accents {{a}} of {{b}}": "accenten {{a}} van {{b}}",
+ "{{a}} of {{b}} with a clear grace note": "{{a}} van {{b}} met een duidelijke voorslag",
+ "evenness ±{{sd}} ms": "gelijkmatigheid ±{{sd}} ms",
+ "best {{b}}% · average {{a}}% over {{n}} passes": "beste {{b}}% · gemiddeld {{a}}% over {{n}} rondes",
+ "Under the score: green on time, blue early, orange late, red missed, yellow accent too soft.": "Onder de partituur: groen op tijd, blauw te vroeg, oranje te laat, rood gemist, geel accent te zacht."
 }
