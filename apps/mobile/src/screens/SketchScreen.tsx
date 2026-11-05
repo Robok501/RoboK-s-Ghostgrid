@@ -16,8 +16,10 @@ import { File, Paths } from 'expo-file-system';
 import {
   GRID_NAMES, INSTRUMENTS, getCountStyle, type CountStyle, MAX_BARS, UndoStack, addBar, addRow, barGrid, buildMidi, clearBar, cycleState, deleteBar, duplicateBar,
   SOUND, SOUNDS, addSamples, analyze, importMidi, newId, nextGrid, staleSamples, taughtSounds, usesOwnSounds, notationStyle, scoreDocument, setBarGrid, setBeats, setGrid, setNote, textTab, tidyRows, visibleRows,
-  INSTRUMENT, type Idea, type InstrumentId, type SoundKey,
+  INSTRUMENT, LIBRARY, exerciseToIdea, stickingLine, type Idea, type InstrumentId, type SoundKey,
 } from '@ghostgrid/core';
+
+const FAMILIES: [string, string][] = [['rolls', 'Rolls'], ['diddles', 'Diddles'], ['flams', 'Flams'], ['drags', 'Drags']];
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 import { GridPager } from '../sketch/GridPager';
@@ -45,7 +47,7 @@ export function SketchScreen() {
   const idea = store.ideas.find((i) => i.id === store.current) ?? store.ideas[0];
   const [bar, setBar] = useState(0);
   const [scope, setScope] = useState<'all' | 'bar'>('all');
-  const [sheet, setSheet] = useState<null | 'menu' | 'ideas' | 'export' | 'voice' | 'settings'>(null);
+  const [sheet, setSheet] = useState<null | 'menu' | 'ideas' | 'library' | 'export' | 'voice' | 'settings'>(null);
   const [recChoice, setRecChoice] = useState(false);
   const [teaching, setTeaching] = useState<SoundKey | null>(null);
   const micWasOff = useRef(false);
@@ -278,7 +280,7 @@ export function SketchScreen() {
       </View>
     </View>
   );
-  const show = (k: 'ideas' | 'export' | 'voice' | 'settings') => sheet === k;
+  const show = (k: 'ideas' | 'library' | 'export' | 'voice' | 'settings') => sheet === k;
   // score: one line of bars that follows the selected (or playing) bar; the whole idea on an iPad
   const perLine = tablet ? idea.bars.length : landscape ? 2 : 1;
   const focusBar = player.pos?.bar ?? selBar;
@@ -379,12 +381,13 @@ export function SketchScreen() {
       <Modal visible={!!sheet} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSheet(null)}>
         <View style={s.sheet}>
           <View style={s.sheetHead}>
-            <Text style={s.sheetTitle}>{t({ menu: 'Sketch', ideas: 'Ideas', export: 'Export', voice: 'Voice to notes', settings: 'Sketch settings' }[sheet ?? 'menu'])}</Text>
+            <Text style={s.sheetTitle}>{t({ menu: 'Sketch', ideas: 'Ideas', library: 'Practice library', export: 'Export', voice: 'Voice to notes', settings: 'Sketch settings' }[sheet ?? 'menu'])}</Text>
             <Btn label="Done" onPress={() => setSheet(null)} />
           </View>
           <ScrollView contentContainerStyle={s.sheetScroll} keyboardShouldPersistTaps="handled">
             {sheet === 'menu' && <Card>
               <NavRow first label="Ideas" value={`${store.ideas.length}`} onPress={() => setSheet('ideas')} />
+              <NavRow label="Practice library" hint="rudiments to play along with" onPress={() => setSheet('library')} />
               <NavRow label="Import" hint="MIDI file or Ghostgrid file" onPress={importFile} />
               <NavRow label="Export" hint="PDF score, MIDI, text tab, Ghostgrid file" onPress={() => setSheet('export')} />
               <NavRow label="Voice to notes" hint="teach your beatbox sounds" onPress={() => setSheet('voice')} />
@@ -406,6 +409,18 @@ export function SketchScreen() {
                 }} />
               </View>
             </Card>}
+
+            {show('library') && <>
+              <Note>{t('Pick an exercise: it opens as a new idea you can play, loop and change. Tempo and counting are in Sketch settings.')}</Note>
+              {FAMILIES.map(([fam, name]) => (
+                <Card key={fam} title={name}>
+                  {LIBRARY.filter((e) => e.family === fam).map((e, k) => (
+                    <NavRow key={e.id} first={k === 0} label={e.title} hint={`${stickingLine(e)} · ${e.bpm[0]}–${e.bpm[1]} bpm`}
+                      onPress={() => { addIdea(exerciseToIdea(e)); setSheet(null); say(t(e.summary)); }} />
+                  ))}
+                </Card>
+              ))}
+            </>}
 
             {show('settings') && <Card title="Groove">
               <Row label="Tempo" first><Stepper value={idea.bpm} min={30} max={260} onChange={(bpm) => commit({ ...idea, bpm }, false)} /></Row>

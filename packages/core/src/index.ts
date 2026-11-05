@@ -17,3 +17,4 @@ export * from './beatmap';
 export * from './drumscore';
 export * from './i18n';
 export * from './sections';
+export * from './library';
