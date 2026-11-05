@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HitLog, barDrift, calibrationFromHits, gridOffset, timingStats, verdict } from '../src/timing';
+import { GridPicker, HitLog, padGroup, barDrift, calibrationFromHits, gridOffset, timingStats, verdict } from '../src/timing';
 
 describe('gridOffset', () => {
   const grid = [0, 0.5, 1, 1.5];
@@ -93,5 +93,28 @@ describe('lean-corrected score and auto grade', () => {
     expect(l.padMean('kick')).toBeNull();
     l.reset();
     expect(l.offGrid).toBe(0);
+  });
+});
+
+describe('GridPicker', () => {
+  it('groups pads', () => {
+    expect([padGroup('bd'), padGroup('rim'), padGroup('hh+o'), padGroup('rd')]).toEqual(['bd', 'sn', 'hh', 'other']);
+  });
+  it('gives the kick beats and the hi-hat sixteenths in the same song', () => {
+    const beat = 500; // 120 bpm; phases are distances to the nearest beat, within half a beat
+    const gp = new GridPicker();
+    for (let i = 0; i < 40; i++) {
+      gp.add('bd', 3); // kick on the beat
+      for (const p of [0, 125, -250, -125]) gp.add('hh', p + 4); // hi-hat on every sixteenth
+    }
+    expect(gp.grade('bd', beat)).toBe(1);
+    expect(gp.grade('hh', beat)).toBe(4);
+    expect(gp.grade('sn', beat)).toBe(4); // too few own hits: borrows the pooled grid
+  });
+  it('lets a sparse group borrow the pooled grid', () => {
+    const gp = new GridPicker();
+    for (let i = 0; i < 30; i++) gp.add('hh', 0);
+    gp.add('sn', 2);
+    expect(gp.grade('sn', 500)).toBe(gp.grade('hh', 500));
   });
 });

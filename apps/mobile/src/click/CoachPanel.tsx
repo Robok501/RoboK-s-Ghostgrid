@@ -21,6 +21,7 @@ const GROUPS: { key: string; name: string; pads: string[] }[] = [
   { key: 'sn', name: 'Snare', pads: ['sn', 'rim'] },
   { key: 'hh', name: 'Hi-hat', pads: ['hh', 'hh+o', 'hf'] },
 ];
+const GRID_NAME: Record<number, string> = { 1: 'beats', 2: '8ths', 4: '16ths' };
 const colorOf = (pct: number | null) => (pct === null ? C.muted : pct >= 85 ? C.good : pct >= 60 ? C.accent : C.late);
 
 export function CoachPanel({ input, running, log, tol, calibrating, calibCount, micLevel, onTap, onPlay, onReset, view = 'needles', totalBars = 0 }: {
@@ -87,7 +88,7 @@ export function CoachPanel({ input, running, log, tol, calibrating, calibCount, 
             return (
               <View key={g.key} style={[s.tile, s.tileHalf]}>
                 <View style={s.tileHead}>
-                  <Text style={s.tileName}>{t(g.name)}</Text>
+                  <Text style={s.tileName}>{t(g.name)}{log.grades[g.key] ? ` · ${t(GRID_NAME[log.grades[g.key]!])}` : ''}</Text>
                   <Text style={[s.tilePct, { color: colorOf(st.n ? st.score : null) }]}>{st.n ? `${Math.round(st.score)}%` : '–'}</Text>
                 </View>
                 <Gauge events={ev} tol={tol} />

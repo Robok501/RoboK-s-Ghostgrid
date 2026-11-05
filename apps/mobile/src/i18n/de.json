@@ -596,5 +596,6 @@
  "Without your average lean of {{lean}} ms you would score {{pct}}%": "Ohne deine durchschnittliche Abweichung von {{lean}} ms würdest du {{pct}}% erreichen",
  "{{n}} hits between the grid points (not scored)": "{{n}} Schläge zwischen den Rasterpunkten (nicht gewertet)",
  "Average {{ms}} ms": "Durchschnitt {{ms}} ms",
- "Auto": "Auto"
+ "Auto": "Auto",
+ "beats": "Schläge"
 }

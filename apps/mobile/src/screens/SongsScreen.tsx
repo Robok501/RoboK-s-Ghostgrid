@@ -9,7 +9,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import {
-  HitLog, OFF_GRID_MS, autoGrade, refineBeats, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, modelBeatMap, modelDrumHits, offsetToBeat, setBeatsPerBar,
+  GridPicker, HitLog, OFF_GRID_MS, padGroup, refineBeats, barAt, barStarts, barsFrom, beatLengthAt, beatMap, clickTimes, doubleTime, drumHits, halfTime, hitsToIdea, modelBeatMap, modelDrumHits, offsetToBeat, setBeatsPerBar,
   setDownbeatAt, shiftDownbeat, snapToBar, songSections, type BeatMap,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -478,7 +478,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   };
   const [, bump] = useState(0);
   const logRef = useRef(new HitLog());
-  const phasesRef = useRef<number[]>([]);
+  const pickerRef = useRef(new GridPicker());
   const [last, setLast] = useState<number | null>(null);
   const coachInput: CoachInput = song.coachInput ?? 'pads';
   const R = useRef({ map, rate, outLat: 0, calib: settings.click.calib, grade: song.grade ?? 0, coach: !!song.coach, playing });
@@ -489,12 +489,15 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     // the device's delay comes off before matching the hit to a beat (see the Click coach)
     const songT = Engine.stemsSongTimeAt(t - r.outLat + r.calib[input] / 1000);
     if (songT < 0) return;
-    // Auto: the coarsest grid (beats, 8ths, 16ths) that most of your recent hits sit on
+    // Auto: per kit voice, the coarsest grid (beats, 8ths, 16ths) that most of its recent hits sit on
     let grade: 1 | 2 | 4 = r.grade === 0 ? 1 : r.grade;
     if (r.grade === 0) {
       const ph = offsetToBeat(r.map, songT, 1);
-      if (ph !== null) { phasesRef.current.push(ph); if (phasesRef.current.length > 160) phasesRef.current.shift(); }
-      grade = autoGrade(phasesRef.current, 60000 / r.map.bpm);
+      if (ph !== null) pickerRef.current.add(pad, ph);
+      grade = pickerRef.current.grade(pad, 60000 / r.map.bpm);
+      logRef.current.grades = { ...pickerRef.current.grades };
+    } else {
+      logRef.current.grades[padGroup(pad)] = r.grade;
     }
     const off = offsetToBeat(r.map, songT, grade);
     if (off === null) return;
@@ -593,7 +596,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       </View>
 
       <View style={s.transport}>
-        <Btn label="↺" onPress={() => { seek(loopOn ? A : 0); logRef.current.reset(); phasesRef.current = []; setLast(null); bump((x) => x + 1); }} />
+        <Btn label="↺" onPress={() => { seek(loopOn ? A : 0); logRef.current.reset(); pickerRef.current.reset(); setLast(null); bump((x) => x + 1); }} />
         <Btn label="−5 s" onPress={() => seek(pos - 5)} />
         <Btn label={playing ? 'Pause' : 'Play'} primary active={playing} disabled={!ready || separating} onPress={toggle} style={{ flex: 1 }} />
         <Btn label="+5 s" onPress={() => seek(pos + 5)} />
@@ -603,7 +606,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
         <CoachPanel input={coachInput} running={playing} last={last} log={logRef.current} tol={settings.click.tol}
           view={settings.click.coachView} totalBars={bars.length}
           calibrating={null} calibCount={0} micLevel={micLevel} onTap={tap}
-          onReset={() => { logRef.current.reset(); phasesRef.current = []; setLast(null); bump((x) => x + 1); }} />
+          onReset={() => { logRef.current.reset(); pickerRef.current.reset(); setLast(null); bump((x) => x + 1); }} />
       )}
 
       <Row label="Listen to" first>

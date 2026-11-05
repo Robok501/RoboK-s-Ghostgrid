@@ -596,5 +596,6 @@
  "Without your average lean of {{lean}} ms you would score {{pct}}%": "Sans votre écart moyen de {{lean}} ms, vous feriez {{pct}} %",
  "{{n}} hits between the grid points (not scored)": "{{n}} coups entre les points de grille (non comptés)",
  "Average {{ms}} ms": "Moyenne {{ms}} ms",
- "Auto": "Auto"
+ "Auto": "Auto",
+ "beats": "temps"
 }

@@ -56,6 +56,45 @@ export function autoGrade(phasesMs: number[], beatMs: number, share = 0.85): 1 |
   return 4;
 }
 
+export type Grade = 1 | 2 | 4;
+/** The kit voices that keep their own grid: kick, snare, hi-hat (with foot); everything else shares one. */
+export type PadGroup = 'bd' | 'sn' | 'hh' | 'other';
+export function padGroup(pad: string): PadGroup {
+  if (pad === 'bd') return 'bd';
+  if (pad === 'sn' || pad === 'rim') return 'sn';
+  if (pad === 'hh' || pad === 'hh+o' || pad === 'hf') return 'hh';
+  return 'other';
+}
+
+/**
+ * Auto grid per kit voice: a hi-hat on sixteenths no longer drags a kick that sits on the beats down to "off-grid".
+ * Each group keeps its own recent phases (distance to the nearest beat) and gets the coarsest grid its hits sit on.
+ * A group with too few hits of its own borrows the grid of all hits together.
+ */
+export class GridPicker {
+  private ph: Partial<Record<PadGroup, number[]>> = {};
+  private pooled: number[] = [];
+  /** the grid last chosen per group, for display */
+  grades: Partial<Record<PadGroup, Grade>> = {};
+  constructor(private keep = 160) {}
+  add(pad: string, phaseMs: number) {
+    const g = padGroup(pad);
+    const a = (this.ph[g] ||= []);
+    a.push(phaseMs);
+    if (a.length > this.keep) a.shift();
+    this.pooled.push(phaseMs);
+    if (this.pooled.length > this.keep) this.pooled.shift();
+  }
+  grade(pad: string, beatMs: number, minOwn = 12): Grade {
+    const g = padGroup(pad);
+    const own = this.ph[g] ?? [];
+    const r = autoGrade(own.length >= minOwn ? own : this.pooled, beatMs);
+    this.grades[g] = r;
+    return r;
+  }
+  reset() { this.ph = {}; this.pooled = []; this.grades = {}; }
+}
+
 export type Verdict = 'on' | 'early' | 'late';
 export function verdict(offsetMs: number, tolMs: number): Verdict {
   return Math.abs(offsetMs) <= tolMs ? 'on' : offsetMs < 0 ? 'early' : 'late';
@@ -105,6 +144,8 @@ export class HitLog {
   /** hits that fell between grid points (not scored), overall and per pad */
   offGrid = 0;
   offByPad: Record<string, number> = {};
+  /** the grid each kit voice is scored on (1 beats, 2 eighths, 4 sixteenths), for display */
+  grades: Partial<Record<string, number>> = {};
   constructor(public size = 10_000) {}
   addOff(pad?: string) {
     this.offGrid++;
@@ -127,7 +168,7 @@ export class HitLog {
       if (a.length > this.size) a.shift();
     }
   }
-  reset() { this.all = []; this.byPad = {}; this.events = []; this.offGrid = 0; this.offByPad = {}; }
+  reset() { this.all = []; this.byPad = {}; this.events = []; this.offGrid = 0; this.offByPad = {}; this.grades = {}; }
 }
 
 /** One bar's worth of hits: how many, the average timing (ms, minus = early) and how scattered. */
