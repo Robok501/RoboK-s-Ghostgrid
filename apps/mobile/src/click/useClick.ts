@@ -76,6 +76,7 @@ export function useClick() {
   const start = useCallback((fromSection = 0) => {
     const r = R.current;
     stop();
+    try { Engine.ensureRunning(false); } catch { /* older native build */ }
     const cfg = configFrom(cRef.current);
     const plan = new ClickPlan(cfg, Math.random, fromSection);
     const s = new Scheduler<ClickStep>({ now: () => Engine.now() }, plan, (st, t) => {

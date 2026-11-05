@@ -21,6 +21,8 @@ final class GGEngine {
     return p
   }()
   private var engine: AVAudioEngine?
+  /// the settings of the last start(), so the engine can be brought back after the system stopped it
+  private var lastStart: (keepBt: Bool, mic: Bool, sens: Double)?
   private var sourceNode: AVAudioSourceNode?
   private var sampleRate: Double = 48_000
   private var rendered: Int64 = 0
@@ -71,6 +73,26 @@ final class GGEngine {
       guard let self = self else { return }
       self.emit?("onRouteChange", self.info())
     }
+    // The system can stop the engine without telling the app (another AVAudioEngine such as the song player
+    // changing the shared session, a call, Siri, media services reset). Then the clock freezes and nothing plays,
+    // so bring it back as soon as that happens; ensureRunning() also does it right before playing.
+    let revive: (Notification) -> Void = { [weak self] _ in _ = self?.ensureRunning() }
+    NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main, using: revive)
+    NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
+      if let v = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+         AVAudioSession.InterruptionType(rawValue: v) == .ended { _ = self?.ensureRunning() }
+    }
+    NotificationCenter.default.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main, using: revive)
+  }
+
+  /// Makes sure the click/drum engine is rendering; restarts it when it was stopped behind our back.
+  /// `force` restarts it even if it claims to run. Returns true if it had to be restarted.
+  @discardableResult
+  func ensureRunning(force: Bool = false) -> Bool {
+    guard let p = lastStart else { return false }
+    if !force, let e = engine, e.isRunning { return false }
+    _ = try? start(keepBluetoothOutput: p.keepBt, mic: p.mic, sensitivity: p.sens)
+    return true
   }
 
   deinit {
@@ -84,6 +106,7 @@ final class GGEngine {
 
   func start(keepBluetoothOutput: Bool, mic: Bool, sensitivity: Double) throws -> [String: Any] {
     stop()
+    lastStart = (keepBluetoothOutput, mic, sensitivity)
     let session = AVAudioSession.sharedInstance()
     if mic {
       var options: AVAudioSession.CategoryOptions = [.defaultToSpeaker]
@@ -142,6 +165,7 @@ final class GGEngine {
   }
 
   func stop() {
+    lastStart = nil   // an explicit stop must not be undone by ensureRunning()
     if let e = engine {
       if micOn { e.inputNode.removeTap(onBus: 0) }
       e.stop()

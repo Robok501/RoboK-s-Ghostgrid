@@ -36,6 +36,8 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   stop(): Promise<void>;
   requestMicPermission(): Promise<boolean>;
   now(): number;
+  /** restart the click/drum engine if the system stopped it (or always with force); true when it was restarted */
+  ensureRunning(force: boolean): boolean;
   scheduleClick(time: number, level: number): void;
   /** Drum voice, index into DRUM_SOUNDS from @ghostgrid/core; gain 1 = normal. */
   scheduleDrum(time: number, sound: number, gain: number): void;

@@ -10,6 +10,7 @@ if (typeof window !== 'undefined') (window as any).__GG_emit = (name: string, e:
 const info = { running: true, sampleRate: 48000, outputLatency: 0.012, inputLatency: 0.01, ioBuffer: 0.005, route: 'bluetooth', routeName: 'TD-27', mic: false };
 const fixed: Record<string, unknown> = {
   now: () => (Date.now() - t0) / 1000,
+  ensureRunning: () => false,
   start: async () => info,
   info: () => info,
   requestMicPermission: async () => true,

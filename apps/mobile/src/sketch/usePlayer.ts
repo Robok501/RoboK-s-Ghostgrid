@@ -193,6 +193,8 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
 
   const begin = useCallback((recording: boolean, source: RecSource = 'pads') => {
     stop();
+    // the system may have stopped the audio engine behind our back (e.g. after the song player ran): wake it first
+    try { Engine.ensureRunning(false); } catch { /* older native build */ }
     const r = R.current, I = ideaRef.current;
     // with the phone speaker the mic would hear the click, so voice takes get the count-in only
     const clickOk = source === 'pads' || route.current !== 'speaker';
@@ -210,6 +212,20 @@ export function useSketchPlayer(idea: Idea, onRecorded: (next: Idea, count: numb
     setPlaying(true);
     setRec(recording ? 'count' : null);
     activateKeepAwakeAsync('sketch').catch(() => {});
+    // watchdog: if the engine clock does not move, the engine is stuck. Restart it once and start the groove over;
+    // if it still does not move, say so instead of showing a silent "Stop".
+    const t0 = Engine.now();
+    setTimeout(() => {
+      const r2 = R.current;
+      if (!r2.timer || Engine.now() - t0 > 0.05) return;
+      if (recording) { stop(); setError(t('Playback problem: {{msg}}', { msg: 'audio engine not running, restart the app' })); return; }
+      try { Engine.ensureRunning(true); } catch { /* older native build */ }
+      const t1 = Engine.now();
+      r2.nextT = t1 + 0.15; r2.nextBar = 0; r2.starts = [];
+      setTimeout(() => {
+        if (R.current.timer && Engine.now() - t1 < 0.05) { stop(); setError(t('Playback problem: {{msg}}', { msg: 'audio engine not running, restart the app' })); }
+      }, 600);
+    }, 400);
   }, [pump, stop]);
 
   // playhead

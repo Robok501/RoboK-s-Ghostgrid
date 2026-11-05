@@ -40,6 +40,11 @@ public class GhostgridEngineModule: Module {
       GGEngine.requestMicPermission { granted in promise.resolve(granted) }
     }
 
+    /// Restart the click/drum engine if the system stopped it (or always, with force). True when it was restarted.
+    Function("ensureRunning") { (force: Bool) -> Bool in
+      return self.engine.ensureRunning(force: force)
+    }
+
     /// Engine clock in seconds (frames rendered / sample rate).
     Function("now") { () -> Double in
       return self.engine.now()
