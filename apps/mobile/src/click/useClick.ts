@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
-  ClickPlan, HitLog, OFF_GRID_MS, Scheduler, calibrateOnBeat, gridOffset, levelsFor, tapTempo,
+  ClickPlan, GridPicker, HitLog, OFF_GRID_MS, Scheduler, calibrateOnBeat, gridOffset, levelsFor, tapTempo,
   type ClickStep, type TrainingConfig,
 } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
@@ -44,6 +44,8 @@ export function useClick() {
     beats: [] as number[],
     visual: [] as { t: number; st: ClickStep }[],
     log: new HitLog(),
+    /** Auto grade: the grid each kit voice sits on */
+    picker: new GridPicker(),
     calibrating: null as CoachInput | null,
     calibRaw: [] as number[],
     outLat: 0,
@@ -137,6 +139,7 @@ export function useClick() {
         r.calibrating = null;
         setCalibratingState(null);
         r.log.reset();
+        r.picker.reset();
         setLast(null);
         bump();
       }
@@ -144,8 +147,20 @@ export function useClick() {
     }
     // the device's delay is taken off BEFORE finding the nearest click: with a big correction (Bluetooth audio),
     // a hit used to be matched to the wrong click first and then corrected, which made calibrating worse
-    const step = beat / (cs.grade === 'sub' ? cs.sub : 1);
-    const raw = gridOffset(time - r.outLat + cs.calib[input] / 1000, r.grid, step);
+    let raw: number | null;
+    if (cs.grade === 'auto') {
+      // each kit voice is graded on the coarsest grid its own hits sit on (kick on beats, hi-hat on 16ths, ...)
+      const ph = gridOffset(time - r.outLat + cs.calib[input] / 1000, r.beats, beat, 1);
+      if (ph === null) { if (r.beats.length) r.log.addOff(pad ?? input); return null; }
+      r.picker.add(pad ?? input, ph * 1000);
+      const g = r.picker.grade(pad ?? input, beat * 1000);
+      r.log.grades = { ...r.picker.grades };
+      const st = beat / g;
+      raw = ph - Math.round(ph / st) * st;
+    } else {
+      const step = beat / (cs.grade === 'sub' ? cs.sub : 1);
+      raw = gridOffset(time - r.outLat + cs.calib[input] / 1000, r.grid, step);
+    }
     if (raw === null) { if (r.grid.length) r.log.addOff(pad ?? input); return null; }
     const off = raw * 1000;
     // far from every grid point: a ghost note, fill or other subdivision. Shown as a count, not scored.
@@ -186,7 +201,7 @@ export function useClick() {
     if (!r.running) start();
   }, [start]);
 
-  const resetHits = useCallback(() => { R.current.log.reset(); setLast(null); bump(); }, []);
+  const resetHits = useCallback(() => { R.current.log.reset(); R.current.picker.reset(); setLast(null); bump(); }, []);
 
   const tapTempoAt = useCallback((ms: number) => {
     const r = R.current;
