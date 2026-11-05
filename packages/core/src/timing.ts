@@ -56,7 +56,7 @@ export function autoGrade(phasesMs: number[], beatMs: number, share = 0.85): 1 |
   return 4;
 }
 
-export type Grade = 1 | 2 | 4;
+export type GridGrade = 1 | 2 | 4;
 /** The kit voices that keep their own grid: kick, snare, hi-hat (with foot); everything else shares one. */
 export type PadGroup = 'bd' | 'sn' | 'hh' | 'other';
 export function padGroup(pad: string): PadGroup {
@@ -75,7 +75,7 @@ export class GridPicker {
   private ph: Partial<Record<PadGroup, number[]>> = {};
   private pooled: number[] = [];
   /** the grid last chosen per group, for display */
-  grades: Partial<Record<PadGroup, Grade>> = {};
+  grades: Partial<Record<PadGroup, GridGrade>> = {};
   constructor(private keep = 160) {}
   add(pad: string, phaseMs: number) {
     const g = padGroup(pad);
@@ -85,7 +85,7 @@ export class GridPicker {
     this.pooled.push(phaseMs);
     if (this.pooled.length > this.keep) this.pooled.shift();
   }
-  grade(pad: string, beatMs: number, minOwn = 12): Grade {
+  grade(pad: string, beatMs: number, minOwn = 12): GridGrade {
     const g = padGroup(pad);
     const own = this.ph[g] ?? [];
     const r = autoGrade(own.length >= minOwn ? own : this.pooled, beatMs);
