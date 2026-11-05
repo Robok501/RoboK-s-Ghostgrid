@@ -55,6 +55,8 @@ export interface Idea {
   rows?: InstrumentId[];
   /** Unquantised notes from a MIDI import or recording, in beats from the start. */
   raw?: RawNote[];
+  /** id of the library exercise this idea came from: Sketch then offers practice mode (grading against the score) */
+  practice?: string;
 }
 
 export const MAX_BARS = 192;

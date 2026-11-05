@@ -66,7 +66,7 @@ export function exerciseToIdea(e: LibraryExercise, bpm?: number): Idea {
   const nb = e.bars.length;
   const idea: Idea = {
     id: newId(), name: e.title, bpm: bpm ?? Math.round((e.bpm[0] + e.bpm[1]) / 2 / 5) * 5,
-    beats: e.beats, grid: e.grid, swing: 0, bars: e.bars.map(() => emptyBar(n)), rows: ['sn' as InstrumentId],
+    beats: e.beats, grid: e.grid, swing: 0, bars: e.bars.map(() => emptyBar(n)), rows: ['sn' as InstrumentId], practice: e.id,
   };
   const put = (bar: number, step: number, v: NoteState) => {
     let b = bar, s = step;
@@ -87,6 +87,20 @@ export function exerciseToIdea(e: LibraryExercise, bpm?: number): Idea {
     });
   });
   return idea;
+}
+
+/** The grace notes of an exercise as `bar:step:instrument` keys, for grading (flam and drag grace notes are not graded on the grid). */
+export function graceSteps(e: LibraryExercise): Set<string> {
+  const n = e.beats * e.grid, nb = e.bars.length, out = new Set<string>();
+  e.bars.forEach((pat, b) => [...pat.replace(/\s+/g, '')].forEach((c, s) => {
+    const k = c === 'f' || c === 'F' ? 1 : c === 'D' ? 2 : 0;
+    for (let j = 1; j <= k; j++) {
+      let bb = b, ss = s - j;
+      while (ss < 0) { bb = (bb - 1 + nb) % nb; ss += n; }
+      out.add(`${bb}:${ss}:sn`);
+    }
+  }));
+  return out;
 }
 
 /** The sticking of an exercise on one line, for display. */
