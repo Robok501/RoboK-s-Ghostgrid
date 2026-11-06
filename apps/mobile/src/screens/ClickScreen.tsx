@@ -232,7 +232,7 @@ function Status({ c, cur, running }: { c: ClickSettings; cur: ClickStep | null; 
 function ModeSettings({ c, setClick, setInput, k }: {
   c: ClickSettings; setClick: ReturnType<typeof useApp>['setClick']; setInput: (i: CoachInput) => void; k: ReturnType<typeof useClick>;
 }) {
-  const { settings, setMicSens, sources } = useApp();
+  const { settings, setMicSens, sources, lastHit } = useApp();
   switch (c.mode) {
     case 'gap':
       return <>
@@ -260,6 +260,7 @@ function ModeSettings({ c, setClick, setInput, k }: {
         {c.input === 'mic' && <Note>Use headphones or Bluetooth to your module, so the mic hears your drums and not the click.</Note>}
         {c.input === 'mic' && <Row label="Mic sensitivity" hint="higher hears softer hits"><Stepper value={settings.micSens} min={1} max={10} onChange={setMicSens} /></Row>}
         {c.input === 'pads' && !sources.length && <Note>{t('No e-drum is connected, so no hits can be counted. Connect it in Settings → E-drum first.')}</Note>}
+        {c.input === 'pads' && <Note>{lastHit || t('No pad hit received yet: hit a pad.')}</Note>}
         {c.input === 'pads' && <Note>Pair your e-drum in Settings. Every pad is scored, with a breakdown per pad.</Note>}
         {c.level >= 2 && <Row label="Grade against"><Seg options={[{ value: 'auto', label: 'Auto' }, { value: 'beat', label: 'Beats' }, { value: 'sub', label: 'Subdivisions' }]} value={c.grade} onChange={(v) => setClick({ grade: v as 'auto' | 'beat' | 'sub' })} /></Row>}
         <Row label="On-time window" hint="how far from the click still counts as on time">
