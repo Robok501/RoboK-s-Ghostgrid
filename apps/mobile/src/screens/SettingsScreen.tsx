@@ -79,7 +79,7 @@ export function SettingsScreen() {
         {Platform.OS === 'web' && !sources.length && (
           <>
             {!!(Engine as any).midiError?.() && <Note>{(Engine as any).midiError()}</Note>}
-            <Note>{t('Press “Connect Bluetooth MIDI” and pick your module in the list. If it is already connected in the phone's Bluetooth settings, disconnect it there first. A USB cable works too.')}</Note>
+            <Note>{t('Press “Connect Bluetooth MIDI” and pick your module in the list. If it is already connected in the phone\'s Bluetooth settings, disconnect it there first. A USB cable works too.')}</Note>
             {!!(Engine as any).bleError?.() && <Note>{(Engine as any).bleError()}</Note>}
             <Btn label="Connect Bluetooth MIDI" primary onPress={async () => { await (Engine as any).connectBluetooth?.(); }} />
             <Btn label="Allow MIDI / look again" onPress={async () => { await (Engine as any).connectMidi?.(); }} />
