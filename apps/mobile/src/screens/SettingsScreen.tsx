@@ -1,6 +1,6 @@
 /** Settings: audio route, e-drum pairing and pad map (incl. learning pads), velocity rules, calibrations. */
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { INSTRUMENTS, NOTATION_STYLES, PAD_NAMES, applyLevel, exampleIdea, notationStyle, notesFor, staffName, type PadKey } from '@ghostgrid/core';
 import { LEVELS } from './ClickScreen';
 import type { ClickSettings } from '../store';
@@ -76,6 +76,13 @@ export function SettingsScreen() {
 
       <Card title="E-drum">
         <Note>{sources.length ? t('Connected: {{names}}', { names: sources.join(', ') }) : t('No MIDI device yet. Pair your module over Bluetooth, or connect it with a USB cable.')}</Note>
+        {Platform.OS === 'web' && !sources.length && (
+          <>
+            {!!(Engine as any).midiError?.() && <Note>{(Engine as any).midiError()}</Note>}
+            <Note>{t('In the browser, Bluetooth pairing in the phone settings is not enough on Android: connect with a USB cable, or use a Bluetooth MIDI connect app, then press the button.')}</Note>
+            <Btn label="Allow MIDI / look again" onPress={async () => { await (Engine as any).connectMidi?.(); }} />
+          </>
+        )}
         <View style={s.btnRow}><Btn label="Pair Bluetooth MIDI" onPress={() => Engine.showBluetoothMidi()} /></View>
         <Row label="Note map">
           <Seg options={[{ value: 'roland', label: 'Roland TD' }, { value: 'gm', label: 'General MIDI' }]} value={p.preset} onChange={(preset) => setPads((x) => ({ ...x, preset }))} />

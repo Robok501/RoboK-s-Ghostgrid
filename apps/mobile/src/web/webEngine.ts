@@ -115,13 +115,15 @@ function onMessage(ev: MIDIMessageEvent, name: string) {
   else if (kind === 0xb0 && d.length >= 3) emit('onControl', { time, cc: d[1], value: d[2], channel, source: name });
 }
 async function setupMidi() {
-  if (midi || !(navigator as any).requestMIDIAccess) { if (!(navigator as any).requestMIDIAccess) midiError = 'This browser has no MIDI support. Use Chrome or Edge.'; return; }
+  if (midi) return;
+  if (!(navigator as any).requestMIDIAccess) { midiError = 'This browser has no MIDI support. Use Chrome or Edge on Android or a computer.'; return; }
   try {
+    midiError = '';
     midi = await (navigator as any).requestMIDIAccess({ sysex: false });
     const hook = () => { midi!.inputs.forEach((i) => { i.onmidimessage = (ev) => onMessage(ev as MIDIMessageEvent, i.name || 'MIDI'); }); refreshSources(); };
     midi!.onstatechange = hook;
     hook();
-  } catch (e) { midiError = (e as Error).message || 'MIDI access was refused.'; }
+  } catch (e) { midiError = (e as Error).message || 'MIDI access was refused.'; emit('onMidiSources', { sources }); }
 }
 
 function info() {
@@ -142,7 +144,8 @@ export const webEngine: Record<string, unknown> = {
   },
   start: async (_keepBt: boolean, _mic: boolean) => {
     const c = context();
-    try { await c.resume(); } catch { /* needs a tap first; the wake-up listener resumes it */ }
+    // MIDI first: the audio context may stay suspended until the first tap, and that must not hold MIDI back
+    c.resume().catch(() => {});
     await setupMidi();
     return info();
   },
@@ -151,6 +154,8 @@ export const webEngine: Record<string, unknown> = {
   requestMicPermission: async () => false,
   midiSources: () => sources,
   midiError: () => midiError,
+  /** ask for MIDI access again (after a refusal), from a button press */
+  connectMidi: async () => { if (!midi) midiError = ''; await setupMidi(); refreshSources(); emit('onMidiSources', { sources }); return midiError; },
   showBluetoothMidi: async () => {},
   uptimeToEngine: (u: number) => perfToEngine(u * 1000),
   scheduleClick: (time: number, level: number) => { if (level > 0) play(time, Math.min(Math.max(level, 1), 3) - 1, 1); },
