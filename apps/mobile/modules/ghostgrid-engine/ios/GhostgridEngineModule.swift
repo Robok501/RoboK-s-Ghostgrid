@@ -45,6 +45,13 @@ public class GhostgridEngineModule: Module {
       return self.engine.ensureRunning(force: force)
     }
 
+    /// Ask iOS for another audio buffer size (seconds) without restarting; returns the size in effect.
+    Function("setIOBuffer") { (seconds: Double) -> Double in
+      let s = AVAudioSession.sharedInstance()
+      try? s.setPreferredIOBufferDuration(seconds)
+      return s.ioBufferDuration
+    }
+
     /// Engine clock in seconds (frames rendered / sample rate).
     Function("now") { () -> Double in
       return self.engine.now()

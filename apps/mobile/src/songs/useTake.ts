@@ -20,7 +20,7 @@ export function useTake() {
   const [count, setCount] = useState(0);
   const [result, setResult] = useState<TakeResult | null>(null);
   const [error, setError] = useState('');
-  const R = useRef({ hits: [] as { time: number; note: number; vel: number; key: string; name: string; mapped: boolean; song: number | null }[], active: false, meta: null as TakeMeta | null, started: 0, outLat: 0, micWasOff: false });
+  const R = useRef({ hits: [] as { time: number; note: number; vel: number; key: string; name: string; mapped: boolean; song: number | null }[], active: false, meta: null as TakeMeta | null, started: 0, outLat: 0, micWasOff: false, ioBuffer: 0, start: null as ReturnType<typeof Engine.info> | null });
   R.current.outLat = info?.outputLatency ?? 0;
 
   useEffect(() => on('pad', (e) => {
@@ -39,6 +39,9 @@ export function useTake() {
       if (!(await setMic(true))) { R.current.micWasOff = false; setError(t('The microphone is off. Allow it in Settings → Ghostgrid.')); return false; }
     }
     if (!Engine.startRecording()) { setError(t('The microphone is off.')); return false; }
+    // a recording does not need the 5 ms buffer the coach wants; a bigger one is easier on Bluetooth and the mic at the same time
+    R.current.ioBuffer = Engine.setIOBuffer(0.02);
+    R.current.start = Engine.info();
     R.current = { ...R.current, hits: [], active: true, meta, started: Date.now() };
     setCount(0); setActive(true);
     return true;
@@ -51,6 +54,8 @@ export function useTake() {
     r.active = false; setActive(false);
     try {
       const f = Engine.stopRecording();
+      const endInfo = Engine.info();
+      try { Engine.setIOBuffer(0.005); } catch { /* keep the bigger buffer */ }
       const samples = readVoiceFile(f.path);
       const hits: TakeHit[] = r.hits
         .map((h) => ({ t: h.time - f.startTime, note: h.note, vel: h.vel, key: h.key, name: h.name, mapped: h.mapped, song: h.song }))
@@ -64,6 +69,7 @@ export function useTake() {
         song: { id: r.meta.songId, name: r.meta.songName, playbackRate: r.meta.rate, startSeconds: r.meta.startSong, countInBeats: r.meta.countIn },
         audio: { file: 'audio.wav', sampleRate: f.sampleRate, seconds, note: 'what the iPhone microphone heard: the room, your kit and the song if it came through a speaker' },
         timing: { note: 'hit.t is seconds after the first sample of audio.wav; hit.song is the position in the song (seconds) of the backing at that moment, null when it was not playing', outputLatencySeconds: r.outLat, padCalibrationMs: settings.click.calib.pads },
+        audioSession: { route: r.start?.route, routeName: r.start?.routeName, requestedIoBufferSeconds: 0.02, ioBufferSeconds: r.ioBuffer, outputLatencySeconds: r.start?.outputLatency, inputLatencySeconds: r.start?.inputLatency, sampleRate: r.start?.sampleRate, endRoute: endInfo?.routeName, midiSources: Engine.midiSources() },
         pads: settings.pads.preset,
         hits: hits.map((h) => ({ t: +h.t.toFixed(4), note: h.note, vel: h.vel, pad: h.mapped ? h.key : null, song: h.song === null ? null : +h.song.toFixed(4) })),
       };

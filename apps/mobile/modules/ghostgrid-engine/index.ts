@@ -38,6 +38,8 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   now(): number;
   /** restart the click/drum engine if the system stopped it (or always with force); true when it was restarted */
   ensureRunning(force: boolean): boolean;
+  /** ask iOS for a larger/smaller audio buffer (seconds) without restarting; returns the size now in effect */
+  setIOBuffer(seconds: number): number;
   scheduleClick(time: number, level: number): void;
   /** Drum voice, index into DRUM_SOUNDS from @ghostgrid/core; gain 1 = normal. */
   scheduleDrum(time: number, sound: number, gain: number): void;

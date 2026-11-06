@@ -12,6 +12,7 @@ const info = { running: true, sampleRate: 48000, outputLatency: 0.012, inputLate
 const fixed: Record<string, unknown> = {
   now: () => (Date.now() - t0) / 1000,
   ensureRunning: () => false,
+  setIOBuffer: () => 0.005,
   start: async () => info,
   info: () => info,
   requestMicPermission: async () => true,
