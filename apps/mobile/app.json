@@ -32,6 +32,14 @@
       "nl": "./locales/nl.json",
       "fr": "./locales/fr.json",
       "de": "./locales/de.json"
+    },
+    "experiments": {
+      "baseUrl": "/RoboK-s-Ghostgrid"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/icon.png"
     }
   }
 }

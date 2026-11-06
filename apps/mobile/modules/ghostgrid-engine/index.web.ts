@@ -2,6 +2,7 @@
  * Web stand-in for the native engine, used only to render the screens in a browser (layout reviews, screenshots).
  * No audio: every call returns a plausible value.
  */
+import { webEngine } from '../../src/web/webEngine';
 const t0 = Date.now();
 // listeners, so a screenshot script can play pad hits: window.__GG_emit('onPadHit', { time, note, velocity })
 const listeners: Record<string, ((e: any) => void)[]> = {};
@@ -39,5 +40,8 @@ const fixed: Record<string, unknown> = {
   stemsSeparate: async () => ({ duration: 213, mixDb: -14, drumsDb: -20, restDb: -15, drumsShare: 0.27, drumsPeak: 0.8, invalid: 0 }),
   stemsDownloadModel: async () => ({ present: true, bytes: 316e6, path: '' }),
 };
-const Engine = new Proxy(fixed, { get: (o, k: string) => (k in o ? o[k] : () => undefined) });
+// Normal web use: real click/drums and MIDI from the browser; songs/stems stay stubs for now.
+// Screenshot mode (a seeded page, window.__GG_SEED) keeps the silent stand-in so layouts stay reproducible.
+const base = (globalThis as any).__GG_SEED ? fixed : { ...fixed, ...webEngine, stemsModelStatus: () => ({ present: false, bytes: 0, path: '' }), startRecording: () => false };
+const Engine = new Proxy(base, { get: (o, k: string) => (k in o ? o[k] : () => undefined) });
 export default Engine as any;

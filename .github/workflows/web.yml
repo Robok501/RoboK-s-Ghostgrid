@@ -1,0 +1,52 @@
+# Builds the web version (practice app for Chrome/Edge on Android and desktop) and publishes it on GitHub Pages:
+# https://robok501.github.io/RoboK-s-Ghostgrid/
+# One-time setup: repo Settings > Pages > Source: "GitHub Actions".
+name: Web build (GitHub Pages)
+
+on:
+  push:
+    branches: [main, beat-this-model]  # TEMP: beat-this-model, remove before merging
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/core/**'
+      - 'package-lock.json'
+      - '.github/workflows/web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx expo export --platform web --output-dir dist
+        working-directory: apps/mobile
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ghostgrid-web
+          path: apps/mobile/dist
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/mobile/dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

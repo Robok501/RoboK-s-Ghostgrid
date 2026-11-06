@@ -8,6 +8,9 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (platform === 'web' && moduleName === 'expo-file-system') {
     return { type: 'sourceFile', filePath: path.resolve(__dirname, 'src/web/fs-mock.ts') };
   }
+  if (platform === 'web' && moduleName === 'expo-keep-awake') {
+    return { type: 'sourceFile', filePath: path.resolve(__dirname, 'src/web/keep-awake.ts') };
+  }
   return (original ?? context.resolveRequest)(context, moduleName, platform);
 };
 module.exports = config;
