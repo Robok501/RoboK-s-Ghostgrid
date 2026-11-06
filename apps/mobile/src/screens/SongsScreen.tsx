@@ -397,7 +397,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     if (playing) { Engine.stemsPause(); setPlaying(false); setPos(Engine.stemsPosition()); return; }
     if (settings.collect && !take.active) {
       // recording needs the microphone; switching it on restarts the audio, so it has to happen before Play
-      const ok = await take.begin({ songId: song.id, songName: song.name, rate, startSong: pos, countIn: song.countIn ?? 0 });
+      const ok = await take.begin({ songId: song.id, songName: song.name, rate, startSong: pos, countIn: song.countIn ?? 0, drumsPath: song.separated ? stemPath(song, 'drums') : null });
       if (!ok) return;
     }
     startPlay();
@@ -618,6 +618,14 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
           {take.active ? `● ${t('Recording')} · ${take.count} ${t('hits')}`
             : take.result ? `${take.result.name} · ${Math.round(take.result.seconds)} s · ${take.result.hits} ${t('hits')} · ${take.result.mb.toFixed(1)} MB`
             : t('Recording on: Play also records the room and your pad hits.')}
+        </Note>
+      )}
+      {take.result?.match && !take.active && take.result.match.reference > 0 && (
+        <Note>
+          {t('Original drummer: you answered {{hit}} % of its hits, {{prec}} % of your hits were on one. On average {{ms}} ms {{dir}} (±{{sd}}).', {
+            hit: Math.round(take.result.match.hitRate * 100), prec: Math.round(take.result.match.precision * 100),
+            ms: Math.abs(Math.round(take.result.match.meanMs)), dir: take.result.match.meanMs >= 0 ? t('behind') : t('ahead'), sd: Math.round(take.result.match.sdMs),
+          })}
         </Note>
       )}
       {!!take.error && <Note>{take.error}</Note>}

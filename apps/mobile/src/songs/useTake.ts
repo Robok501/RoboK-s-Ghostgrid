@@ -5,14 +5,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { audacityLabels, hitsToMidi, wavBytes, zip, type TakeHit } from '@ghostgrid/core';
+import { audacityLabels, drumHits, hitsToMidi, matchToReference, wavBytes, zip, type ReferenceMatch, type TakeHit } from '@ghostgrid/core';
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 import { readVoiceFile } from '../sketch/usePlayer';
 import { t } from '../i18n';
 
-export interface TakeMeta { songId: string; songName: string; rate: number; startSong: number; countIn: number }
-export interface TakeResult { uri: string; name: string; seconds: number; hits: number; mb: number }
+export interface TakeMeta { songId: string; songName: string; rate: number; startSong: number; countIn: number; /** the separated drum track, when there is one: the take is compared with it */ drumsPath: string | null }
+export interface TakeResult { uri: string; name: string; seconds: number; hits: number; mb: number; match: ReferenceMatch | null }
 
 export function useTake() {
   const { on, mic, setMic, info, settings } = useApp();
@@ -60,6 +60,17 @@ export function useTake() {
       const hits: TakeHit[] = r.hits
         .map((h) => ({ t: h.time - f.startTime, note: h.note, vel: h.vel, key: h.key, name: h.name, mapped: h.mapped, song: h.song }))
         .filter((h) => h.t >= 0 && h.t <= samples.length / f.sampleRate + 1);
+      // against the real drummer: timing of your hits vs the hits found in the song's drum track
+      let match: ReferenceMatch | null = null;
+      const inSong = hits.filter((h) => h.song !== null && h.song >= 0);
+      if (r.meta.drumsPath && inSong.length > 4) {
+        try {
+          const ref = drumHits(await Engine.stemsEnvelope(r.meta.drumsPath)).map((h) => ({ t: h.t, id: h.id }));
+          const times = inSong.map((h) => h.song as number);
+          const window: [number, number] = [Math.min(r.meta.startSong, ...times) - 0.2, Math.max(Engine.stemsPosition(), ...times) + 0.2];
+          match = matchToReference(ref, inSong.map((h) => ({ t: h.song as number, key: h.key })), window);
+        } catch { match = null; }
+      }
       const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
       const slug = r.meta.songName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 40) || 'take';
       const base = `${slug}-${stamp}`;
@@ -70,6 +81,7 @@ export function useTake() {
         audio: { file: 'audio.wav', sampleRate: f.sampleRate, seconds, note: 'what the iPhone microphone heard: the room, your kit and the song if it came through a speaker' },
         timing: { note: 'hit.t is seconds after the first sample of audio.wav; hit.song is the position in the song (seconds) of the backing at that moment, null when it was not playing', outputLatencySeconds: r.outLat, padCalibrationMs: settings.click.calib.pads },
         audioSession: { route: r.start?.route, routeName: r.start?.routeName, requestedIoBufferSeconds: 0.02, ioBufferSeconds: r.ioBuffer, outputLatencySeconds: r.start?.outputLatency, inputLatencySeconds: r.start?.inputLatency, sampleRate: r.start?.sampleRate, endRoute: endInfo?.routeName, midiSources: Engine.midiSources() },
+        referenceMatch: match && { note: 'your hits vs the hits found in the separated drum track; meanMs > 0 = you were behind the original', ...match, hitRate: +match.hitRate.toFixed(3), precision: +match.precision.toFixed(3), meanMs: +match.meanMs.toFixed(1), sdMs: +match.sdMs.toFixed(1), voiceAgree: +match.voiceAgree.toFixed(3) },
         pads: settings.pads.preset,
         hits: hits.map((h) => ({ t: +h.t.toFixed(4), note: h.note, vel: h.vel, pad: h.mapped ? h.key : null, song: h.song === null ? null : +h.song.toFixed(4) })),
       };
@@ -84,7 +96,7 @@ export function useTake() {
       try { if (file.exists) file.delete(); } catch { /* overwrite */ }
       file.writeSync(bundle);
       try { new File(f.path).delete(); } catch { /* temp */ }
-      const res = { uri: file.uri, name: `${base}.zip`, seconds, hits: hits.length, mb: bundle.length / 1e6 };
+      const res = { uri: file.uri, name: `${base}.zip`, seconds, hits: hits.length, mb: bundle.length / 1e6, match };
       setResult(res);
       return res;
     } catch (e) {

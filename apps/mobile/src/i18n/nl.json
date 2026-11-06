@@ -625,5 +625,8 @@
  "hits": "slagen",
  "Recording on: Play also records the room and your pad hits.": "Opname aan: Play neemt ook de kamer en je pad-slagen op.",
  "Share take": "Take delen",
- "Discard": "Weggooien"
+ "Discard": "Weggooien",
+ "Original drummer: you answered {{hit}} % of its hits, {{prec}} % of your hits were on one. On average {{ms}} ms {{dir}} (±{{sd}}).": "Originele drummer: je beantwoordde {{hit}} % van zijn slagen, {{prec}} % van jouw slagen viel op een slag van hem. Gemiddeld {{ms}} ms {{dir}} (±{{sd}}).",
+ "behind": "achter",
+ "ahead": "voor"
 }
