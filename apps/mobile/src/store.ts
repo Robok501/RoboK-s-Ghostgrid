@@ -41,6 +41,8 @@ export interface AppSettings {
   sketch: SketchSettings;
   ear: EarSettings;
   keepBt: boolean;
+  /** data collection: Songs records every play-along (mic + pad hits) for export */
+  collect?: boolean;
   pads: PadSettings;
   /** microphone sensitivity 1–10: live hits (Coach, teaching) and voice recognition */
   micSens: number;
@@ -87,6 +89,7 @@ export function loadSettings(): AppSettings {
       ear: { ...DEFAULT_SETTINGS.ear, ...(saved.ear || {}) },
       sketch: { ...DEFAULT_SETTINGS.sketch, ...(saved.sketch || {}) },
       keepBt: saved.keepBt ?? DEFAULT_SETTINGS.keepBt,
+      collect: saved.collect ?? false,
       micSens: saved.micSens ?? DEFAULT_SETTINGS.micSens,
       lang: saved.lang ?? DEFAULT_SETTINGS.lang,
       pads: { ...DEFAULT_SETTINGS.pads, ...(saved.pads || {}) },

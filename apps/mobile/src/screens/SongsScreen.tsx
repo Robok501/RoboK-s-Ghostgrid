@@ -17,6 +17,7 @@ import { CoachPanel } from '../click/CoachPanel';
 import type { CoachInput } from '../store';
 import { useApp } from '../AppContext';
 import { readVoiceFile, saveWav } from '../sketch/usePlayer';
+import { useTake } from '../songs/useTake';
 import { addIdeaFromOutside } from '../sketch/ideas';
 import { t } from '../i18n';
 import {
@@ -227,6 +228,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
   const [dur, setDur] = useState(song.duration ?? 0);
   const [pos, setPos] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const take = useTake();
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState('');
   const [analysing, setAnalysing] = useState(false);
@@ -373,9 +375,7 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
     return () => clearInterval(t);
   }, [playing]);
 
-  const toggle = () => {
-    if (!ready) return;
-    if (playing) { Engine.stemsPause(); setPlaying(false); setPos(Engine.stemsPosition()); return; }
+  const startPlay = () => {
     try {
       const ci = song.countIn ?? 0;
       if (ci > 0 && map) {
@@ -392,6 +392,18 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       setPlaying(true); setErr('');
     } catch (e) { setErr(t("Couldn't play: {{msg}}", { msg: (e as Error).message })); }
   };
+  const toggle = async () => {
+    if (!ready) return;
+    if (playing) { Engine.stemsPause(); setPlaying(false); setPos(Engine.stemsPosition()); return; }
+    if (settings.collect && !take.active) {
+      // recording needs the microphone; switching it on restarts the audio, so it has to happen before Play
+      const ok = await take.begin({ songId: song.id, songName: song.name, rate, startSong: pos, countIn: song.countIn ?? 0 });
+      if (!ok) return;
+    }
+    startPlay();
+  };
+  // the take ends with the music: Pause, or the song reaching its end
+  useEffect(() => { if (!playing && take.active) take.finish(); }, [playing]); // eslint-disable-line react-hooks/exhaustive-deps
   const seek = (at: number) => {
     const v = Math.max(0, Math.min(dur, at));
     try { Engine.stemsSeek(v); } catch (e) { setErr(t("Couldn't jump there: {{msg}}", { msg: (e as Error).message })); }
@@ -601,6 +613,20 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
         <Btn label={playing ? 'Pause' : 'Play'} primary active={playing} disabled={!ready || separating} onPress={toggle} style={{ flex: 1 }} />
         <Btn label="+5 s" onPress={() => seek(pos + 5)} />
       </View>
+      {settings.collect && (
+        <Note>
+          {take.active ? `● ${t('Recording')} · ${take.count} ${t('hits')}`
+            : take.result ? `${take.result.name} · ${Math.round(take.result.seconds)} s · ${take.result.hits} ${t('hits')} · ${take.result.mb.toFixed(1)} MB`
+            : t('Recording on: Play also records the room and your pad hits.')}
+        </Note>
+      )}
+      {!!take.error && <Note>{take.error}</Note>}
+      {take.result && !take.active && (
+        <View style={s.transport}>
+          <Btn label="Share take" primary onPress={take.share} style={{ flex: 1 }} />
+          <Btn label="Discard" onPress={take.discard} />
+        </View>
+      )}
 
       {song.coach && (
         <CoachPanel input={coachInput} running={playing} last={last} log={logRef.current} tol={settings.click.tol}

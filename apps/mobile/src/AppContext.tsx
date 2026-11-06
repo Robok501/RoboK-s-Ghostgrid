@@ -22,6 +22,7 @@ interface Ctx {
   setSketch: (patch: Partial<SketchSettings>) => void;
   setEar: (patch: Partial<EarSettings> | ((e: EarSettings) => Partial<EarSettings>)) => void;
   setKeepBt: (v: boolean) => void;
+  setCollect: (v: boolean) => void;
   setMicSens: (v: number) => void;
   /** app language ('auto' = the iPhone's); the screens redraw in it */
   setLang: (l: LangSetting) => void;
@@ -122,6 +123,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     update((s) => ({ ...s, keepBt: v }));
     start(v, mic);
   }, [update, start, mic]);
+  const setCollect = useCallback((v: boolean) => update((s) => ({ ...s, collect: v })), [update]);
   const sensTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setMicSens = useCallback((v: number) => {
     update((s) => ({ ...s, micSens: v }));
@@ -176,8 +178,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(() => ({
     stopAll: () => emit('restart', null),
     goTab: (t) => emit('goTab', t),
-    settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setLang, lang, countStyle, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
-  }), [settings, setClick, setEar, setSketch, setKeepBt, setMicSens, setLang, lang, countStyle, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on, emit]);
+    settings, setClick, setEar, setSketch, setKeepBt, setCollect, setMicSens, setLang, lang, countStyle, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, setLearning, on,
+  }), [settings, setClick, setEar, setSketch, setKeepBt, setCollect, setMicSens, setLang, lang, countStyle, setPads, info, error, mic, setMic, sources, pedal, lastHit, micLevel, learning, on, emit]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }
