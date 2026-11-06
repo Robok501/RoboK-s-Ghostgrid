@@ -622,9 +622,9 @@ function Player({ song, update, separating, progress, onSeparate, onCancel, onDe
       )}
       {take.result?.match && !take.active && take.result.match.reference > 0 && (
         <Note>
-          {t('Original drummer: you answered {{hit}} % of its hits, {{prec}} % of your hits were on one. On average {{ms}} ms {{dir}} (±{{sd}}).', {
+          {t('Original drummer: you answered {{hit}} % of its hits, {{prec}} % of your hits were on one. Steadiness ±{{sd}} ms. Offset from the music {{off}} ms (sound path included).', {
             hit: Math.round(take.result.match.hitRate * 100), prec: Math.round(take.result.match.precision * 100),
-            ms: Math.abs(Math.round(take.result.match.meanMs)), dir: take.result.match.meanMs >= 0 ? t('behind') : t('ahead'), sd: Math.round(take.result.match.sdMs),
+            sd: Math.round(take.result.match.sdMs), off: Math.round(take.result.match.offsetMs),
           })}
         </Note>
       )}

@@ -30,3 +30,21 @@ describe('matchToReference', () => {
     expect(m.matched).toBe(1); expect(m.voiceAgree).toBe(0);
   });
 });
+
+import { alignedMatch } from '../src';
+describe('alignedMatch', () => {
+  const long = Array.from({ length: 160 }, (_, i) => ({ t: 1 + i * 0.37, id: i % 3 === 0 ? 'bd' : i % 3 === 1 ? 'hh' : 'sn' }));
+  it('finds a constant offset and removes it', () => {
+    const m = alignedMatch(long, long.map((r) => ({ t: r.t + 0.15, key: r.id })), [0, 60]);
+    expect(m.hitRate).toBeGreaterThan(0.95); expect(m.offsetMs).toBeGreaterThan(140); expect(m.offsetMs).toBeLessThan(160);
+  });
+  it('follows an offset that grows over the song', () => {
+    const m = alignedMatch(long, long.map((r) => ({ t: r.t + 0.04 + r.t * 0.003, key: r.id })), [0, 60]);
+    expect(m.hitRate).toBeGreaterThan(0.9);
+    expect(m.blocks[m.blocks.length - 1].shift).toBeGreaterThan(m.blocks[0].shift + 40);
+  });
+  it('without alignment the same late play would score poorly', () => {
+    const late = long.map((r) => ({ t: r.t + 0.2, key: r.id }));
+    expect(matchToReference(long, late, [0, 60]).hitRate).toBeLessThan(0.2);
+  });
+});

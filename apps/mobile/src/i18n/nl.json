@@ -628,5 +628,6 @@
  "Discard": "Weggooien",
  "Original drummer: you answered {{hit}} % of its hits, {{prec}} % of your hits were on one. On average {{ms}} ms {{dir}} (±{{sd}}).": "Originele drummer: je beantwoordde {{hit}} % van zijn slagen, {{prec}} % van jouw slagen viel op een slag van hem. Gemiddeld {{ms}} ms {{dir}} (±{{sd}}).",
  "behind": "achter",
- "ahead": "voor"
+ "ahead": "voor",
+ "Original drummer: you answered {{hit}} % of its hits, {{prec}} % of your hits were on one. Steadiness ±{{sd}} ms. Offset from the music {{off}} ms (sound path included).": "Originele drummer: je beantwoordde {{hit}} % van zijn slagen, {{prec}} % van jouw slagen viel op een slag van hem. Regelmaat ±{{sd}} ms. Verschil met de muziek {{off}} ms (geluidsweg inbegrepen)."
 }

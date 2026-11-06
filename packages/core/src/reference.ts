@@ -71,3 +71,49 @@ export function matchToReference(ref: RefHit[], played: ReferencePlayed[], windo
     meanMs: mean, sdMs: sd, voiceAgree: n ? agree / n : 0, perVoice: per,
   };
 }
+
+export interface AlignedMatch extends ReferenceMatch {
+  /** timing offset (ms, you − original) found per block: the audio path (Bluetooth!) delays what you hear by an amount that is not exactly known and can change */
+  blocks: { from: number; shift: number; played: number }[];
+  /** average of the block offsets, weighted by hits played */
+  offsetMs: number;
+}
+
+/**
+ * Like matchToReference, but first finds, per `block` seconds of the song, the offset that makes your hits best fit the
+ * original's, then matches with that offset removed. `meanMs`/`sdMs` are then what is left (your steadiness).
+ */
+export function alignedMatch(ref: RefHit[], played: ReferencePlayed[], window: [number, number], block = 20, tol = 0.07, maxShift = 0.3): AlignedMatch {
+  const total: ReferenceMatch = { reference: 0, played: 0, matched: 0, hitRate: 0, precision: 0, meanMs: 0, sdMs: 0, voiceAgree: 0, perVoice: {} };
+  const blocks: AlignedMatch['blocks'] = [];
+  let carry = 0, devSum = 0, devSq = 0, agree = 0, wShift = 0, wN = 0;
+  for (let b = window[0]; b < window[1]; b += block) {
+    const w: [number, number] = [b, Math.min(b + block, window[1])];
+    const inBlock = played.filter((p) => p.t >= w[0] && p.t < w[1]);
+    let best = carry;
+    if (inBlock.length >= 6) {
+      let bestRate = -1;
+      for (let sh = -maxShift; sh <= maxShift + 1e-9; sh += 0.005) {
+        const m = matchToReference(ref, played.map((p) => ({ t: p.t - sh, key: p.key })), w, tol);
+        // the count decides; among equal counts the shift that leaves the smallest average error (the middle of the plateau) wins
+        const score = m.matched - Math.min(0.9, Math.abs(m.meanMs) / (tol * 1000));
+        if (score > bestRate) { bestRate = score; best = sh; }
+      }
+      carry = best;
+    }
+    const m = matchToReference(ref, played.map((p) => ({ t: p.t - best, key: p.key })), w, tol);
+    total.reference += m.reference; total.played += m.played; total.matched += m.matched;
+    devSum += m.meanMs * m.matched; devSq += (m.sdMs ** 2 + m.meanMs ** 2) * m.matched; agree += m.voiceAgree * m.matched;
+    for (const [k, v] of Object.entries(m.perVoice)) { const t = (total.perVoice[k] ||= { reference: 0, matched: 0 }); t.reference += v.reference; t.matched += v.matched; }
+    blocks.push({ from: b, shift: Math.round(best * 1000), played: inBlock.length });
+    wShift += best * 1000 * inBlock.length; wN += inBlock.length;
+  }
+  const n = total.matched;
+  const mean = n ? devSum / n : 0;
+  total.hitRate = total.reference ? n / total.reference : 0;
+  total.precision = total.played ? n / total.played : 0;
+  total.meanMs = mean;
+  total.sdMs = n ? Math.sqrt(Math.max(0, devSq / n - mean * mean)) : 0;
+  total.voiceAgree = n ? agree / n : 0;
+  return { ...total, blocks, offsetMs: wN ? wShift / wN : 0 };
+}
