@@ -57,6 +57,7 @@ function drums(sr: number): Float32Array[] {
     tom(210, 0.5), tom(160, 0.55), tom(105, 0.7), cymbal(0.9, 0.16, 0.25), cymbal(1.8, 0.3, 0), hat(0.04, 0.12), rim];
 }
 
+if (typeof window !== 'undefined') (window as any).__ggMidi = (bytes: number[]) => handleMidi(bytes, performance.now(), 'test');
 if (typeof window !== 'undefined') (window as any).__ggDebug = () => ({ state: ctx?.state, t: ctx?.currentTime, pending: pending.length, sr: ctx?.sampleRate, buffers: buffers.length, peak: buffers.slice(0, 3).map((b) => Math.max(...b.getChannelData(0).map(Math.abs))) });
 
 function context(): AudioContext {
