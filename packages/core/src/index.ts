@@ -21,3 +21,4 @@ export * from './library';
 export * from './exercise';
 export * from './collect';
 export * from './reference';
+export * from './blemidi';

@@ -4,7 +4,7 @@
  * Chrome/Edge on Android and desktop: Web MIDI works. Safari (iPhone) has no Web MIDI; use the iOS app there.
  * Not done yet here: microphone hits and recording, songs/stems.
  */
-import { DRUM_SOUNDS } from '@ghostgrid/core';
+import { BleClock, DRUM_SOUNDS, parseBleMidi } from '@ghostgrid/core';
 
 type Listener = (e: any) => void;
 type ClickName = 'click' | 'wood' | 'cowbell' | 'hat';
@@ -99,18 +99,22 @@ function perfToEngine(ms: number): number {
 }
 
 let sources: string[] = [];
+const bleNames = new Set<string>();
 function refreshSources() {
   const names: string[] = [];
   midi?.inputs.forEach((i) => { if (i.state !== 'disconnected') names.push(i.name || 'MIDI'); });
+  bleNames.forEach((n) => names.push(`${n} (Bluetooth)`));
   const same = names.length === sources.length && names.every((n, i) => n === sources[i]);
   sources = names;
   if (!same) emit('onMidiSources', { sources });
 }
 function onMessage(ev: MIDIMessageEvent, name: string) {
-  const d = ev.data;
+  if (ev.data) handleMidi(Array.from(ev.data), ev.timeStamp || performance.now(), name);
+}
+function handleMidi(d: number[], ms: number, name: string) {
   if (!d || d.length < 2) return;
   const status = d[0], kind = status & 0xf0, channel = status & 0x0f;
-  const time = perfToEngine(ev.timeStamp || performance.now());
+  const time = perfToEngine(ms);
   if (kind === 0x90 && d.length >= 3 && d[2] > 0) emit('onPadHit', { time, note: d[1], velocity: d[2], channel, source: name });
   else if (kind === 0xb0 && d.length >= 3) emit('onControl', { time, cc: d[1], value: d[2], channel, source: name });
 }
@@ -124,6 +128,41 @@ async function setupMidi() {
     midi!.onstatechange = hook;
     hook();
   } catch (e) { midiError = (e as Error).message || 'MIDI access was refused.'; emit('onMidiSources', { sources }); }
+}
+
+const BLE_MIDI_SERVICE = '03b80e5a-ede8-4b33-a751-6ce34ec4c700';
+const BLE_MIDI_CHAR = '7772e5db-3868-4112-a1a9-f2669d106bf3';
+let bleError = '';
+/** Bluetooth MIDI straight from the page (Web Bluetooth): Android Chrome does not list a Bluetooth-paired MIDI device otherwise. Needs a button press. */
+async function connectBluetooth(): Promise<string> {
+  const bt = (navigator as any).bluetooth;
+  if (!bt) { bleError = 'This browser has no Web Bluetooth. Use Chrome or Edge (not Safari or Firefox).'; return bleError; }
+  try {
+    bleError = '';
+    const dev = await bt.requestDevice({ filters: [{ services: [BLE_MIDI_SERVICE] }], optionalServices: [BLE_MIDI_SERVICE] });
+    const server = await dev.gatt.connect();
+    const svc = await server.getPrimaryService(BLE_MIDI_SERVICE);
+    const ch = await svc.getCharacteristic(BLE_MIDI_CHAR);
+    const clock = new BleClock();
+    const name = dev.name || 'Bluetooth MIDI';
+    ch.addEventListener('characteristicvaluechanged', (e: any) => {
+      const arrival = performance.now();
+      const v: DataView = e.target.value;
+      const bytes: number[] = [];
+      for (let i = 0; i < v.byteLength; i++) bytes.push(v.getUint8(i));
+      for (const m of parseBleMidi(bytes)) handleMidi(m.data, clock.map(m.ts, arrival), name);
+    });
+    dev.addEventListener('gattserverdisconnected', () => { bleNames.delete(name); refreshSources(); emit('onMidiSources', { sources }); });
+    await ch.startNotifications();
+    bleNames.add(name);
+    refreshSources();
+    emit('onMidiSources', { sources });
+  } catch (e) {
+    const msg = (e as Error).message || String(e);
+    bleError = /cancel|chosen/i.test(msg) ? '' : `Bluetooth: ${msg}. If the TD-27 is already connected in the phone's Bluetooth settings, disconnect it there first.`;
+    emit('onMidiSources', { sources: sources.slice() });
+  }
+  return bleError;
 }
 
 function info() {
@@ -154,6 +193,8 @@ export const webEngine: Record<string, unknown> = {
   requestMicPermission: async () => false,
   midiSources: () => sources,
   midiError: () => midiError,
+  bleError: () => bleError,
+  connectBluetooth,
   /** ask for MIDI access again (after a refusal), from a button press */
   connectMidi: async () => { if (!midi) midiError = ''; await setupMidi(); refreshSources(); emit('onMidiSources', { sources }); return midiError; },
   showBluetoothMidi: async () => {},
