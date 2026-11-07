@@ -59,6 +59,8 @@ export function useClick() {
   const [last, setLast] = useState<number | null>(null);
   const [calibrating, setCalibratingState] = useState<CoachInput | null>(null);
   const [calibCount, setCalibCount] = useState(0);
+  /** hits during calibration that were ignored because they were not near a beat */
+  const [calibMiss, setCalibMiss] = useState(0);
   /** result of the last calibration: correction and how far the hits still spread around it (ms) */
   const [calibInfo, setCalibInfo] = useState<{ input: CoachInput; fix: number; spread: number } | null>(null);
   const [hitsVersion, bump] = useReducer((x: number) => x + 1, 0);
@@ -129,7 +131,7 @@ export function useClick() {
       // calibration: against the beats only, over the whole beat, without the old correction
       // (with subdivisions on, a late hit used to lock onto the wrong 16th, and the result was off by a 16th)
       const raw = gridOffset(time - r.outLat, r.beats, beat, 1);
-      if (raw === null) return null;
+      if (raw === null) { setCalibMiss((n) => n + 1); return null; }
       r.calibRaw.push(raw * 1000);
       setCalibCount(r.calibRaw.length);
       if (r.calibRaw.length >= CALIB_HITS) {
@@ -197,6 +199,7 @@ export function useClick() {
     r.calibRaw = [];
     r.calibrating = input;
     setCalibCount(0);
+    setCalibMiss(0);
     setCalibratingState(input);
     if (!r.running) start();
   }, [start]);
@@ -212,7 +215,7 @@ export function useClick() {
   }, [setClick]);
 
   return {
-    running, start, stop, cur, last, log: R.current.log, hitsVersion, calibrating, calibCount, calibInfo,
+    running, start, stop, cur, last, log: R.current.log, hitsVersion, calibrating, calibCount, calibMiss, calibInfo,
     startCalibration, resetHits, tap, tapTempoAt, mic,
     tempo: running && cur ? cur.bpm : c.bpm,
   };

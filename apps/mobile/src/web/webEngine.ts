@@ -94,9 +94,15 @@ function play(time: number, index: number, gain: number) {
 /** performance.now()-style milliseconds (MIDI timestamps) to engine seconds */
 function perfToEngine(ms: number): number {
   const c = context();
+  // simple and always in the right neighbourhood: the engine clock now, minus how long ago the event was
+  const simple = c.currentTime + (ms - performance.now()) / 1000;
   const ts = c.getOutputTimestamp?.();
-  if (ts && ts.performanceTime && ts.contextTime !== undefined) return ts.contextTime + (ms - ts.performanceTime) / 1000;
-  return c.currentTime + (ms - performance.now()) / 1000;
+  if (ts && ts.performanceTime && ts.contextTime !== undefined) {
+    const precise = ts.contextTime + (ms - ts.performanceTime) / 1000;
+    // the precise pairing is better, but some browsers (Android Chrome) give a stale or odd pair: then it is far from the simple value
+    if (Math.abs(precise - simple) < 0.05) return precise;
+  }
+  return simple;
 }
 
 let sources: string[] = [];

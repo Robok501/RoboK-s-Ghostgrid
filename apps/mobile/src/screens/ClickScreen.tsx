@@ -272,6 +272,7 @@ function ModeSettings({ c, setClick, setInput, k }: {
           <Btn label={k.calibrating ? t('Calibrating {{n}}/{{of}}', { n: k.calibCount, of: 8 }) : 'Calibrate'} onPress={() => k.startCalibration(c.input)} />
           <Btn label="Reset hits" onPress={k.resetHits} />
         </View>
+        {k.calibrating && k.calibMiss > 0 && <Note>{t('{{n}} hits were ignored: they did not fall near a beat. If this keeps going, the timing of the hits is off; tell Claude.', { n: k.calibMiss })}</Note>}
         {k.calibInfo && k.calibInfo.input === c.input && (
           <Note>{t('Calibrated: {{fix}} ms correction, hits spread ±{{spread}} ms.', { fix: `${k.calibInfo.fix > 0 ? '+' : ''}${k.calibInfo.fix}`, spread: k.calibInfo.spread })}
             {k.calibInfo.spread > 25 ? ` ${t('That is a lot: the hits arrive unevenly. Bluetooth audio and Bluetooth MIDI over the same connection add delay and wobble. Play the click through the phone or wired headphones, or connect the e-drum with USB, and calibrate again.')}` : ''}</Note>
