@@ -23,3 +23,4 @@ export * from './collect';
 export * from './reference';
 export * from './blemidi';
 export * from './latency';
+export * from './clockcheck';

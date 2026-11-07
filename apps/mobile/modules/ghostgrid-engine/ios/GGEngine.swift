@@ -480,6 +480,15 @@ final class GGEngine {
     return micOn
   }
 
+  /// How much microphone audio the recording holds so far (for the clock check).
+  func recordedProgress() -> [String: Any] {
+    os_unfair_lock_lock(recLock)
+    let n = recBuf.count
+    let r = recRate
+    os_unfair_lock_unlock(recLock)
+    return ["frames": n, "rate": r]
+  }
+
   /// Stop and write the recording as raw 32-bit float mono samples to a temporary file.
   /// Returns the file path, sample rate, engine time of the first sample and the number of samples.
   func stopRecording() -> [String: Any] {

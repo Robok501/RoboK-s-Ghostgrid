@@ -646,5 +646,11 @@
  "Share results": "Resultaten delen",
  "{{n}} hits were ignored: they did not fall near a beat. If this keeps going, the timing of the hits is off; tell Claude.": "{{n}} slagen werden genegeerd: ze vielen niet bij een tel. Blijft dit gebeuren, dan klopt de timing van de slagen niet; zeg het aan Claude.",
  "Long test (60 clicks, 90 s)": "Lange test (60 klikken, 90 s)",
- "What are you measuring now? Pick it before you run the test.": "Wat meet je nu? Kies het voordat je de test start."
+ "What are you measuring now? Pick it before you run the test.": "Wat meet je nu? Kies het voordat je de test start.",
+ "No sound needed. For 90 seconds the app compares the clock of the audio engine, the microphone clock and the phone clock. If they agree, a delay that keeps growing in the latency test is real; if not, the test itself drifts. Run it once with the drum module connected over Bluetooth and once without.": "Geen geluid nodig. 90 seconden lang vergelijkt de app de klok van de audio-engine, de microfoonklok en de telefoonklok. Lopen ze gelijk, dan is een vertraging die blijft groeien in de latentietest echt; zo niet, dan loopt de test zelf uit de pas. Doe het één keer met de drummodule via Bluetooth verbonden en één keer zonder.",
+ "Checking the clocks… {{n}}/{{of}} s": "De klokken controleren… {{n}}/{{of}} s",
+ "Checking…": "Controleren…",
+ "the clocks agree": "de klokken lopen gelijk",
+ "the clocks DISAGREE": "de klokken lopen NIET gelijk",
+ "unclear, run it again": "onduidelijk, doe het nog eens"
 }

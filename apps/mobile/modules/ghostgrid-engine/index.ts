@@ -84,6 +84,8 @@ declare class GhostgridEngineModule extends NativeModule<Events> {
   /** Keep the raw mic signal (voice to notes). Returns false when the mic is off. */
   startRecording(): boolean;
   /** Stop; the samples are in a file of 32-bit floats (little-endian, mono). */
+  /** microphone frames kept so far and their rate (clock check) */
+  recordedProgress(): { frames: number; rate: number };
   stopRecording(): { path: string; sampleRate: number; startTime: number; frames: number };
   midiSources(): string[];
   showBluetoothMidi(): Promise<void>;

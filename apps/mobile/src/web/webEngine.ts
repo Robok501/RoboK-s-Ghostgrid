@@ -265,6 +265,7 @@ export const webEngine: Record<string, unknown> = {
     return { path: 'web:recording', sampleRate: context().sampleRate, startTime: recStart, frames: recFrames };
   },
   /** the raw samples of the last recording (web only: the native engine writes a file instead) */
+  recordedProgress: () => ({ frames: recFrames, rate: context().sampleRate }),
   recordedSamples: () => { const out = new Float32Array(recFrames); let o = 0; for (const ch of recChunks) { out.set(ch, o); o += ch.length; } return out; },
   midiSources: () => sources,
   midiError: () => midiError,

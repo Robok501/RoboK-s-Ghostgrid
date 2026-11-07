@@ -82,6 +82,10 @@ public class GhostgridEngineModule: Module {
       return self.engine.startRecording()
     }
 
+    Function("recordedProgress") { () -> [String: Any] in
+      return self.engine.recordedProgress()
+    }
+
     Function("stopRecording") { () -> [String: Any] in
       return self.engine.stopRecording()
     }
