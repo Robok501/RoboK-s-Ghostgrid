@@ -641,9 +641,10 @@
  "The latency test is in the iPhone app for now.": "De latency-test zit voorlopig alleen in de iPhone-app.",
  "Latency test": "Latency-test",
  "Measures how long sound takes from the app to your ears, with nobody playing. 1) Switch the sound to the iPhone speaker (Control Center, hold the audio card, AirPlay icon) and run it. 2) Switch to your drum module over Bluetooth, hold the phone close to the module’s speaker or headphones, and run it again.": "Meet hoe lang geluid nodig heeft van de app tot je oren, zonder dat iemand speelt. 1) Zet het geluid op de iPhone-luidspreker (Controlecentrum, houd de audiokaart ingedrukt, AirPlay-icoon) en voer de test uit. 2) Zet het geluid op je drummodule via Bluetooth, houd de telefoon dicht bij de luidspreker of koptelefoon van de module en voer opnieuw uit.",
- "{{a}} adds about {{ms}} ms compared with {{b}}; iOS reports {{rep}} ms for that difference.": "{{a}} voegt ongeveer {{ms}} ms toe tegenover {{b}}; iOS meldt {{rep}} ms voor dat verschil.",
+ "{{a}} adds about {{ms}} ms compared with {{b}}; the system reports {{rep}} ms for that difference.": "{{a}} voegt ongeveer {{ms}} ms toe tegenover {{b}}; het systeem meldt {{rep}} ms voor dat verschil.",
  "Run test (20 clicks, 30 s)": "Test starten (20 klikken, 30 s)",
  "Share results": "Resultaten delen",
  "{{n}} hits were ignored: they did not fall near a beat. If this keeps going, the timing of the hits is off; tell Claude.": "{{n}} slagen werden genegeerd: ze vielen niet bij een tel. Blijft dit gebeuren, dan klopt de timing van de slagen niet; zeg het aan Claude.",
- "Long test (60 clicks, 90 s)": "Lange test (60 klikken, 90 s)"
+ "Long test (60 clicks, 90 s)": "Lange test (60 klikken, 90 s)",
+ "What are you measuring now? Pick it before you run the test.": "Wat meet je nu? Kies het voordat je de test start."
 }

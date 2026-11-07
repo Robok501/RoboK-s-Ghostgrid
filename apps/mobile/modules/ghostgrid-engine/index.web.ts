@@ -43,6 +43,6 @@ const fixed: Record<string, unknown> = {
 };
 // Normal web use: real click/drums and MIDI from the browser; songs/stems stay stubs for now.
 // Screenshot mode (a seeded page, window.__GG_SEED) keeps the silent stand-in so layouts stay reproducible.
-const base = (globalThis as any).__GG_SEED ? fixed : { ...fixed, ...webEngine, stemsModelStatus: () => ({ present: false, bytes: 0, path: '' }), startRecording: () => false };
+const base = (globalThis as any).__GG_SEED ? fixed : { ...fixed, ...webEngine, stemsModelStatus: () => ({ present: false, bytes: 0, path: '' }) };
 const Engine = new Proxy(base, { get: (o, k: string) => (k in o ? o[k] : () => undefined) });
 export default Engine as any;

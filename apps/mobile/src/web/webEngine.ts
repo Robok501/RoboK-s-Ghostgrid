@@ -137,6 +137,62 @@ async function setupMidi() {
   } catch (e) { midiError = (e as Error).message || 'MIDI access was refused.'; emit('onMidiSources', { sources }); }
 }
 
+// ---- microphone: raw capture through an AudioWorklet (no echo cancelling, no noise suppression, no auto gain) ----
+let micStream: MediaStream | null = null;
+let micNode: AudioWorkletNode | null = null;
+let micError = '';
+let recording = false;
+let recChunks: Float32Array[] = [];
+let recStart = 0;
+let recFrames = 0;
+const WORKLET = `class GGRec extends AudioWorkletProcessor {
+  constructor() { super(); this.on = false; this.port.onmessage = (e) => { this.on = !!e.data; }; }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (this.on && ch) this.port.postMessage({ t: currentTime, d: ch.slice() });
+    return true;
+  }
+}
+registerProcessor('gg-rec', GGRec);`;
+
+async function micOnOff(on: boolean): Promise<boolean> {
+  if (!on) {
+    recording = false;
+    try { micNode?.disconnect(); } catch { /* gone */ }
+    micNode = null;
+    micStream?.getTracks().forEach((t) => t.stop());
+    micStream = null; micOn = false;
+    return true;
+  }
+  if (micStream && micNode) { micOn = true; return true; }
+  try {
+    micError = '';
+    const c = context();
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } as MediaTrackConstraints });
+    if (!(c as any).audioWorklet) throw new Error('This browser cannot record raw audio (no AudioWorklet).');
+    const url = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
+    await c.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    const src = c.createMediaStreamSource(micStream);
+    micNode = new AudioWorkletNode(c, 'gg-rec', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 });
+    micNode.port.onmessage = (e: MessageEvent) => {
+      if (!recording) return;
+      if (!recFrames) recStart = e.data.t;
+      recChunks.push(e.data.d); recFrames += e.data.d.length;
+    };
+    // some browsers only run a worklet that ends in the destination; silence it
+    const mute = c.createGain(); mute.gain.value = 0;
+    src.connect(micNode); micNode.connect(mute); mute.connect(c.destination);
+    micOn = true;
+    return true;
+  } catch (e) {
+    micError = (e as Error).message || 'The microphone could not start.';
+    micStream?.getTracks().forEach((t) => t.stop());
+    micStream = null; micNode = null; micOn = false;
+    return false;
+  }
+}
+
 const BLE_MIDI_SERVICE = '03b80e5a-ede8-4b33-a751-6ce34ec4c700';
 const BLE_MIDI_CHAR = '7772e5db-3868-4112-a1a9-f2669d106bf3';
 let bleError = '';
@@ -188,16 +244,28 @@ export const webEngine: Record<string, unknown> = {
     if (force || c.state !== 'running') { c.resume().catch(() => {}); return true; }
     return false;
   },
-  start: async (_keepBt: boolean, _mic: boolean) => {
+  start: async (_keepBt: boolean, wantMic: boolean) => {
     const c = context();
     // MIDI first: the audio context may stay suspended until the first tap, and that must not hold MIDI back
     c.resume().catch(() => {});
     await setupMidi();
+    await micOnOff(!!wantMic);
     return info();
   },
   stop: async () => { /* the page owns the audio context; nothing to release */ },
   info,
-  requestMicPermission: async () => false,
+  requestMicPermission: async () => {
+    try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach((t) => t.stop()); return true; }
+    catch (e) { micError = (e as Error).message || 'Microphone access was refused.'; return false; }
+  },
+  micError: () => micError,
+  startRecording: () => { if (!micStream || !micNode) return false; recChunks = []; recFrames = 0; recStart = 0; recording = true; micNode.port.postMessage(true); return true; },
+  stopRecording: () => {
+    recording = false; micNode?.port.postMessage(false);
+    return { path: 'web:recording', sampleRate: context().sampleRate, startTime: recStart, frames: recFrames };
+  },
+  /** the raw samples of the last recording (web only: the native engine writes a file instead) */
+  recordedSamples: () => { const out = new Float32Array(recFrames); let o = 0; for (const ch of recChunks) { out.set(ch, o); o += ch.length; } return out; },
   midiSources: () => sources,
   midiError: () => midiError,
   bleError: () => bleError,
