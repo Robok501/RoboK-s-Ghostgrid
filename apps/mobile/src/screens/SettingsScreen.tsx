@@ -8,6 +8,7 @@ import { Score } from '../sketch/Score';
 import Engine from '../../modules/ghostgrid-engine';
 import { useApp } from '../AppContext';
 import { C } from '../theme';
+import { LatencyCard } from '../settings/LatencyCard';
 import { Btn, Card, Chip, Note, Row, Seg, Stepper, Toggle, TopBar, Value } from '../ui';
 import { LANGUAGES, deviceLanguage, t } from '../i18n';
 import { BEAT_THIS_CHANGES, BEAT_THIS_CITATION, BEAT_THIS_LICENCE, BEAT_THIS_NOTE, CREDITS, SPLEETER_CHANGES, SPLEETER_CITATION, SPLEETER_LICENCE, SPLEETER_NOTE } from '../legal/notices';
@@ -73,6 +74,8 @@ export function SettingsScreen() {
       <Card title="Data collection">
         <Toggle label="Record play-alongs" hint="In Songs, Play also records the room and your pad hits; share them as a zip afterwards" value={!!settings.collect} onChange={setCollect} />
       </Card>
+
+      <LatencyCard />
 
       <Card title="E-drum">
         <Note>{sources.length ? t('Connected: {{names}}', { names: sources.join(', ') }) : t('No MIDI device yet. Pair your module over Bluetooth, or connect it with a USB cable.')}</Note>
