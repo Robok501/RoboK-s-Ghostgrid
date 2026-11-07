@@ -28,6 +28,7 @@ describe('analyzeLoopback', () => {
   it('sees a delay that creeps up', () => {
     const r = analyzeLoopback(synth(sched, 9.5, (i) => 0.1 + i * 0.002), SR, 9.5, sched);
     expect(r.driftMsPer10s).toBeGreaterThan(5);
+    expect(r.trendJitterMs).toBeLessThan(1.5);
   });
   it('a silent room gives no valid clicks', () => {
     const r = analyzeLoopback(synth([], 9.5, () => 0), SR, 9.5, sched);

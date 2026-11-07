@@ -18,6 +18,8 @@ export interface LoopbackResult {
   maxMs: number;
   /** how the delay changes over the test, ms per 10 s (a steady creep shows here) */
   driftMsPer10s: number;
+  /** jitter around that trend (std dev of what is left after removing the straight line), ms: the real wobble */
+  trendJitterMs: number;
 }
 
 /** Amplitude envelope of the tone at `freq` over [from, to) samples, 1 ms steps. */
@@ -64,13 +66,15 @@ export function analyzeLoopback(samples: Float32Array, sr: number, startTime: nu
   const med = median(lat);
   const spread = 1.4826 * median(lat.map((v) => Math.abs(v - med)));
   // drift: least-squares slope of latency over time
-  let drift = 0;
+  let drift = 0, trendSd = 0;
   if (ok.length > 3) {
     const t = ok.map((c) => c.sched - ok[0].sched), mt = t.reduce((a, b) => a + b, 0) / t.length, ml = lat.reduce((a, b) => a + b, 0) / lat.length;
     const num = t.reduce((a, v, i) => a + (v - mt) * (lat[i] - ml), 0), den = t.reduce((a, v) => a + (v - mt) ** 2, 0);
-    drift = den ? (num / den) * 10 : 0;
+    const slope = den ? num / den : 0;
+    drift = slope * 10;
+    trendSd = Math.sqrt(t.reduce((a, v, i) => a + (lat[i] - (ml + slope * (v - mt))) ** 2, 0) / t.length);
   }
-  return { clicks, valid: ok.length, medianMs: med, spreadMs: spread, minMs: lat.length ? Math.min(...lat) : 0, maxMs: lat.length ? Math.max(...lat) : 0, driftMsPer10s: drift };
+  return { clicks, valid: ok.length, medianMs: med, spreadMs: spread, minMs: lat.length ? Math.min(...lat) : 0, maxMs: lat.length ? Math.max(...lat) : 0, driftMsPer10s: drift, trendJitterMs: trendSd };
 }
 
 /** Click times for a test: `count` clicks starting `lead` s after `now`, with uneven gaps (1.1–1.9 s) so a room echo can't line up with the next click. */

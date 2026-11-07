@@ -13,9 +13,10 @@ import { readVoiceFile } from '../sketch/usePlayer';
 import { Btn, Card, Note } from '../ui';
 import { t } from '../i18n';
 
-interface Run { at: string; route: string; routeName: string; reportedMs: number; ioBufferMs: number; result: LoopbackResult }
+interface Run { count: number; at: string; route: string; routeName: string; reportedMs: number; ioBufferMs: number; result: LoopbackResult }
 
 const COUNT = 20;
+const LONG = 60;
 
 export function LatencyCard() {
   const { mic, setMic, settings } = useApp();
@@ -24,7 +25,7 @@ export function LatencyCard() {
   const [msg, setMsg] = useState('');
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const run = async () => {
+  const run = async (count = COUNT) => {
     if (busy) return;
     setBusy(true); setMsg(t('Preparing…'));
     const wasOff = !mic;
@@ -34,14 +35,14 @@ export function LatencyCard() {
       Engine.setClickSound('click');
       if (!Engine.startRecording()) { setMsg(t('The microphone could not start.')); return; }
       const info = Engine.info();
-      const sched = loopbackSchedule(Engine.now(), COUNT, 1.2);
+      const sched = loopbackSchedule(Engine.now(), count, 1.2);
       let next = 0;
       // clicks go to the engine just before they are due, not all at once
       await new Promise<void>((resolve) => {
         timer.current = setInterval(() => {
           const now = Engine.now();
           while (next < sched.length && sched[next] < now + 0.6) { Engine.scheduleClick(sched[next], 3); next++; }
-          setMsg(t('Measuring… {{n}}/{{of}}', { n: Math.min(next, COUNT), of: COUNT }));
+          setMsg(t('Measuring… {{n}}/{{of}}', { n: Math.min(next, count), of: count }));
           if (now > sched[sched.length - 1] + 1.2) { if (timer.current) clearInterval(timer.current); timer.current = null; resolve(); }
         }, 100);
       });
@@ -49,8 +50,8 @@ export function LatencyCard() {
       const samples = readVoiceFile(f.path);
       try { new File(f.path).delete(); } catch { /* temp */ }
       const result = analyzeLoopback(samples, f.sampleRate, f.startTime, sched);
-      setRuns((r) => [...r, { at: new Date().toISOString(), route: info.route, routeName: info.routeName, reportedMs: Math.round((info.outputLatency + info.ioBuffer) * 1000), ioBufferMs: Math.round(info.ioBuffer * 1000), result }]);
-      setMsg(result.valid < COUNT / 2 ? t('Only {{n}} of {{of}} clicks were heard. Hold the phone close to the speaker, turn the volume up and try again.', { n: result.valid, of: COUNT }) : '');
+      setRuns((r) => [...r, { count, at: new Date().toISOString(), route: info.route, routeName: info.routeName, reportedMs: Math.round((info.outputLatency + info.ioBuffer) * 1000), ioBufferMs: Math.round(info.ioBuffer * 1000), result }]);
+      setMsg(result.valid < count / 2 ? t('Only {{n}} of {{of}} clicks were heard. Hold the phone close to the speaker, turn the volume up and try again.', { n: result.valid, of: count }) : '');
     } catch (e) {
       setMsg(t('Test failed: {{msg}}', { msg: (e as Error).message }));
     } finally {
@@ -78,14 +79,15 @@ export function LatencyCard() {
   return (
     <Card title="Latency test">
       <Note>{t('Measures how long sound takes from the app to your ears, with nobody playing. 1) Switch the sound to the iPhone speaker (Control Center, hold the audio card, AirPlay icon) and run it. 2) Switch to your drum module over Bluetooth, hold the phone close to the module’s speaker or headphones, and run it again.')}</Note>
-      <Btn label={busy ? t('Measuring…') : 'Run test (20 clicks, 30 s)'} primary onPress={run} />
+      <Btn label={busy ? t('Measuring…') : 'Run test (20 clicks, 30 s)'} primary onPress={() => run(COUNT)} />
+      {!busy && <Btn label="Long test (60 clicks, 90 s)" onPress={() => run(LONG)} />}
       {!!msg && <Note>{msg}</Note>}
       {runs.map((r, i) => (
         <Note key={i}>
-          {`${r.routeName}: ${r.result.valid}/${COUNT} heard · ${Math.round(r.result.medianMs)} ms · ±${r.result.spreadMs.toFixed(1)} ms · ${r.result.driftMsPer10s >= 0 ? '+' : ''}${r.result.driftMsPer10s.toFixed(1)} ms per 10 s · iOS says ${r.reportedMs} ms`}
+          {`${r.routeName}: ${r.result.valid}/${r.count} heard · ${Math.round(r.result.clicks.find((c) => c.latencyMs !== null)?.latencyMs ?? 0)} → ${Math.round([...r.result.clicks].reverse().find((c) => c.latencyMs !== null)?.latencyMs ?? 0)} ms (median ${Math.round(r.result.medianMs)}) · trend ${r.result.driftMsPer10s >= 0 ? '+' : ''}${r.result.driftMsPer10s.toFixed(1)} ms per 10 s · wobble ±${r.result.trendJitterMs.toFixed(1)} ms · iOS says ${r.reportedMs} ms`}
         </Note>
       ))}
-      {last && other && last.result.valid >= COUNT / 2 && other.result.valid >= COUNT / 2 && (
+      {last && other && last.result.valid >= last.count / 2 && other.result.valid >= other.count / 2 && (
         <Note>{t('{{a}} adds about {{ms}} ms compared with {{b}}; iOS reports {{rep}} ms for that difference.', { a: last.routeName, b: other.routeName, ms: Math.round(last.result.medianMs - other.result.medianMs), rep: last.reportedMs - other.reportedMs })}</Note>
       )}
       {runs.length > 0 && <Btn label="Share results" onPress={share} />}
