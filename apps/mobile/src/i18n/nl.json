@@ -652,5 +652,10 @@
  "Checking…": "Controleren…",
  "the clocks agree": "de klokken lopen gelijk",
  "the clocks DISAGREE": "de klokken lopen NIET gelijk",
- "unclear, run it again": "onduidelijk, doe het nog eens"
+ "unclear, run it again": "onduidelijk, doe het nog eens",
+ "Stopped.": "Gestopt.",
+ "No MIDI output yet. Connect your module with \"Connect Bluetooth MIDI\" in the E-drum card first.": "Nog geen MIDI-uitgang. Verbind eerst je module met \"Connect Bluetooth MIDI\" in de E-drum-kaart.",
+ "Done: {{n}} messages sent to {{to}}.": "Klaar: {{n}} berichten verstuurd naar {{to}}.",
+ "Sending to {{to}}… {{n}} messages, {{s}}/{{of}} s": "Versturen naar {{to}}… {{n}} berichten, {{s}}/{{of}} s",
+ "Can the drum module play the click itself, over Bluetooth MIDI, so no Bluetooth audio is needed? Connect the module first, then pick what to send and press the button. Clock: set the module to follow external MIDI clock (see its manual: sync / clock source) and start its metronome. Notes: the module plays the chosen sound when it receives the note.": "Kan de drummodule de klik zelf spelen, via Bluetooth-MIDI, zodat Bluetooth-audio niet nodig is? Verbind eerst de module, kies wat je verstuurt en druk op de knop. Clock: laat de module externe MIDI-clock volgen (zie de handleiding: sync / clock source) en start zijn metronoom. Notes: de module speelt het gekozen geluid wanneer hij de noot ontvangt."
 }

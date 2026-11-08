@@ -197,6 +197,44 @@ async function micOnOff(on: boolean): Promise<boolean> {
 const BLE_MIDI_SERVICE = '03b80e5a-ede8-4b33-a751-6ce34ec4c700';
 const BLE_MIDI_CHAR = '7772e5db-3868-4112-a1a9-f2669d106bf3';
 let bleError = '';
+// ---- MIDI out (clock, start/stop, notes) to the connected module: Bluetooth MIDI first, otherwise a MIDI output port ----
+let bleOut: any = null;
+let bleOutName = '';
+let outQueue: { ts: number; data: number[] }[] = [];
+let outBusy: Promise<void> = Promise.resolve();
+function bleFlush() {
+  const q = outQueue; outQueue = [];
+  while (q.length && bleOut) {
+    // one BLE MIDI packet: header (timestamp high), then per message a timestamp byte and the message; 20 bytes at most
+    const first = Math.round(q[0].ts) & 0x1fff;
+    const bytes = [0x80 | ((first >> 7) & 0x3f)];
+    while (q.length) {
+      const m = q[0];
+      if (bytes.length + 1 + m.data.length > 20) break;
+      bytes.push(0x80 | (Math.round(m.ts) & 0x7f), ...m.data);
+      q.shift();
+    }
+    const ch = bleOut, payload = new Uint8Array(bytes);
+    outBusy = outBusy.then(() => (ch.writeValueWithoutResponse ? ch.writeValueWithoutResponse(payload) : ch.writeValue(payload))).catch(() => { /* link gone */ });
+  }
+}
+/** Send one MIDI message. `atPerf` is a performance.now() time (ms); the message goes out now and carries that timestamp. */
+function midiSendAt(data: number[], atPerf: number): boolean {
+  if (bleOut) {
+    outQueue.push({ ts: atPerf, data });
+    if (outQueue.length === 1) queueMicrotask(bleFlush);
+    return true;
+  }
+  let sent = false;
+  midi?.outputs.forEach((o) => { try { o.send(data, atPerf); sent = true; } catch { /* port gone */ } });
+  return sent;
+}
+function midiTarget(): string {
+  if (bleOut) return bleOutName;
+  const names: string[] = [];
+  midi?.outputs.forEach((o) => names.push(o.name || 'MIDI'));
+  return names.join(', ');
+}
 /** Bluetooth MIDI straight from the page (Web Bluetooth): Android Chrome does not list a Bluetooth-paired MIDI device otherwise. Needs a button press. */
 async function connectBluetooth(): Promise<string> {
   const bt = (navigator as any).bluetooth;
@@ -209,6 +247,7 @@ async function connectBluetooth(): Promise<string> {
     const ch = await svc.getCharacteristic(BLE_MIDI_CHAR);
     const clock = new BleClock();
     const name = dev.name || 'Bluetooth MIDI';
+    bleOut = ch; bleOutName = name;
     ch.addEventListener('characteristicvaluechanged', (e: any) => {
       const arrival = performance.now();
       const v: DataView = e.target.value;
@@ -216,7 +255,7 @@ async function connectBluetooth(): Promise<string> {
       for (let i = 0; i < v.byteLength; i++) bytes.push(v.getUint8(i));
       for (const m of parseBleMidi(bytes)) handleMidi(m.data, clock.map(m.ts, arrival), name);
     });
-    dev.addEventListener('gattserverdisconnected', () => { bleNames.delete(name); refreshSources(); emit('onMidiSources', { sources }); });
+    dev.addEventListener('gattserverdisconnected', () => { if (bleOut === ch) { bleOut = null; bleOutName = ''; } bleNames.delete(name); refreshSources(); emit('onMidiSources', { sources }); });
     await ch.startNotifications();
     bleNames.add(name);
     refreshSources();
@@ -272,6 +311,8 @@ export const webEngine: Record<string, unknown> = {
   midiError: () => midiError,
   bleError: () => bleError,
   connectBluetooth,
+  midiSendAt,
+  midiTarget,
   /** ask for MIDI access again (after a refusal), from a button press */
   connectMidi: async () => { if (!midi) midiError = ''; await setupMidi(); refreshSources(); emit('onMidiSources', { sources }); return midiError; },
   showBluetoothMidi: async () => {},
