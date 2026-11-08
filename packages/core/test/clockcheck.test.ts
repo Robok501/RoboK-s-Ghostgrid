@@ -19,6 +19,10 @@ describe('clock check', () => {
   it('flags an engine that runs against the wall clock', () => {
     expect(analyzeClocks(make(90, 1.002, 1.002)).verdict).toBe('mismatch');
   });
+  it('does not cry wolf when the mic count moves in 0.1 s steps', () => {
+    const s = make(90, 1, 1.0005).map((p) => ({ ...p, mic: Math.floor(p.mic * 10) / 10 }));
+    expect(analyzeClocks(s).verdict).not.toBe('mismatch');
+  });
   it('says unclear for too little data', () => {
     expect(analyzeClocks(make(3, 1, 1)).verdict).toBe('unclear');
   });

@@ -5,7 +5,8 @@
  * also has an ordinary real-time clock. Sampled once a second for a minute or two, a straight line through each
  * pair tells how fast one runs against the other. Real crystals differ by a few tens of ppm (parts per million);
  * a latency that creeps by 2 ms per second would be 2000 ppm, which crystals cannot do, so a gap that large
- * means the timing in the test itself is off.
+ * means the timing in the test itself is off. (The microphone count moves in whole buffers, so its slope is only good
+ * to about 1000 ppm: enough to rule a 2000 ppm creep in or out, not to measure crystal drift.)
  */
 export interface ClockSample {
   /** seconds on the phone's real-time clock since the check began */
@@ -54,7 +55,9 @@ export function analyzeClocks(samples: ClockSample[]): ClockCheckResult {
   const me = fit(eng, mic);
   const micVsEng = me.slope - 1;
   const ppm = (v: number) => v * 1e6;
-  const verdict = Math.abs(ppm(micVsEng)) > 500 || Math.abs(ppm(ew)) > 500 ? 'mismatch' : Math.abs(ppm(micVsEng)) < 200 && Math.abs(ppm(ew)) < 200 ? 'agree' : 'unclear';
+  // the microphone count moves in whole tap buffers (0.1 s on the iPhone), so over 90 s its slope is only good to
+  // about +-1000 ppm; the engine count moves in tiny steps and is good to about 50 ppm
+  const verdict = Math.abs(ppm(micVsEng)) > 1500 || Math.abs(ppm(ew)) > 500 ? 'mismatch' : Math.abs(ppm(micVsEng)) < 1000 && Math.abs(ppm(ew)) < 200 ? 'agree' : 'unclear';
   return {
     samples: s.length,
     seconds: wall[wall.length - 1] - wall[0],
