@@ -138,6 +138,7 @@ async function setupMidi() {
 }
 
 // ---- microphone: raw capture through an AudioWorklet (no echo cancelling, no noise suppression, no auto gain) ----
+let keepNode: OscillatorNode | null = null;
 let micStream: MediaStream | null = null;
 let micNode: AudioWorkletNode | null = null;
 let micError = '';
@@ -281,6 +282,17 @@ export const webEngine: Record<string, unknown> = {
     for (let i = pending.length - 1; i >= 0; i--) {
       if (pending[i].t > time) { try { pending[i].src.stop(); pending[i].src.disconnect(); } catch { /* already done */ } pending.splice(i, 1); }
     }
+  },
+  /** an inaudible tone so the output stream stays busy (the clock check asks: does an idle stream run slow?) */
+  keepAlive: (on: boolean) => {
+    try { keepNode?.stop(); keepNode?.disconnect(); } catch { /* gone */ }
+    keepNode = null;
+    if (!on) return;
+    const c = context();
+    const o = c.createOscillator(); o.frequency.value = 110;
+    const g = c.createGain(); g.gain.value = 0.0004; // about -68 dB
+    o.connect(g); g.connect(c.destination); o.start();
+    keepNode = o;
   },
   setClickSound: (name: ClickName) => { clickSound = name; if (ctx) buildBuffers(); },
   addListener: (name: string, f: Listener) => {

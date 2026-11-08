@@ -30,6 +30,9 @@ export function ClockCard() {
     try {
       if (wasOff && !(await setMic(true))) { setMsg(t('The microphone is off. Allow it in Settings → Ghostgrid.')); return; }
       Engine.ensureRunning(false);
+      // web only: keep the output stream busy with an inaudible tone, so an idle stream cannot be what slows the clock
+      const kept = isWeb && typeof (Engine as any).keepAlive === 'function';
+      if (kept) (Engine as any).keepAlive(true);
       if (!Engine.startRecording()) { setMsg(t('The microphone could not start.')); return; }
       const info = Engine.info();
       const w0 = now(), e0 = Engine.now();
@@ -48,12 +51,13 @@ export function ClockCard() {
       const f = Engine.stopRecording();
       if (!isWeb) { try { new File(f.path).delete(); } catch { /* temp */ } }
       const result = analyzeClocks(samples);
-      setRuns((r) => [...r, { seconds: SECONDS, at: new Date().toISOString(), route: info.route, routeName: isWeb ? 'browser' : info.routeName, ioBufferMs: Math.round(info.ioBuffer * 1000), sampleRate: info.sampleRate, micRate, result, samples }]);
+      setRuns((r) => [...r, { seconds: SECONDS, at: new Date().toISOString(), route: info.route, routeName: isWeb ? (kept ? 'browser + tone' : 'browser') : info.routeName, ioBufferMs: Math.round(info.ioBuffer * 1000), sampleRate: info.sampleRate, micRate, result, samples }]);
       setMsg('');
     } catch (e) {
       setMsg(t('Test failed: {{msg}}', { msg: (e as Error).message }));
     } finally {
       if (timer.current) { clearInterval(timer.current); timer.current = null; }
+      if (isWeb) { try { (Engine as any).keepAlive?.(false); } catch { /* keep */ } }
       if (wasOff) setMic(false);
       setBusy(false);
     }
@@ -70,7 +74,7 @@ export function ClockCard() {
 
   return (
     <Card title="Clock check">
-      <Note>{t('No sound needed. For 90 seconds the app compares the clock of the audio engine, the microphone clock and the phone clock. If they agree, a delay that keeps growing in the latency test is real; if not, the test itself drifts. Run it once with the drum module connected over Bluetooth and once without.')}</Note>
+      <Note>{t('No sound needed (in the browser an inaudible tone keeps the output busy). For 90 seconds the app compares the clock of the audio engine, the microphone clock and the phone clock. If they agree, a delay that keeps growing in the latency test is real; if not, the test itself drifts. Run it once with the drum module connected over Bluetooth and once without.')}</Note>
       <Btn label={busy ? t('Checking…') : 'Run clock check (90 s)'} primary onPress={run} />
       {!!msg && <Note>{msg}</Note>}
       {runs.map((r, i) => (
